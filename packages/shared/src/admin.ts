@@ -19,6 +19,8 @@ import { z } from 'zod';
 import { IsoDate, RecordAudit, RecordVersion, Uuid } from './common';
 import { KbProgress } from './kb';
 import { listPageSchema } from './list';
+import { ReportRow } from './reports';
+import { StatusHistoryEntry } from './status';
 
 /**
  * Организация в Админке → «Организации» (ТЗ «Админка» → «Модуль организаций»; прототип
@@ -407,56 +409,30 @@ export const AdminOrgCard = z.object({
     staff: Count,
     staffBlocked: Count,
     contractors: z.object({ regular: Count, oneoff: Count, paused: Count, archived: Count }),
-    /** Месяц «Отчётов за месяц» по Бишкеку. */
+    /** Текущий месяц по Бишкеку. */
     month: Month,
-    reports: z.object({ todo: Count, inWork: Count, submitted: Count, overdue: Count }),
+    /**
+     * Плитки «Отчёты» и «Просрочено» (доработки 20.11.2026, пакет 2, блок 1, пункт 4): все несданные —
+     * «в этом месяце» и «позже», все просроченные на сегодня.
+     */
+    reports: z.object({ open: Count, month: Count, later: Count, overdue: Count }),
     tasks: Count,
     files: z.object({ count: Count, bytes: Count }),
     telegram: Count,
     logins30: Count,
   }),
-  staff: cardList(
-    z.object({
-      userId: Uuid,
-      fullName: z.string(),
-      login: z.string(),
-      role: z.string(),
-      telegram: z.boolean(),
-      lastLoginAt: z.iso.datetime().nullable(),
-      states: z.array(z.enum(ACCOUNT_CARD_STATES)),
-    }),
-  ),
-  contractors: cardList(
-    z.object({
-      id: Uuid,
-      name: z.string(),
-      inn: z.string(),
-      form: z.string(),
-      regime: z.string().nullable(),
-      responsible: z.string().nullable(),
-      kind: z.string(),
-      /** Стоимость обслуживания по действующей ставке, тыйыны; null — ставки нет. */
-      fee: Money.nullable(),
-      serviceStatus: z.string(),
-    }),
-  ),
   reports: z.object({
+    /** 6 прошлых месяцев, текущий и 3 следующих. */
     byMonth: z.array(
       z.object({ month: Month, type: z.string(), total: Count, submitted: Count, overdue: Count }),
     ),
-    overdue: cardList(
-      z.object({
-        id: Uuid,
-        contractor: z.string(),
-        type: z.string(),
-        period: z.string(),
-        periodStart: IsoDate,
-        eventDate: IsoDate.nullable(),
-        dueDate: IsoDate,
-        responsible: z.string().nullable(),
-        status: z.string(),
-      }),
-    ),
+    /** Числа плиток-фильтров списка: «К сдаче», «В работе», «Сдано», «Просрочено», «Все». */
+    plates: z.object({ due: Count, work: Count, done: Count, over: Count, all: Count }),
+    /** Пустая вкладка: контрагентов без архива и у скольких есть действующее назначение. */
+    contractors: Count,
+    assigned: Count,
+    taxpay: z.boolean(),
+    confirm: z.boolean(),
   }),
   money: z.object({
     feeMonth: z.object({ charged: Money, paid: Money }),
@@ -553,3 +529,41 @@ export const NewOrganizationForm = z.object({
 });
 export type NewOrganizationFormInput = z.input<typeof NewOrganizationForm>;
 export type NewOrganizationForm = z.output<typeof NewOrganizationForm>;
+
+/** Строка «Сотрудников» карточки организации (доработки 20.11.2026, пакет 2, блок 1, пункт 5). */
+export const AdminOrgStaffRow = z.object({
+  userId: Uuid,
+  fullName: z.string(),
+  login: z.string(),
+  role: z.string(),
+  telegram: z.boolean(),
+  lastLoginAt: z.iso.datetime().nullable(),
+  states: z.array(z.enum(ACCOUNT_CARD_STATES)),
+});
+export type AdminOrgStaffRow = z.infer<typeof AdminOrgStaffRow>;
+export const AdminOrgStaffList = listPageSchema(AdminOrgStaffRow);
+
+/** Плитка-фильтр списка «Отчёты» карточки организации. */
+export const AdminOrgReportPlate = z.object({
+  plate: z.enum(['due', 'work', 'done', 'over', 'all']).default('due'),
+});
+export type AdminOrgReportPlate = z.infer<typeof AdminOrgReportPlate>;
+
+/**
+ * Окно «Отчёт» карточки организации — только просмотр (доработки 20.11.2026, пакет 2, блок 1, пункт 3;
+ * прототип v150 ocRepWin): строка списка, «История статусов» и файлы отчёта (без ключей хранилища).
+ */
+export const AdminOrgReport = ReportRow.extend({
+  statusHistory: z.array(StatusHistoryEntry),
+  files: z.array(
+    z.object({
+      id: Uuid,
+      name: z.string(),
+      bytes: Count,
+      contentType: z.string(),
+      by: z.string().nullable(),
+      at: z.iso.datetime(),
+    }),
+  ),
+});
+export type AdminOrgReport = z.infer<typeof AdminOrgReport>;

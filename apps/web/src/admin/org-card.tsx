@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  ACCOUNT_LOCK_FAILURES,
   bishkekDate,
   FEATURES,
   formatCount,
@@ -12,9 +11,6 @@ import {
   LEAD_DOC_TEXT_KEYS,
   monthLabel,
   ORG_TIMEZONES,
-  periodLabel,
-  type AccountCardState,
-  type ReportPeriod,
   type Tyiyn,
   type UiTextKey,
   weekDayOf,
@@ -43,7 +39,6 @@ import {
   type CardTab,
   type IconName,
   type KeyValueItem,
-  type MiniColumn,
 } from '@buhuchet/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -51,8 +46,14 @@ import { api, ApiFailure, apiFailure, callApi } from '../api-client';
 import { fileSizeText } from '../files/files-data';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
-import { statusName } from '../status/status-view';
 import { ORG_CARD_KEY } from './org-actions';
+import {
+  ORG_REPORTS_VIEW,
+  OrgContractorsTab,
+  OrgReportsTab,
+  OrgStaffTab,
+  type OrgReportsView,
+} from './org-card-lists';
 import {
   megabytesText,
   ORG_CARD_TABS,
@@ -145,12 +146,17 @@ export function OrgCard({
     onClose();
   }, [missing, toast, t, onClose]);
   const [tab, setTab] = useState<OrgCardTab>('main');
+  // Плитка, поиск и «По месяцам» вкладки «Отчёты» живут, пока открыта карточка (прототип `st.rf`).
+  const [repView, setRepView] = useState<OrgReportsView>(ORG_REPORTS_VIEW);
   const overdue = card?.summary.reports.overdue ?? 0;
   const tabs: CardTab[] = ORG_CARD_TABS.map((k) => ({
     id: k,
     label: t(`orgs.card.tab.${k}`),
     icon: TAB_ICONS[k],
-    ...(k === 'staff' && card ? { count: { value: card.staff.count } } : {}),
+    // Число сотрудников — все учётные записи организации, с заблокированными (прототип `us.length`).
+    ...(k === 'staff' && card
+      ? { count: { value: card.summary.staff + card.summary.staffBlocked } }
+      : {}),
     ...(k === 'rep' && overdue
       ? { count: { value: overdue, tone: 'red' as const, title: t('orgs.card.sum.overdue') } }
       : {}),
@@ -280,10 +286,28 @@ export function OrgCard({
               ) : null}
             </div>
             {tab === 'main' ? <MainTab t={t} card={card} onUser={onUser} onLead={onLead} /> : null}
-            {tab === 'sum' ? <SummaryTab t={t} card={card} onTab={setTab} /> : null}
-            {tab === 'staff' ? <StaffTab t={t} staff={card.staff} onUser={onUser} /> : null}
-            {tab === 'cps' ? <ContractorsTab t={t} list={card.contractors} /> : null}
-            {tab === 'rep' ? <ReportsTab t={t} reports={card.reports} /> : null}
+            {tab === 'sum' ? (
+              <SummaryTab
+                t={t}
+                card={card}
+                onTab={(next, plate) => {
+                  if (plate) setRepView((v) => ({ ...v, plate }));
+                  setTab(next);
+                }}
+              />
+            ) : null}
+            {tab === 'staff' ? <OrgStaffTab t={t} orgId={id} onUser={onUser} /> : null}
+            {tab === 'cps' ? <OrgContractorsTab t={t} orgId={id} /> : null}
+            {tab === 'rep' ? (
+              <OrgReportsTab
+                t={t}
+                orgId={id}
+                orgName={card.org.name}
+                reports={card.reports}
+                view={repView}
+                onView={setRepView}
+              />
+            ) : null}
             {tab === 'money' ? (
               <MoneyTab t={t} money={card.money} month={card.summary.month as YearMonth} />
             ) : null}
@@ -313,12 +337,6 @@ export function OrgCard({
       </div>
     </Modal>
   );
-}
-
-// ОТКЛОНЕНИЕ: docs/deviations.md#О-66 — списки карточки — простые таблицы до 200 строк, а не общий список.
-/** «Показаны первые 200 из N» — список карточки длиннее предела ответа. */
-function More({ t, shown, total }: { t: Translate; shown: number; total: number }) {
-  return total > shown ? <Hint>{t('orgs.card.more', { n: shown, total })}</Hint> : null;
 }
 
 /**
@@ -455,7 +473,10 @@ function MainTab({
   );
 }
 
-/** «Сводка» (прототип ocSum): плитки с числами; нажатие открывает соответствующую вкладку. */
+/**
+ * «Сводка» (прототип v150 ocSum): плитки с числами; нажатие открывает соответствующую вкладку,
+ * «Отчёты» и «Просрочено» — вкладку «Отчёты» с плиткой «К сдаче» или «Просрочено».
+ */
 function SummaryTab({
   t,
   card,
@@ -463,10 +484,14 @@ function SummaryTab({
 }: {
   t: Translate;
   card: AdminOrgCard;
-  onTab: (tab: OrgCardTab) => void;
+  onTab: (tab: OrgCardTab, plate?: 'due' | 'over') => void;
 }) {
   const s = card.summary;
-  const go = (plate: keyof typeof ORG_PLATE_TABS) => () => onTab(ORG_PLATE_TABS[plate]);
+  const go = (plate: keyof typeof ORG_PLATE_TABS) => () =>
+    onTab(
+      ORG_PLATE_TABS[plate],
+      plate === 'rep' ? 'due' : plate === 'overdue' ? 'over' : undefined,
+    );
   return (
     <div data-org-summary="">
       <Plates static>
@@ -492,13 +517,9 @@ function SummaryTab({
           id="rep"
           icon="file"
           color="yellow"
-          label={t('orgs.card.sum.rep', { month: monthLabel(s.month as YearMonth) })}
-          value={formatCount(s.reports.todo + s.reports.inWork + s.reports.submitted)}
-          sub={t('orgs.card.sum.rep_sub', {
-            todo: s.reports.todo,
-            work: s.reports.inWork,
-            done: s.reports.submitted,
-          })}
+          label={t('orgs.card.sum.reports')}
+          value={formatCount(s.reports.open)}
+          sub={t('orgs.card.sum.reports_sub', { month: s.reports.month, later: s.reports.later })}
           onClick={go('rep')}
         />
         <Plate
@@ -507,7 +528,7 @@ function SummaryTab({
           color={s.reports.overdue ? 'red' : 'green'}
           label={t('orgs.card.sum.overdue')}
           value={formatCount(s.reports.overdue)}
-          sub={t('orgs.card.sum.overdue_sub')}
+          sub={t('orgs.card.sum.overdue_today')}
           onClick={go('overdue')}
         />
         <Plate
@@ -545,166 +566,6 @@ function SummaryTab({
         />
       </Plates>
     </div>
-  );
-}
-
-/** «Сотрудники» (прототип ocGrids, oc-staff): строка открывает карточку пользователя. */
-function StaffTab({
-  t,
-  staff,
-  onUser,
-}: {
-  t: Translate;
-  staff: AdminOrgCard['staff'];
-  onUser: (userId: string) => void;
-}) {
-  const state = (s: AccountCardState) =>
-    t(`accounts.card.state.${s}`, { n: ACCOUNT_LOCK_FAILURES });
-  return (
-    <div data-org-staff="" className="flex flex-col gap-2.5">
-      <MiniTable
-        label={t('orgs.card.tab.staff')}
-        columns={[
-          { key: 'name', label: t('orgs.card.staff.col.name') },
-          { key: 'login', label: t('orgs.card.staff.col.login') },
-          { key: 'role', label: t('orgs.card.staff.col.role') },
-          { key: 'tg', label: t('orgs.card.staff.col.tg') },
-          { key: 'last', label: t('orgs.card.staff.col.last') },
-          { key: 'state', label: t('orgs.card.staff.col.state') },
-        ]}
-        rows={staff.rows.map((u) => ({
-          key: u.userId,
-          cells: {
-            name: <span className="font-semibold">{u.fullName}</span>,
-            login: <span className={MONO_CLASS}>{u.login}</span>,
-            role: u.role,
-            tg: t(u.telegram ? 'orgs.card.staff.tg_on' : 'orgs.card.staff.tg_off'),
-            last: u.lastLoginAt ? (
-              <span className="tabular-nums">{moment(u.lastLoginAt)}</span>
-            ) : (
-              t('orgs.card.staff.never')
-            ),
-            state: u.states.map(state).join(', '),
-          },
-          wide: miniWide({ name: u.fullName, state: u.states.map(state).join(', ') }),
-        }))}
-        empty={t('orgs.card.empty')}
-        onOpen={onUser}
-      />
-      <More t={t} shown={staff.rows.length} total={staff.count} />
-    </div>
-  );
-}
-
-/** «Контрагенты» (прототип ocGrids, oc-cps): только просмотр. */
-function ContractorsTab({ t, list }: { t: Translate; list: AdminOrgCard['contractors'] }) {
-  return (
-    <div data-org-contractors="" className="flex flex-col gap-2.5">
-      <MiniTable
-        label={t('orgs.card.tab.cps')}
-        columns={[
-          { key: 'name', label: t('orgs.card.cps.col.name') },
-          { key: 'inn', label: t('orgs.card.cps.col.inn') },
-          { key: 'form', label: t('orgs.card.cps.col.form') },
-          { key: 'regime', label: t('orgs.card.cps.col.regime') },
-          { key: 'responsible', label: t('orgs.card.cps.col.responsible') },
-          { key: 'kind', label: t('orgs.card.cps.col.kind') },
-          { key: 'fee', label: t('orgs.card.cps.col.fee'), numeric: true },
-          { key: 'state', label: t('orgs.card.cps.col.state') },
-        ]}
-        rows={list.rows.map((c) => ({
-          key: c.id,
-          cells: {
-            name: <span className="font-semibold">{c.name}</span>,
-            inn: <span className={MONO_CLASS}>{c.inn}</span>,
-            form: c.form,
-            regime: c.regime ?? '—',
-            responsible: c.responsible ?? '—',
-            kind: t(
-              c.kind === 'oneoff' ? 'orgs.card.cps.kind.oneoff' : 'orgs.card.cps.kind.regular',
-            ),
-            fee: c.fee === null ? '—' : som(c.fee),
-            state: t(`status.service.${c.serviceStatus}` as UiTextKey),
-          },
-          wide: miniWide({ name: c.name }),
-          blank: [
-            ...(c.regime ? [] : ['regime']),
-            ...(c.responsible ? [] : ['responsible']),
-            ...(c.fee === null ? ['fee'] : []),
-          ],
-        }))}
-        empty={t('orgs.card.empty')}
-      />
-      <More t={t} shown={list.rows.length} total={list.count} />
-      <Hint>{t('orgs.card.cps.hint')}</Hint>
-    </div>
-  );
-}
-
-/** «Отчёты» (прототип ocRep): по месяцам срока и видам за полгода и список просроченных. */
-function ReportsTab({ t, reports }: { t: Translate; reports: AdminOrgCard['reports'] }) {
-  const months: MiniColumn[] = [
-    { key: 'month', label: t('orgs.card.rep.col.month') },
-    { key: 'type', label: t('orgs.card.rep.col.type') },
-    { key: 'total', label: t('orgs.card.rep.col.total'), numeric: true },
-    { key: 'done', label: t('orgs.card.rep.col.done'), numeric: true },
-    { key: 'overdue', label: t('orgs.card.rep.col.overdue'), numeric: true },
-  ];
-  return (
-    <>
-      <Box title={t('orgs.card.rep.by_month')}>
-        <div data-org-reports="">
-          <MiniTable
-            label={t('orgs.card.rep.by_month')}
-            columns={months}
-            rows={reports.byMonth.map((r) => ({
-              key: `${r.month}|${r.type}`,
-              cells: {
-                month: monthLabel(r.month as YearMonth),
-                type: r.type,
-                total: formatCount(r.total),
-                done: formatCount(r.submitted),
-                overdue: formatCount(r.overdue),
-              },
-            }))}
-            empty={t('orgs.card.empty')}
-          />
-        </div>
-      </Box>
-      <Box title={t('orgs.card.rep.overdue')}>
-        <div data-org-overdue="" className="flex flex-col gap-2.5">
-          <MiniTable
-            label={t('orgs.card.rep.overdue')}
-            columns={[
-              { key: 'contractor', label: t('orgs.card.rep.col.contractor') },
-              { key: 'type', label: t('orgs.card.rep.col.report') },
-              { key: 'period', label: t('orgs.card.rep.col.period') },
-              { key: 'due', label: t('orgs.card.rep.col.due') },
-              { key: 'status', label: t('orgs.card.rep.col.status') },
-              { key: 'responsible', label: t('orgs.card.rep.col.responsible') },
-            ]}
-            rows={reports.overdue.rows.map((r) => ({
-              key: r.id,
-              cells: {
-                contractor: r.contractor,
-                type: r.type,
-                period: periodLabel(
-                  { period: r.period as ReportPeriod, start: r.periodStart, event: r.eventDate },
-                  t,
-                ),
-                due: formatDateRu(r.dueDate),
-                status: statusName(t, 'report', r.status),
-                responsible: r.responsible ?? '—',
-              },
-              wide: miniWide({ contractor: r.contractor }),
-              blank: r.responsible ? [] : ['responsible'],
-            }))}
-            empty={t('orgs.card.rep.overdue_none')}
-          />
-          <More t={t} shown={reports.overdue.rows.length} total={reports.overdue.count} />
-        </div>
-      </Box>
-    </>
   );
 }
 

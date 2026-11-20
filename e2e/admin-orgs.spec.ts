@@ -229,6 +229,93 @@ test.describe('Админка: организации', () => {
     await signIn(page.request, origin, owner, OWNER_PASSWORD);
   });
 
+  test('(доработки 20.11.2026, пакет 2, блок 1; прототип v150) карточка организации: «Отчёты» — плитки-фильтры, поиск и окно «Отчёт» только для просмотра; «Сотрудники» и «Контрагенты» — общий список', async ({
+    page,
+    baseURL,
+    isMobile,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    await platformAdmin(page.request, origin);
+    const orgs = (await (await page.request.get('/api/admin/organizations?size=all')).json()) as {
+      items: { id: string; name: string; slug: string; isDemo: boolean }[];
+    };
+    const demo = orgs.items.find((o) => o.isDemo)!;
+    // Контрагент для поиска — у первого отчёта демо-организации по сроку (список «Все» отчётов).
+    const all = (await (
+      await page.request.get(
+        `/api/admin/organizations/${demo.id}/reports?plate=all&size=25&sort=due.asc`,
+      )
+    ).json()) as { total: number; items: { contractor: { name: string } }[] };
+    expect(all.total).toBeGreaterThan(0);
+    const cp = all.items[0]!.contractor.name;
+    const staff = (await (
+      await page.request.get(`/api/admin/organizations/${demo.id}/staff?size=all`)
+    ).json()) as { total: number; items: { fullName: string }[] };
+    expect(staff.total).toBeGreaterThan(0);
+
+    await page.goto(`/app/orgs#orgs/${demo.slug}`);
+    const card = page.getByRole('dialog', { name: demo.name });
+    await expect(card.locator('[data-org-states]')).toBeVisible();
+    const openTab = (tab: string) => cardTab(page, card, isMobile, tab);
+
+    // «Сводка»: «Отчёты» — все несданные; нажатие открывает «Отчёты» на плитке «К сдаче».
+    await openTab('Сводка');
+    const summary = card.locator('[data-org-summary]');
+    await expect(summary.locator('[data-plate="rep"]')).toContainText('в этом месяце');
+    await expect(summary.locator('[data-plate="overdue"]')).toContainText('отчётов на сегодня');
+    await summary.locator('[data-plate="rep"]').click();
+    await expect(card.getByRole('tab', { selected: true })).toContainText('Отчёты');
+    const plates = card.locator('[data-org-rep-plates]');
+    await expect(plates.locator('[data-plate="due"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(plates.locator('[data-plate="due"]')).toContainText('все несданные');
+    await expect(plates.locator('[data-plate="over"]')).toContainText('на сегодня');
+    // «По месяцам и видам отчётов» — свёрнутым блоком над списком.
+    const months = card.locator('[data-org-rep-months]');
+    await expect(months).toContainText('6 прошлых месяцев, текущий и 3 следующих');
+    await expect(months).not.toHaveAttribute('open');
+    await expect(card).toContainText('Только просмотр: статусы отчётов меняет сама организация.');
+
+    // «Все» и поиск по контрагенту: в списке — только его отчёты.
+    await plates.locator('[data-plate="all"]').click();
+    await expect(plates.locator('[data-plate="all"]')).toHaveAttribute('aria-pressed', 'true');
+    const field = card.locator('[data-org-rep-search]');
+    await expect(field).toHaveAttribute('placeholder', 'Поиск: контрагент, ИНН, отчёт, период');
+    await field.fill(cp);
+    const rows = card.locator('[data-org-rep-list] [data-grid] [data-id]');
+    await expect
+      .poll(async () => {
+        const texts = await rows.allTextContents();
+        return texts.length > 0 && texts.every((x) => x.includes(cp));
+      })
+      .toBe(true);
+
+    // Строка открывает окно «Отчёт» только для просмотра; «Готово» возвращает к тому же списку.
+    await rows.first().getByText(cp).first().click();
+    const report = page.locator('[data-org-report]');
+    await expect(report).toContainText(cp);
+    await expect(report.locator('[data-org-report-history]')).toBeVisible();
+    await expect(report).toContainText('Файлы отчёта ·');
+    await expect(report.locator('button')).toHaveCount(0);
+    const win = page.getByRole('dialog').filter({ has: report });
+    await expect(win).toContainText('Только просмотр: статус отчёта меняет сама организация');
+    await win.getByRole('button', { name: 'Готово' }).click();
+    await expect(report).toBeHidden();
+    await expect(plates.locator('[data-plate="all"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(field).toHaveValue(cp);
+
+    // «Сотрудники» и «Контрагенты» — общий список с сервера.
+    await openTab('Сотрудники');
+    await expect(card.locator('[data-org-staff] [data-grid]')).toContainText(
+      staff.items[0]!.fullName,
+    );
+    await openTab('Контрагенты');
+    await expect(
+      card.locator('[data-org-contractors] [data-grid] [data-id]').first(),
+    ).toBeVisible();
+    await card.getByRole('button', { name: 'Готово' }).click();
+    await expect(card).toBeHidden();
+  });
+
   test('(приёмка, прототип v83) карточка организации: девять вкладок только для просмотра, кнопки шапки, ссылки на карточку пользователя и #orgs/<адрес>', async ({
     page,
     baseURL,
@@ -316,9 +403,12 @@ test.describe('Админка: организации', () => {
     await expect(card.locator('[data-org-contractors]')).toContainText(
       'Только просмотр: изменить контрагентов организации из Админки нельзя.',
     );
+    // У новой организации отчётов нет — пустая вкладка объясняет почему (доработки 20.11.2026, пакет 2).
     await openTab('Отчёты');
-    await expect(card).toContainText('По месяцам и видам отчётов');
-    await expect(card.locator('[data-org-overdue]')).toContainText('Просроченных отчётов нет');
+    await expect(card.locator('[data-org-reports-empty]')).toContainText('Отчётов пока нет');
+    await expect(card.locator('[data-org-reports-empty]')).toContainText(
+      'У организации 0 контрагентов, отчёты назначены у 0. Отчёты появятся, когда фирма назначит их контрагентам',
+    );
     await openTab('Деньги');
     await expect(card.locator('[data-org-fee="year"]')).toContainText('Начислено');
     await expect(card).toContainText('Налоги контрагентов по месяцам');

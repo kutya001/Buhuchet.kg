@@ -2,7 +2,16 @@ import { randomUUID } from 'node:crypto';
 import { ADMIN_ORG_VIEW_ROWS, schema } from '@buhuchet/db';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
 import { bishkekDate } from '@buhuchet/domain';
-import { AdminOrgCard, AdminOrgLookup, ApiError } from '@buhuchet/shared';
+import {
+  AdminOrgCard,
+  AdminOrgLookup,
+  AdminOrgReport,
+  AdminOrgStaffList,
+  ApiError,
+  ContractorList,
+  ListValues,
+  ReportList,
+} from '@buhuchet/shared';
 import { and, asc, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../testing';
@@ -26,6 +35,17 @@ describe.skipIf(!databaseAvailable())('Админка → карточка ор�
   // Срок внутри текущего месяца: вчера, а первого числа — сегодня (тогда просрочки в месяце нет).
   const firstDay = today.endsWith('-01');
   const past = firstDay ? today : day(today, -1);
+  // Срок в следующем месяце: «позже» в плитке «Отчёты» «Сводки».
+  const [yy, mm] = month.split('-').map(Number) as [number, number];
+  const nextMonth = mm === 12 ? `${yy + 1}-01` : `${yy}-${String(mm + 1).padStart(2, '0')}`;
+  const reportIds: Record<'over' | 'work' | 'done' | 'later' | 'old', string> = {
+    over: '',
+    work: '',
+    done: '',
+    later: '',
+    old: '',
+  };
+  let cpId = '';
 
   beforeAll(async () => {
     f = await createStaffFixture();
@@ -57,6 +77,7 @@ describe.skipIf(!databaseAvailable())('Админка → карточка ор�
     const cp = await contractor(f.a.orgId, 'ОсОО «Ала-Тоо Трейд»', '03744097401851', {
       responsibleEmployeeId: acc.employeeId,
     });
+    cpId = cp;
     await contractor(f.a.orgId, 'ИП Разовый', '03744097401854', { kind: 'oneoff' });
     await contractor(f.a.orgId, 'ОсОО «Пауза»', '03744097401852', { serviceStatus: 'paused' });
     await contractor(f.a.orgId, 'ОсОО «Архив»', '03744097401853', { serviceStatus: 'archived' });
@@ -67,23 +88,28 @@ describe.skipIf(!databaseAvailable())('Админка → карточка ор�
       amount: 500_000,
       validFrom: '2026-01-01',
     });
-    const report = (values: Partial<typeof schema.reports.$inferInsert>) =>
-      f.t.admin.db.insert(schema.reports).values({
-        orgId: f.a.orgId,
-        contractorId: cp,
-        responsibleEmployeeId: acc.employeeId,
-        reportTypeCode: 't1m',
-        period: 'M',
-        act: 'sub',
-        periodStart: '2026-01-01',
-        dueBase: today,
-        dueDate: today,
-        ...values,
-      });
+    const report = async (values: Partial<typeof schema.reports.$inferInsert>) => {
+      const [row] = await f.t.admin.db
+        .insert(schema.reports)
+        .values({
+          orgId: f.a.orgId,
+          contractorId: cp,
+          responsibleEmployeeId: acc.employeeId,
+          reportTypeCode: 't1m',
+          period: 'M',
+          act: 'sub',
+          periodStart: '2026-01-01',
+          dueBase: today,
+          dueDate: today,
+          ...values,
+        })
+        .returning({ id: schema.reports.id });
+      return row!.id;
+    };
     // В этом месяце: «К сдаче» (срок прошёл, если сегодня не первое число), «В работе», сдан с налогом.
-    await report({ periodStart: '2026-02-01', dueBase: past, dueDate: past });
-    await report({ periodStart: '2026-03-01', status: 'in_progress' });
-    await report({
+    reportIds.over = await report({ periodStart: '2026-02-01', dueBase: past, dueDate: past });
+    reportIds.work = await report({ periodStart: '2026-03-01', status: 'in_progress' });
+    reportIds.done = await report({
       periodStart: '2026-04-01',
       status: 'submitted',
       submittedOn: today,
@@ -92,6 +118,26 @@ describe.skipIf(!databaseAvailable())('Админка → карточка ор�
     });
     // Прежняя версия не считается.
     await report({ periodStart: '2026-05-01', superseded: true, amount: 999_000 });
+    // Следующий месяц — «позже».
+    reportIds.later = await report({
+      periodStart: '2026-06-01',
+      dueBase: `${nextMonth}-15`,
+      dueDate: `${nextMonth}-15`,
+    });
+    // Давно просроченный: просрочен и по часам теста (списки берут «сегодня» из часов сайта), и сегодня.
+    reportIds.old = await report({
+      periodStart: '2025-12-01',
+      dueBase: '2026-10-01',
+      dueDate: '2026-10-01',
+    });
+    await f.t.admin.db.insert(schema.statusHistory).values({
+      orgId: f.a.orgId,
+      scale: 'report',
+      entityId: reportIds.work,
+      fromStatus: 'todo',
+      toStatus: 'in_progress',
+      actorUserId: acc.userId,
+    });
     await f.t.admin.db.insert(schema.tasks).values([
       {
         orgId: f.a.orgId,
@@ -135,8 +181,9 @@ describe.skipIf(!databaseAvailable())('Админка → карточка ор�
         createdBy: acc.userId,
       };
     };
+    const charter = file('Устав.pdf', 2_097_152, 'ready');
     await f.t.admin.db.insert(schema.files).values([
-      file('Устав.pdf', 2_097_152, 'ready'),
+      charter,
       file('Черновик.pdf', 500, 'pending'),
       // Как в «Файловом менеджере»: файл оплаты услуги — вид «Разовая услуга», файлов оплат за
       // обслуживание и финансовых операций в карточке нет.
@@ -144,6 +191,14 @@ describe.skipIf(!databaseAvailable())('Админка → карточка ор�
       file('Оплата обслуживания.pdf', 4096, 'ready', 'fee_payment'),
       file('Списание.pdf', 8192, 'ready', 'money_operation'),
     ]);
+    // Файл контрагента, прикреплённый к сданному отчёту ссылкой: виден в окне «Отчёт».
+    await f.t.admin.db.insert(schema.fileLinks).values({
+      orgId: f.a.orgId,
+      fileId: charter.id,
+      sourceKind: 'report',
+      sourceId: reportIds.done,
+      createdBy: acc.userId,
+    });
     const [bank] = await f.t.admin.db
       .select({ code: schema.banks.code, name: schema.banks.name })
       .from(schema.banks)
@@ -189,7 +244,7 @@ describe.skipIf(!databaseAvailable())('Админка → карточка ор�
     expect((await get('/api/admin/organizations/lookup')).status).toBe(400);
   });
 
-  it('«Основное», «Сводка» и «Сотрудники»: владелец, числа и состояния', async () => {
+  it('«Основное» и «Сводка»: владелец и числа; плитка «Отчёты» — несданные в этом месяце и позже', async () => {
     const c = await card(f.a.orgId);
     expect(c.org).toMatchObject({ name: 'Организация А', slug: 'org-a', active: true });
     expect(c.owner).toMatchObject({
@@ -207,53 +262,150 @@ describe.skipIf(!databaseAvailable())('Админка → карточка ор�
       staffBlocked: 0,
       contractors: { regular: 1, oneoff: 1, paused: 1, archived: 1 },
       month,
-      reports: { todo: 1, inWork: 1, submitted: 1, overdue: firstDay ? 0 : 1 },
+      // Прототип v150 orgSum: все несданные (прежняя версия не считается), срок до конца месяца (и
+      // просроченные прошлых месяцев) — «в этом месяце», остальные — «позже»; «Просрочено» — на сегодня.
+      reports: { open: 4, month: 3, later: 1, overdue: (firstDay ? 0 : 1) + 1 },
       tasks: 1,
       files: { count: 2, bytes: 2_097_152 + 1024 },
       telegram: 1,
     });
     // Входы за 30 дней: владелец вошёл в начале теста.
     expect(c.summary.logins30).toBe(1);
-    expect(c.staff.count).toBe(5);
-    const acc = c.staff.rows.find((u) => u.login === 'acc-a')!;
-    expect(acc).toMatchObject({
+    // Списков сотрудников, контрагентов и отчётов в карточке нет — у них свои методы страницами.
+    expect(c).not.toHaveProperty('staff');
+    expect(c).not.toHaveProperty('contractors');
+  });
+
+  it('«Сотрудники»: страница с сервера, все состояния учётной записи, фильтр по состоянию; чужих нет', async () => {
+    const base = `/api/admin/organizations/${f.a.orgId}/staff`;
+    const res = await get(`${base}?size=all`);
+    expect(res.status, await res.clone().text()).toBe(200);
+    const list = AdminOrgStaffList.parse(await res.json());
+    expect(list.total).toBe(5);
+    // По умолчанию — по ФИО (прототип: sort fio).
+    const names = list.items.map((u) => u.fullName);
+    expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b, 'ru')));
+    expect(list.items.find((u) => u.login === 'acc-a')).toMatchObject({
       userId: f.people['acc-a']!.userId,
       fullName: 'Сотрудник acc-a',
       telegram: true,
       states: ['active'],
     });
-    expect(c.staff.rows.find((u) => u.login === 'owner-a')).toMatchObject({ telegram: false });
-    // Чужих сотрудников в списке нет.
-    expect(c.staff.rows.map((u) => u.login)).not.toContain('acc-b');
+    expect(list.items.find((u) => u.login === 'owner-a')).toMatchObject({ telegram: false });
+    expect(list.items.map((u) => u.login)).not.toContain('acc-b');
+    // Временный пароль у одного сотрудника: фильтр «Состояние» и столбец Telegram.
+    await f.t.admin.db
+      .update(schema.users)
+      .set({ mustChangePassword: true })
+      .where(eq(schema.users.login, 'chief-a'));
+    const filter = (x: object) => `filters=${encodeURIComponent(JSON.stringify(x))}`;
+    const temp = AdminOrgStaffList.parse(
+      await (
+        await get(`${base}?${filter({ state: { type: 'enum', vals: ['temp_password'] } })}`)
+      ).json(),
+    );
+    expect(temp.items.map((u) => u.login)).toEqual(['chief-a']);
+    expect(temp.items[0]!.states).toEqual(['temp_password']);
+    const tg = AdminOrgStaffList.parse(
+      await (await get(`${base}?${filter({ tg: { type: 'enum', vals: ['on'] } })}`)).json(),
+    );
+    expect(tg.items.map((u) => u.login)).toEqual(['acc-a']);
+    const values = ListValues.parse(await (await get(`${base}/values?col=state`)).json());
+    expect(values.items.map((v) => v.value)).toEqual(
+      expect.arrayContaining(['active', 'temp_password']),
+    );
+    await f.t.admin.db
+      .update(schema.users)
+      .set({ mustChangePassword: false })
+      .where(eq(schema.users.login, 'chief-a'));
+    const xlsx = await get(`${base}/export?cols=fullName,login,state`);
+    expect(xlsx.status).toBe(200);
+    expect(xlsx.headers.get('content-type')).toContain('spreadsheetml');
   });
 
-  it('«Контрагенты», «Отчёты», «Деньги», «Настройки», «Файлы»: только данные этой организации', async () => {
-    const c = await card(f.a.orgId);
-    expect(c.contractors.count).toBe(4);
-    expect(c.contractors.rows.map((r) => r.name)).not.toContain('ОсОО «Чужой»');
-    expect(c.contractors.rows.find((r) => r.name === 'ОсОО «Ала-Тоо Трейд»')).toMatchObject({
+  it('«Контрагенты»: все контрагенты организации вместе с архивом и стоимостью; чужих нет', async () => {
+    const base = `/api/admin/organizations/${f.a.orgId}/contractors`;
+    const res = await get(`${base}?size=all`);
+    expect(res.status, await res.clone().text()).toBe(200);
+    const list = ContractorList.parse(await res.json());
+    expect(list.total).toBe(4);
+    expect(list.items.map((r) => r.name)).not.toContain('ОсОО «Чужой»');
+    expect(list.items.find((r) => r.name === 'ОсОО «Ала-Тоо Трейд»')).toMatchObject({
       inn: '03744097401851',
-      responsible: 'acc-a',
       kind: 'regular',
-      fee: 500_000,
       serviceStatus: 'active',
+      tariff: expect.objectContaining({ amount: 500_000 }),
     });
-    expect(c.contractors.rows.find((r) => r.name === 'ИП Разовый')).toMatchObject({
-      kind: 'oneoff',
-      fee: null,
+    expect(list.items.find((r) => r.name === 'ОсОО «Архив»')).toMatchObject({
+      serviceStatus: 'archived',
     });
+    const values = ListValues.parse(await (await get(`${base}/values?col=service`)).json());
+    expect(values.items.map((v) => v.value)).toEqual(expect.arrayContaining(['archived']));
+    expect((await get(`${base}/export?cols=name,inn`)).status).toBe(200);
+  });
+
+  it('«Отчёты»: плитки-фильтры, числа плиток, окно «Отчёт» только для просмотра; «Деньги», «Настройки», «Файлы»', async () => {
+    const c = await card(f.a.orgId);
+    expect(c.reports.plates).toEqual({
+      due: 4,
+      work: 1,
+      done: 1,
+      over: (firstDay ? 0 : 1) + 1,
+      all: 5,
+    });
+    expect(c.reports).toMatchObject({ contractors: 3, assigned: 0 });
     const thisMonth = c.reports.byMonth.filter((r) => r.month === month);
     expect(thisMonth).toHaveLength(1);
     expect(thisMonth[0]).toMatchObject({ total: 3, submitted: 1, overdue: firstDay ? 0 : 1 });
-    expect(c.reports.overdue.count).toBe(firstDay ? 0 : 1);
-    if (!firstDay) {
-      expect(c.reports.overdue.rows[0]).toMatchObject({
-        contractor: 'ОсОО «Ала-Тоо Трейд»',
-        periodStart: '2026-02-01',
-        responsible: 'acc-a',
-        status: 'todo',
-      });
-    }
+    // «По месяцам»: 6 прошлых месяцев, текущий и 3 следующих.
+    expect(c.reports.byMonth.find((r) => r.month === nextMonth)).toMatchObject({ total: 1 });
+
+    const base = `/api/admin/organizations/${f.a.orgId}/reports`;
+    const ids = async (query: string) => {
+      const res = await get(`${base}?size=all${query}`);
+      expect(res.status, await res.clone().text()).toBe(200);
+      return ReportList.parse(await res.json()).items.map((r) => r.id);
+    };
+    // По умолчанию — «К сдаче»: все несданные.
+    expect(new Set(await ids(''))).toEqual(
+      new Set([reportIds.over, reportIds.work, reportIds.later, reportIds.old]),
+    );
+    expect(await ids('&plate=work')).toEqual([reportIds.work]);
+    expect(await ids('&plate=done')).toEqual([reportIds.done]);
+    // «Сегодня» списка — по часам сайта (в тестах 18.10.2026): просрочен только давний.
+    expect(await ids('&plate=over')).toEqual([reportIds.old]);
+    expect(await ids('&plate=all')).toHaveLength(5);
+    expect((await get(`${base}?plate=nope`)).status).toBe(400);
+    // Поиск — по контрагенту и ИНН, «Месяц срока» — фильтр по месяцу.
+    expect(await ids(`&plate=all&q=${encodeURIComponent('Ала-Тоо')}&qcols=cp`)).toHaveLength(5);
+    const dueMonth = encodeURIComponent(
+      JSON.stringify({ dueMonth: { type: 'enum', vals: [nextMonth] } }),
+    );
+    expect(await ids(`&plate=all&filters=${dueMonth}`)).toEqual([reportIds.later]);
+    const months = ListValues.parse(
+      await (await get(`${base}/values?col=dueMonth&plate=all`)).json(),
+    );
+    expect(months.items.map((v) => v.value)).toEqual(expect.arrayContaining([month, nextMonth]));
+    expect((await get(`${base}/export?cols=cp,type,due&plate=all`)).status).toBe(200);
+
+    // Окно «Отчёт»: строка, «История статусов», файлы отчёта — без ключа хранилища.
+    const work = AdminOrgReport.parse(await (await get(`${base}/${reportIds.work}`)).json());
+    expect(work).toMatchObject({ id: reportIds.work, status: 'in_progress' });
+    expect(work.statusHistory).toEqual([
+      expect.objectContaining({ from: 'todo', to: 'in_progress', actor: 'acc-a' }),
+    ]);
+    expect(work.files).toEqual([]);
+    const done = AdminOrgReport.parse(await (await get(`${base}/${reportIds.done}`)).json());
+    expect(done.files).toEqual([
+      expect.objectContaining({ name: 'Устав.pdf', bytes: 2_097_152, by: 'acc-a' }),
+    ]);
+    expect(JSON.stringify(done)).not.toContain('/files/');
+    // Отчёт другой организации в окне чужой организации не виден.
+    expect(
+      (await get(`/api/admin/organizations/${f.b.orgId}/reports/${reportIds.done}`)).status,
+    ).toBe(404);
+    expect((await get(`${base}/${randomUUID()}`)).status).toBe(404);
+
     // Налоги: сумма к уплате и оплачено; прежняя версия отчёта не считается.
     expect(c.money.taxes).toEqual([{ month, sum: 120_000, paid: 20_000 }]);
     expect(c.money.feeMonth).toEqual({ charged: expect.any(Number), paid: 0 });
@@ -286,6 +438,17 @@ describe.skipIf(!databaseAvailable())('Админка → карточка ор�
     );
     // Ключа хранилища и ссылок на файлы в ответе нет.
     expect(JSON.stringify(c)).not.toContain('/files/');
+  });
+
+  it('списки карточки: только администратор платформы; нет такой организации — 404', async () => {
+    const none = '00000000-0000-4000-8000-000000000000';
+    for (const tail of ['staff', 'contractors', 'reports', `reports/${reportIds.work}`]) {
+      const path = `/api/admin/organizations/${f.a.orgId}/${tail}`;
+      expect((await get(path, owner)).status, tail).toBe(403);
+      expect((await apiRequest(f.app, 'GET', path)).status, tail).toBe(401);
+      expect((await get(`/api/admin/organizations/${none}/${tail}`)).status, tail).toBe(404);
+    }
+    expect(cpId).not.toBe('');
   });
 
   it('каждое открытие карточки — в истории организации; перечитывание — без новой записи; блокировка видна', async () => {

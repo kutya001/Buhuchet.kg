@@ -196,6 +196,9 @@ function fromReports(tx: Tx, fields: object, texts: SQL) {
     .$dynamic();
 }
 
+/** Месяц срока сдачи `YYYY-MM`. */
+const DUE_MONTH = sql`to_char(${reports.dueDate}, 'YYYY-MM')`;
+
 const statusIn = (statuses: Iterable<string>) =>
   sql`${reports.status} in (${sql.join([...statuses].map(textLiteral), sql`, `)})`;
 const OPEN = statusIn(OPEN_REPORT_STATUSES);
@@ -374,6 +377,15 @@ export function reportListColumns(
       sort: { value: PERIOD_KEY, text: false },
     },
     due: { type: 'date', label: 'report.col.due', value: reports.dueDate },
+    // «Месяц срока» — группировка списка отчётов организации в Админке (доработки 20.11.2026, пакет 2,
+    // блок 1, пункт 2; прототип v150 OC_REPCOLS `m`).
+    dueMonth: {
+      type: 'enum',
+      label: 'report.col.due_month',
+      value: DUE_MONTH,
+      display: sql`${lt('months')}[extract(month from ${reports.dueDate})::int] || ' ' || extract(year from ${reports.dueDate})::int::text`,
+      sort: { value: DUE_MONTH, text: false },
+    },
     days: {
       type: 'int',
       label: 'report.col.days',
@@ -557,6 +569,11 @@ export interface ReportListOptions {
   month?: YearMonth;
   /** «Учёт оплаты налогов» включён: просрочка оплаты во вкладках «Просрочено» и «На неделе». */
   taxpay: boolean;
+  /**
+   * Только эти статусы сдачи: плитки-фильтры «К сдаче», «В работе», «Сдано» списка отчётов организации в
+   * Админке (`REPORT_PLATE_STATUSES`).
+   */
+  statuses?: readonly ReportStatus[];
 }
 
 /**
@@ -691,7 +708,16 @@ function tabCondition(
 function listScope(
   o: Pick<
     ReportListOptions,
-    'scope' | 'tab' | 'today' | 'quick' | 'waiting' | 'contractorId' | 'day' | 'month' | 'taxpay'
+    | 'scope'
+    | 'tab'
+    | 'today'
+    | 'quick'
+    | 'waiting'
+    | 'contractorId'
+    | 'day'
+    | 'month'
+    | 'taxpay'
+    | 'statuses'
   >,
 ): SQL | undefined {
   return and(
@@ -700,7 +726,68 @@ function listScope(
     o.contractorId ? eq(reports.contractorId, o.contractorId) : undefined,
     tabCondition(o),
     quickOf(o.quick),
+    o.statuses ? statusIn(o.statuses) : undefined,
   );
+}
+
+/**
+ * Плитки-фильтры списка отчётов организации в Админке (доработки 20.11.2026, пакет 2, блок 1, пункт 2;
+ * прототип v150 OC_RF): «К сдаче» — все несданные, «В работе» — в работе и на исправлении, «Сдано»,
+ * «Просрочено» — как у самой фирмы на вкладке «Просроченные», «Все».
+ */
+export const REPORT_PLATES = ['due', 'work', 'done', 'over', 'all'] as const;
+export type ReportPlate = (typeof REPORT_PLATES)[number];
+
+export const REPORT_PLATE_STATUSES: Readonly<
+  Record<Exclude<ReportPlate, 'over' | 'all'>, readonly ReportStatus[]>
+> = {
+  due: [...OPEN_REPORT_STATUSES],
+  work: ['in_progress', 'needs_fix'],
+  done: ['submitted'],
+};
+
+/** Вкладка и статусы списка для плитки: «Просрочено» — вкладка `overdue`, остальные — `all`. */
+export function reportPlateOptions(
+  plate: ReportPlate,
+): Pick<ReportListOptions, 'tab' | 'statuses'> {
+  if (plate === 'over') return { tab: 'overdue' };
+  if (plate === 'all') return { tab: 'all' };
+  return { tab: 'all', statuses: REPORT_PLATE_STATUSES[plate] };
+}
+
+/** Числа плиток и «Сводки» карточки организации: `dueMonth` — несданные со сроком до конца месяца. */
+export interface ReportPlateCounts extends Record<ReportPlate, number> {
+  dueMonth: number;
+  dueLater: number;
+}
+
+/**
+ * Числа плиток-фильтров и плитки «Отчёты» «Сводки» карточки организации (прототип v150 orgSum, ocRep):
+ * все живые отчёты организации одним проходом; несданные — «в этом месяце» (срок до конца текущего
+ * месяца, вместе с просроченными прошлых месяцев) и «позже».
+ */
+export async function reportPlateCounts(
+  tx: Tx,
+  o: { today: IsoDate; taxpay: boolean },
+): Promise<ReportPlateCounts> {
+  const count = (where: SQL | undefined) =>
+    sql<number>`count(*) filter (where ${where ?? sql`true`})`.mapWith(Number);
+  const open = statusIn(REPORT_PLATE_STATUSES.due);
+  const monthEnd = sql`(date_trunc('month', ${dateLiteral(o.today)}::date) + interval '1 month' - interval '1 day')::date`;
+  const [row] = await tx
+    .select({
+      due: count(open),
+      dueMonth: count(sql`${open} and ${reports.dueDate} <= ${monthEnd}`),
+      dueLater: count(sql`${open} and ${reports.dueDate} > ${monthEnd}`),
+      work: count(statusIn(REPORT_PLATE_STATUSES.work)),
+      done: count(statusIn(REPORT_PLATE_STATUSES.done)),
+      over: count(tabCondition({ ...o, tab: 'overdue', waiting: { confirm: false, own: null } })),
+      all: count(undefined),
+    })
+    .from(reports)
+    .innerJoin(contractors, eq(contractors.id, reports.contractorId))
+    .where(eq(reports.superseded, false));
+  return row ?? { due: 0, dueMonth: 0, dueLater: 0, work: 0, done: 0, over: 0, all: 0 };
 }
 
 /** Строка списка отчётов. */

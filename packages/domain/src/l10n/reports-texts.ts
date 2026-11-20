@@ -39,6 +39,7 @@ export const REPORTS_TEXTS = {
   'report.col.organ': { ru: 'Орган', section: S },
   'report.col.period': { ru: 'Период', section: S },
   'report.col.due': { ru: 'Срок сдачи', section: S },
+  'report.col.due_month': { ru: 'Месяц срока', section: S },
   'report.col.days': { ru: 'Дней до срока', section: S },
   'report.col.status': { ru: 'Статус сдачи', section: S },
   'report.col.submitted': { ru: 'Дата сдачи', section: S },

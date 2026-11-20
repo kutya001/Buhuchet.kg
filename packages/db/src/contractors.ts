@@ -676,6 +676,11 @@ export interface ContractorListOptions {
    * заполнены показатели»; null — столбца нет (функция выключена, нет права или он не нужен запросу).
    */
   kpiMissing?: readonly string[] | null;
+  /**
+   * Архивные видны и без фильтра «Статус обслуживания»: «Контрагенты» карточки организации в Админке
+   * (прототип v150 ocGrids: все контрагенты, «В архиве» — в «Состоянии»).
+   */
+  archived?: boolean;
 }
 
 /**
@@ -686,7 +691,7 @@ function listScope(query: Pick<ListQuery, 'filters'>, o: ContractorListOptions):
   const parts: (SQL | undefined)[] = [o.scope];
   if (o.tab === 'mine') parts.push(eq(contractors.responsibleEmployeeId, o.employeeId));
   if (o.tab === 'debtors') parts.push(o.fee ? sql`${FEE_DEBT_VALUE} > 0` : sql`false`);
-  if (!Object.hasOwn(query.filters, 'service'))
+  if (!o.archived && !Object.hasOwn(query.filters, 'service'))
     parts.push(ne(contractors.serviceStatus, 'archived'));
   return and(...parts);
 }

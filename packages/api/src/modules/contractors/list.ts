@@ -94,7 +94,7 @@ async function listOptions(
 type RowService = ContractorRowBody['service'];
 
 /** Обслуживание строк для меню: периоды и запланированное (правила `serviceMenu`). */
-async function rowServices(
+export async function contractorRowServices(
   tx: Tx,
   rows: readonly ContractorRow[],
   today: string,
@@ -123,7 +123,11 @@ async function rowServices(
 }
 
 /** Строка списка для ответа API: моменты — строкой ISO, ставка и долг — только тому, кто видит плату. */
-function rowBody(r: ContractorRow, fee: boolean, service: RowService): ContractorRowBody {
+export function contractorRowBody(
+  r: ContractorRow,
+  fee: boolean,
+  service: RowService,
+): ContractorRowBody {
   return {
     ...r,
     tariff: fee ? r.tariff : null,
@@ -172,11 +176,11 @@ export function listContractorsHandler(
     const { page, fee, services } = await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
       const o = await listOptions(deps, c, tx, params.tab, needsKpi(query));
       const page = await listContractorsPage(tx, query, o);
-      return { page, fee: o.fee, services: await rowServices(tx, page.rows, o.today) };
+      return { page, fee: o.fee, services: await contractorRowServices(tx, page.rows, o.today) };
     });
     return c.json(
       {
-        items: page.rows.map((r) => rowBody(r, fee, services.get(r.id)!)),
+        items: page.rows.map((r) => contractorRowBody(r, fee, services.get(r.id)!)),
         total: page.total,
         page: page.page,
         size: page.size,

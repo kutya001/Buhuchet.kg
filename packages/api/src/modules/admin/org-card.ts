@@ -8,7 +8,7 @@ import {
   withOrgContext,
   withUserContext,
 } from '@buhuchet/db';
-import { accountStates, RecordNotFoundError } from '@buhuchet/domain';
+import { RecordNotFoundError } from '@buhuchet/domain';
 import { AdminOrgCard, AdminOrgLookup, ApiError, Uuid } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
@@ -71,7 +71,7 @@ export const orgCardRoute = createRoute({
   responses: {
     200: {
       description:
-        'Карточка: основное, сводка, сотрудники, контрагенты, отчёты, деньги, настройки, файлы, история. Открытие пишется в историю организации',
+        'Карточка: основное, сводка, отчёты по месяцам и числа плиток, деньги, настройки, файлы, история (списки сотрудников, контрагентов и отчётов — своими методами). Открытие пишется в историю организации',
       content: { 'application/json': { schema: AdminOrgCard } },
     },
     400: { description: 'Неверный параметр', content: error },
@@ -111,19 +111,6 @@ export function orgCardHandler(deps: ApiDeps): RouteHandler<typeof orgCardRoute,
       lead: card.lead ? { ...card.lead, at: iso(card.lead.at) } : null,
       leadFiles: card.leadFiles.map((f) => ({ ...f, at: iso(f.at) })),
       summary: card.summary,
-      staff: {
-        count: card.staff.count,
-        rows: card.staff.rows.map((u) => ({
-          userId: u.userId,
-          fullName: u.fullName,
-          login: u.login,
-          role: u.role,
-          telegram: u.telegram,
-          lastLoginAt: u.lastLoginAt ? iso(u.lastLoginAt) : null,
-          states: accountStates({ ...u, isPlatformAdmin: false }),
-        })),
-      },
-      contractors: card.contractors,
       reports: card.reports,
       money: card.money,
       settings: card.settings,
