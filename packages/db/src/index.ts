@@ -15,6 +15,8 @@ export * from './storage-retries';
 export * from './file-trash';
 export * from './admin-storage';
 export * from './subscriptions';
+export * from './datamart-roles';
+export * from './datamart-run';
 export * from './auth';
 export * from './telegram';
 export * from './telegram-bot';

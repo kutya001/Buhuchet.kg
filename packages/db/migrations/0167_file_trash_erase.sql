@@ -11,6 +11,8 @@
 ALTER TABLE "file_trash" ADD COLUMN "contractor_bound" boolean DEFAULT false NOT NULL;--> statement-breakpoint
 UPDATE "file_trash" SET "contractor_bound" = true WHERE "contractor_id" IS NOT NULL;--> statement-breakpoint
 ALTER TABLE "file_trash" ADD CONSTRAINT "file_trash_contractor_check" CHECK ("file_trash"."contractor_bound" or "file_trash"."contractor_id" is null);--> statement-breakpoint
+-- Новый столбец — роли Админки «Витрины данных», как остальные столбцы file_trash (0166, п. О-62).
+GRANT SELECT ("contractor_bound") ON TABLE "file_trash" TO buhuchet_dm_admin;--> statement-breakpoint
 CREATE FUNCTION app.storage_key_in_use(p_key text)
   RETURNS boolean
   LANGUAGE sql STABLE SECURITY DEFINER
