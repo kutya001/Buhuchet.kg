@@ -331,22 +331,23 @@ export const subscriptionPayments = pgTable(
       using: adminOutsideOrg,
     }),
     // Заявку с чеком отправляет сотрудник организации от своего имени (что это владелец — проверяет
-    // API), непроверенной и без полей решения; запись без чека — только администратор платформы, сразу
-    // подтверждённой.
+    // API), сейчас (по `created_at` база ищет последнюю проверенную заявку — открывает ли новый чек
+    // доступ), непроверенной и без полей решения; запись без чека — только администратор платформы,
+    // сразу подтверждённой. Правил — только тот, кто вошёл.
     pgPolicy('subscription_payments_insert_guard', {
       as: 'restrictive',
       for: 'insert',
       to: appRole,
-      withCheck: sql`${t.createdBy} = ${currentUserId} and ((${t.status} = 'pending' and ${t.kind} in (${oneOf(SUBSCRIPTION_OWNER_PAYMENT_KINDS)}) and ${t.decidedBy} is null and ${t.paidUntil} is null and ${t.reason} is null and not ${isPlatformAdmin}) or (${isPlatformAdmin} and ${t.kind} in (${oneOf(SUBSCRIPTION_ADMIN_PAYMENT_KINDS)}) and ${t.decidedBy} = ${currentUserId}))`,
+      withCheck: sql`${t.createdBy} = ${currentUserId} and (${t.updatedBy} is null or ${t.updatedBy} = ${currentUserId}) and ((${t.status} = 'pending' and ${t.kind} in (${oneOf(SUBSCRIPTION_OWNER_PAYMENT_KINDS)}) and ${t.decidedBy} is null and ${t.paidUntil} is null and ${t.reason} is null and ${t.createdAt} between now() - interval '1 minute' and now() + interval '1 minute' and not ${isPlatformAdmin}) or (${isPlatformAdmin} and ${t.kind} in (${oneOf(SUBSCRIPTION_ADMIN_PAYMENT_KINDS)}) and ${t.decidedBy} = ${currentUserId}))`,
     }),
     // Меняется только непроверенная заявка: владелец заменяет чек, решает администратор (какие столбцы
-    // кто меняет — триггер `subscription_payments_guard`, миграция 0165).
+    // кто меняет — триггер `subscription_payments_guard`, миграция 0165); правил — тот, кто вошёл.
     pgPolicy('subscription_payments_update_guard', {
       as: 'restrictive',
       for: 'update',
       to: appRole,
       using: sql`${t.status} = 'pending'`,
-      withCheck: sql`${t.status} = 'pending' or (${isPlatformAdmin} and ${t.decidedBy} = ${currentUserId})`,
+      withCheck: sql`(${t.updatedBy} is null or ${t.updatedBy} = ${currentUserId}) and (${t.status} = 'pending' or (${isPlatformAdmin} and ${t.decidedBy} = ${currentUserId}))`,
     }),
   ],
 ).enableRLS();

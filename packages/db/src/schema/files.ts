@@ -454,7 +454,11 @@ export const fileTrash = pgTable(
     why: text('why', { enum: FILE_TRASH_REASONS }).notNull(),
     /** Удалённый файл (`del`) — для «Вернуть». */
     fileId: uuid('file_id'),
-    /** Ключ хранилища; у организации — только в её папке `org/<org_id>/`, у `del` — ключ файла `file_id`. */
+    /**
+     * Ключ хранилища: у организации — только в её папке `org/<org_id>/`, без `.` и `..` в пути; кроме
+     * лишнего файла — ключ файла или присланного файла (`files/<номер>`, `sent/<номер>` с `.up`, `.chk-…`);
+     * у `del` — ключ файла `file_id`.
+     */
     storageKey: text('storage_key').notNull(),
     /**
      * Контрагент файла: составной внешний ключ (contractor_id, org_id) на контрагента своей организации с
@@ -496,7 +500,7 @@ export const fileTrash = pgTable(
     }).onDelete('cascade'),
     check(
       'file_trash_fields_check',
-      sql`${t.why} in (${oneOf(FILE_TRASH_REASONS)}) and (${t.why} = 'del') = (${t.fileId} is not null) and (${t.why} = 'extra' or ${t.orgId} is not null) and char_length(${t.name}) between 1 and ${sql.raw(String(FILE_NAME_MAX_LENGTH))} and char_length(${t.storageKey}) between 1 and 300 and (${t.orgId} is null or starts_with(${t.storageKey}, 'org/' || ${t.orgId}::text || '/')) and char_length(coalesce(${t.source}, '')) <= 100 and ${t.sizeBytes} >= 0`,
+      sql`${t.why} in (${oneOf(FILE_TRASH_REASONS)}) and (${t.why} = 'del') = (${t.fileId} is not null) and (${t.why} = 'extra' or ${t.orgId} is not null) and char_length(${t.name}) between 1 and ${sql.raw(String(FILE_NAME_MAX_LENGTH))} and char_length(${t.storageKey}) between 1 and 300 and (${t.orgId} is null or starts_with(${t.storageKey}, 'org/' || ${t.orgId}::text || '/')) and ${t.storageKey} !~ '(^|/)[.]{1,2}(/|$)' and (${t.why} = 'extra' or ${t.storageKey} ~ ('^org/' || ${t.orgId}::text || '/(files|sent)/${sql.raw(KEY_UUID)}([.]up|[.]chk-${sql.raw(KEY_UUID)})?$')) and (${t.orgId} is not null or ${t.contractorId} is null) and char_length(coalesce(${t.source}, '')) <= 100 and ${t.sizeBytes} >= 0`,
     ),
     check(
       'file_trash_erase_try_check',
@@ -529,12 +533,13 @@ export const fileTrash = pgTable(
     }),
     // Ставит тот, кто вошёл (задача — без пользователя), сейчас — значит, не раньше суток от сейчас;
     // лишний файл — только администратор; удалённый файл (`del`) — только с ключом этого файла своей
-    // организации, уже удалённого (под RLS: чужой файл не виден).
+    // организации, уже удалённого (под RLS: чужой файл не виден); прежняя версия и непринятый
+    // присланный (`rep`, `auto`) — не ключ живого файла: «Изменить файл» сначала меняет ключ файла.
     pgPolicy('file_trash_insert_guard', {
       as: 'restrictive',
       for: 'insert',
       to: appRole,
-      withCheck: sql`${t.deletedBy} is not distinct from ${currentUserId} and ${t.deletedAt} between now() - interval '5 minutes' and now() + interval '5 minutes' and ${t.erasedAt} is null and ${t.restoredAt} is null and ${t.attempts} = 0 and ${t.lastError} is null and (${t.why} <> 'extra' or ${isPlatformAdmin}) and (${t.why} <> 'del' or exists (select 1 from public.files f where f.id = ${t.fileId} and f.org_id = ${t.orgId} and f.storage_key = ${t.storageKey} and f.state = 'deleted'))`,
+      withCheck: sql`${t.deletedBy} is not distinct from ${currentUserId} and ${t.deletedAt} between now() - interval '5 minutes' and now() + interval '5 minutes' and ${t.erasedAt} is null and ${t.restoredAt} is null and ${t.attempts} = 0 and ${t.lastError} is null and (${t.why} <> 'extra' or ${isPlatformAdmin}) and (${t.why} <> 'del' or exists (select 1 from public.files f where f.id = ${t.fileId} and f.org_id = ${t.orgId} and f.storage_key = ${t.storageKey} and f.state = 'deleted')) and (${t.why} = 'del' or not exists (select 1 from public.files f where f.storage_key = ${t.storageKey} and f.state <> 'deleted'))`,
     }),
     // «Вернуть» — только администратор платформы, от своего имени; меняются только отметки «Вернуть»
     // (права на столбцы, миграция 0165), стирание и попытки пишут функции задачи этапа 1.

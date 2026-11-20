@@ -251,10 +251,24 @@ describe.skipIf(!databaseAvailable())('витрина данных и файлы
         inA((tx) => tx.update(dmTokens).set(set).where(eq(dmTokens.id, mine!.id))),
       ).rejects.toEqual(rls);
     }
-    // Перевыпуск: старый работает ещё не дольше суток.
+    // Перевыпуск: старый работает ещё не дольше суток; новый — живой токен той же организации (простой
+    // внешний ключ идёт мимо RLS), не сам токен.
     const [next] = await inA((tx) =>
       tx.insert(dmTokens).values(token()).returning({ id: dmTokens.id }),
     );
+    const [ofB] = await inB((tx) =>
+      tx.insert(dmTokens).values(token()).returning({ id: dmTokens.id }),
+    );
+    for (const replacedBy of [ofB!.id, mine!.id]) {
+      await expect(
+        inA((tx) =>
+          tx
+            .update(dmTokens)
+            .set({ replacedBy, graceUntil: new Date(Date.now() + HOUR) })
+            .where(eq(dmTokens.id, mine!.id)),
+        ),
+      ).rejects.toEqual(pgError('23514', 'dm_tokens_guard'));
+    }
     await expect(
       inA((tx) =>
         tx
@@ -273,6 +287,24 @@ describe.skipIf(!databaseAvailable())('витрина данных и файлы
         })
         .where(eq(dmTokens.id, mine!.id)),
     );
+    // Перевыпуск один раз: снять его или продлить нельзя — иначе старый токен «оживает».
+    for (const set of [
+      { replacedBy: null, graceUntil: null },
+      { graceUntil: new Date(Date.now() + 22 * HOUR) },
+    ]) {
+      await expect(
+        inA((tx) => tx.update(dmTokens).set(set).where(eq(dmTokens.id, mine!.id))),
+      ).rejects.toEqual(pgError('23514', 'dm_tokens_guard'));
+    }
+    // Отзыв — сейчас, не будущей датой.
+    await expect(
+      inA((tx) =>
+        tx
+          .update(dmTokens)
+          .set({ revokedAt: new Date('2099-01-01T00:00:00Z'), revokedBy: a.ownerUserId })
+          .where(eq(dmTokens.id, next!.id)),
+      ),
+    ).rejects.toEqual(pgError('23514', 'dm_tokens_guard'));
     // Свой токен отзывает сотрудник своей организации от своего имени.
     expect(
       await inA((tx) =>
@@ -430,6 +462,37 @@ describe.skipIf(!databaseAvailable())('витрина данных и файлы
           .values({ ...row, fileId: live, storageKey: `org/${b.orgId}/files/${live}` }),
       ),
     ).rejects.toEqual(rls);
+    // Кроме лишнего файла — только ключ файла или присланного файла, без «..» в пути; прежняя версия —
+    // не ключ живого файла (иначе через сутки сотрётся живой).
+    for (const storageKey of [
+      `org/${b.orgId}/../${a.orgId}/files/${randomUUID()}`,
+      `org/${b.orgId}/subs/${randomUUID()}`,
+      `org/${b.orgId}/files/${randomUUID()}/x`,
+    ]) {
+      await expect(
+        inB((tx) =>
+          tx.insert(fileTrash).values({ why: 'rep', storageKey, name: 'Старый.pdf', sizeBytes: 1 }),
+        ),
+      ).rejects.toEqual(pgError('23514', 'file_trash_fields_check'));
+    }
+    await expect(
+      inB((tx) =>
+        tx.insert(fileTrash).values({
+          why: 'rep',
+          storageKey: `org/${b.orgId}/files/${live}`,
+          name: 'Живой.pdf',
+          sizeBytes: 1,
+        }),
+      ),
+    ).rejects.toEqual(rls);
+    await inB((tx) =>
+      tx.insert(fileTrash).values({
+        why: 'auto',
+        storageKey: `org/${b.orgId}/sent/${randomUUID()}.chk-${randomUUID()}`,
+        name: 'Не принят.pdf',
+        sizeBytes: 1,
+      }),
+    );
     // Контрагент — только существующий своей организации (составной внешний ключ).
     await expect(
       inB((tx) => tx.insert(fileTrash).values({ ...row, contractorId: randomUUID() })),
@@ -514,7 +577,19 @@ describe.skipIf(!databaseAvailable())('витрина данных и файлы
         source: 'Лишний файл хранилища',
       }),
     );
-    expect(await asAdmin((tx) => tx.select().from(fileTrash))).toHaveLength(3);
+    // Без организации нет и контрагента.
+    await expect(
+      asAdmin((tx) =>
+        tx.insert(fileTrash).values({
+          why: 'extra',
+          storageKey: 'org/x/files/z',
+          contractorId: randomUUID(),
+          name: 'z',
+          sizeBytes: 1,
+        }),
+      ),
+    ).rejects.toEqual(pgError('23514', 'file_trash_fields_check'));
+    expect(await asAdmin((tx) => tx.select().from(fileTrash))).toHaveLength(4);
   });
 
   it('файлы всех организаций для Админки — без ключа хранилища и незагруженных; сотруднику — ничего', async () => {

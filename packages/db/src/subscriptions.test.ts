@@ -455,11 +455,15 @@ describe.skipIf(!databaseAvailable())(
           ),
         ).rejects.toEqual(pgError('23514', 'subscription_payments_receipt_check'));
       }
-      // Заявка — без полей решения: «решил» и «Оплачено до» ставит только администратор.
+      // Заявка — без полей решения: «решил» и «Оплачено до» ставит только администратор. Отправлена
+      // сейчас (иначе будущей датой обходится «после отклонения чек доступ не открывает») и от своего имени.
       for (const bad of [
         { decidedBy: adminId },
         { paidUntil: '2027-01-01' },
         { reason: 'Подтверждено' },
+        { createdAt: new Date('2099-01-01T00:00:00Z') },
+        { createdAt: new Date(Date.now() - 2 * 60_000) },
+        { updatedBy: b.ownerUserId },
       ]) {
         await expect(
           inA((tx) =>
@@ -509,6 +513,15 @@ describe.skipIf(!databaseAvailable())(
           ),
         ).rejects.toEqual(guard);
       }
+      // Правит заявку только тот, кто вошёл.
+      await expect(
+        inA((tx) =>
+          tx
+            .update(subscriptionPayments)
+            .set({ updatedBy: b.ownerUserId })
+            .where(eq(subscriptionPayments.id, id)),
+        ),
+      ).rejects.toEqual(rls);
       // Тип и размер чека владелец меняет вместе с файлом, но пустыми не оставляет.
       for (const set of [{ receiptType: null }, { receiptBytes: null }]) {
         await expect(

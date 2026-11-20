@@ -10,10 +10,13 @@
 --     загрузка и удаление файлов ждут до COMMIT; чтение не ждёт;
 --   organizations, users, contractors — внешние ключи новых таблиц (SHARE ROW EXCLUSIVE): правки этих
 --     строк ждут до COMMIT, чтение не ждёт; запуск подписок держит строки организаций FOR NO KEY UPDATE —
---     с проверками внешних ключей вставок в таблицы организаций он не спорит;
+--     с проверками внешних ключей вставок в таблицы организаций он не спорит; contractors берём первой,
+--     до files: «Создать контрагента» пишет контрагента, потом его файлы — тот же порядок, без
+--     взаимной блокировки;
 --   org_settings — столбец ext_api добавляется без перезаписи таблицы (строка на организацию,
 --     миллисекунды), но ACCESS EXCLUSIVE закрывает и чтение — поэтому он в самом конце, перед ANALYZE.
 SET LOCAL lock_timeout = '10s';--> statement-breakpoint
+LOCK TABLE public.contractors IN SHARE ROW EXCLUSIVE MODE;--> statement-breakpoint
 CREATE TABLE "org_subscriptions" (
 	"org_id" uuid PRIMARY KEY DEFAULT app.current_org_id() NOT NULL,
 	"plan_id" text NOT NULL,
@@ -136,7 +139,7 @@ CREATE TABLE "file_trash" (
 	"erased_at" timestamp with time zone,
 	"restored_at" timestamp with time zone,
 	"restored_by" uuid,
-	CONSTRAINT "file_trash_fields_check" CHECK ("file_trash"."why" in ('del', 'rep', 'auto', 'extra') and ("file_trash"."why" = 'del') = ("file_trash"."file_id" is not null) and ("file_trash"."why" = 'extra' or "file_trash"."org_id" is not null) and char_length("file_trash"."name") between 1 and 255 and char_length("file_trash"."storage_key") between 1 and 300 and ("file_trash"."org_id" is null or starts_with("file_trash"."storage_key", 'org/' || "file_trash"."org_id"::text || '/')) and char_length(coalesce("file_trash"."source", '')) <= 100 and "file_trash"."size_bytes" >= 0),
+	CONSTRAINT "file_trash_fields_check" CHECK ("file_trash"."why" in ('del', 'rep', 'auto', 'extra') and ("file_trash"."why" = 'del') = ("file_trash"."file_id" is not null) and ("file_trash"."why" = 'extra' or "file_trash"."org_id" is not null) and char_length("file_trash"."name") between 1 and 255 and char_length("file_trash"."storage_key") between 1 and 300 and ("file_trash"."org_id" is null or starts_with("file_trash"."storage_key", 'org/' || "file_trash"."org_id"::text || '/')) and "file_trash"."storage_key" !~ '(^|/)[.]{1,2}(/|$)' and ("file_trash"."why" = 'extra' or "file_trash"."storage_key" ~ ('^org/' || "file_trash"."org_id"::text || '/(files|sent)/[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}([.]up|[.]chk-[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12})?$')) and ("file_trash"."org_id" is not null or "file_trash"."contractor_id" is null) and char_length(coalesce("file_trash"."source", '')) <= 100 and "file_trash"."size_bytes" >= 0),
 	CONSTRAINT "file_trash_erase_try_check" CHECK ("file_trash"."attempts" >= 0 and char_length(coalesce("file_trash"."last_error", '')) <= 500 and case when jsonb_typeof("file_trash"."links") = 'array' then jsonb_array_length("file_trash"."links") <= 500 else false end),
 	CONSTRAINT "file_trash_erase_check" CHECK ("file_trash"."erase_at" >= "file_trash"."deleted_at" + interval '24 hours'),
 	CONSTRAINT "file_trash_restore_check" CHECK (("file_trash"."restored_at" is null) = ("file_trash"."restored_by" is null) and ("file_trash"."restored_at" is null or ("file_trash"."why" in ('del', 'extra') and "file_trash"."erased_at" is null)))
@@ -321,8 +324,8 @@ CREATE POLICY "org_subscriptions_admin_insert" ON "org_subscriptions" AS RESTRIC
 CREATE POLICY "org_subscriptions_admin_update" ON "org_subscriptions" AS RESTRICTIVE FOR UPDATE TO "buhuchet_app" USING (app.is_platform_admin()) WITH CHECK (app.is_platform_admin());--> statement-breakpoint
 CREATE POLICY "subscription_payments_isolation" ON "subscription_payments" AS PERMISSIVE FOR ALL TO "buhuchet_app" USING ("subscription_payments"."org_id" = app.current_org_id()) WITH CHECK ("subscription_payments"."org_id" = app.current_org_id());--> statement-breakpoint
 CREATE POLICY "subscription_payments_admin_read" ON "subscription_payments" AS PERMISSIVE FOR SELECT TO "buhuchet_app" USING (app.current_org_id() is null and app.is_platform_admin());--> statement-breakpoint
-CREATE POLICY "subscription_payments_insert_guard" ON "subscription_payments" AS RESTRICTIVE FOR INSERT TO "buhuchet_app" WITH CHECK ("subscription_payments"."created_by" = app.current_user_id() and (("subscription_payments"."status" = 'pending' and "subscription_payments"."kind" in ('renew', 'grow', 'mem') and "subscription_payments"."decided_by" is null and "subscription_payments"."paid_until" is null and "subscription_payments"."reason" is null and not app.is_platform_admin()) or (app.is_platform_admin() and "subscription_payments"."kind" in ('free', 'admin') and "subscription_payments"."decided_by" = app.current_user_id())));--> statement-breakpoint
-CREATE POLICY "subscription_payments_update_guard" ON "subscription_payments" AS RESTRICTIVE FOR UPDATE TO "buhuchet_app" USING ("subscription_payments"."status" = 'pending') WITH CHECK ("subscription_payments"."status" = 'pending' or (app.is_platform_admin() and "subscription_payments"."decided_by" = app.current_user_id()));--> statement-breakpoint
+CREATE POLICY "subscription_payments_insert_guard" ON "subscription_payments" AS RESTRICTIVE FOR INSERT TO "buhuchet_app" WITH CHECK ("subscription_payments"."created_by" = app.current_user_id() and ("subscription_payments"."updated_by" is null or "subscription_payments"."updated_by" = app.current_user_id()) and (("subscription_payments"."status" = 'pending' and "subscription_payments"."kind" in ('renew', 'grow', 'mem') and "subscription_payments"."decided_by" is null and "subscription_payments"."paid_until" is null and "subscription_payments"."reason" is null and "subscription_payments"."created_at" between now() - interval '1 minute' and now() + interval '1 minute' and not app.is_platform_admin()) or (app.is_platform_admin() and "subscription_payments"."kind" in ('free', 'admin') and "subscription_payments"."decided_by" = app.current_user_id())));--> statement-breakpoint
+CREATE POLICY "subscription_payments_update_guard" ON "subscription_payments" AS RESTRICTIVE FOR UPDATE TO "buhuchet_app" USING ("subscription_payments"."status" = 'pending') WITH CHECK (("subscription_payments"."updated_by" is null or "subscription_payments"."updated_by" = app.current_user_id()) and ("subscription_payments"."status" = 'pending' or (app.is_platform_admin() and "subscription_payments"."decided_by" = app.current_user_id())));--> statement-breakpoint
 CREATE POLICY "subscription_plans_read" ON "subscription_plans" AS PERMISSIVE FOR SELECT TO "buhuchet_app" USING (true);--> statement-breakpoint
 CREATE POLICY "subscription_plans_admin_insert" ON "subscription_plans" AS PERMISSIVE FOR INSERT TO "buhuchet_app" WITH CHECK (app.is_platform_admin());--> statement-breakpoint
 CREATE POLICY "subscription_plans_admin_update" ON "subscription_plans" AS PERMISSIVE FOR UPDATE TO "buhuchet_app" USING (app.is_platform_admin()) WITH CHECK (app.is_platform_admin());--> statement-breakpoint
@@ -331,7 +334,7 @@ CREATE POLICY "subscription_settings_read" ON "subscription_settings" AS PERMISS
 CREATE POLICY "subscription_settings_admin_update" ON "subscription_settings" AS PERMISSIVE FOR UPDATE TO "buhuchet_app" USING (app.is_platform_admin()) WITH CHECK (app.is_platform_admin());--> statement-breakpoint
 CREATE POLICY "file_trash_isolation" ON "file_trash" AS PERMISSIVE FOR ALL TO "buhuchet_app" USING ("file_trash"."org_id" = app.current_org_id()) WITH CHECK ("file_trash"."org_id" = app.current_org_id());--> statement-breakpoint
 CREATE POLICY "file_trash_admin" ON "file_trash" AS PERMISSIVE FOR ALL TO "buhuchet_app" USING (app.current_org_id() is null and app.is_platform_admin()) WITH CHECK (app.current_org_id() is null and app.is_platform_admin());--> statement-breakpoint
-CREATE POLICY "file_trash_insert_guard" ON "file_trash" AS RESTRICTIVE FOR INSERT TO "buhuchet_app" WITH CHECK ("file_trash"."deleted_by" is not distinct from app.current_user_id() and "file_trash"."deleted_at" between now() - interval '5 minutes' and now() + interval '5 minutes' and "file_trash"."erased_at" is null and "file_trash"."restored_at" is null and "file_trash"."attempts" = 0 and "file_trash"."last_error" is null and ("file_trash"."why" <> 'extra' or app.is_platform_admin()) and ("file_trash"."why" <> 'del' or exists (select 1 from public.files f where f.id = "file_trash"."file_id" and f.org_id = "file_trash"."org_id" and f.storage_key = "file_trash"."storage_key" and f.state = 'deleted')));--> statement-breakpoint
+CREATE POLICY "file_trash_insert_guard" ON "file_trash" AS RESTRICTIVE FOR INSERT TO "buhuchet_app" WITH CHECK ("file_trash"."deleted_by" is not distinct from app.current_user_id() and "file_trash"."deleted_at" between now() - interval '5 minutes' and now() + interval '5 minutes' and "file_trash"."erased_at" is null and "file_trash"."restored_at" is null and "file_trash"."attempts" = 0 and "file_trash"."last_error" is null and ("file_trash"."why" <> 'extra' or app.is_platform_admin()) and ("file_trash"."why" <> 'del' or exists (select 1 from public.files f where f.id = "file_trash"."file_id" and f.org_id = "file_trash"."org_id" and f.storage_key = "file_trash"."storage_key" and f.state = 'deleted')) and ("file_trash"."why" = 'del' or not exists (select 1 from public.files f where f.storage_key = "file_trash"."storage_key" and f.state <> 'deleted')));--> statement-breakpoint
 CREATE POLICY "file_trash_update_guard" ON "file_trash" AS RESTRICTIVE FOR UPDATE TO "buhuchet_app" USING (app.is_platform_admin() and "file_trash"."erased_at" is null and "file_trash"."restored_at" is null) WITH CHECK (app.is_platform_admin() and "file_trash"."restored_by" = app.current_user_id());--> statement-breakpoint
 CREATE POLICY "storage_check_items_admin_read" ON "storage_check_items" AS PERMISSIVE FOR SELECT TO "buhuchet_app" USING (app.is_platform_admin());--> statement-breakpoint
 CREATE POLICY "storage_check_runs_admin_read" ON "storage_check_runs" AS PERMISSIVE FOR SELECT TO "buhuchet_app" USING (app.is_platform_admin());--> statement-breakpoint
@@ -375,6 +378,44 @@ ALTER TABLE public.file_trash ADD CONSTRAINT file_trash_contractor_fk FOREIGN KE
 REVOKE UPDATE ON TABLE public.dm_tokens FROM buhuchet_app;--> statement-breakpoint
 GRANT UPDATE (name, revoked_at, revoked_by, replaced_by, grace_until) ON TABLE public.dm_tokens
   TO buhuchet_app;--> statement-breakpoint
+-- Отзыв — «сейчас» и один раз; перевыпуск — на живой токен той же организации (простой внешний ключ
+-- проверяется мимо RLS) и один раз: снять или продлить его нельзя — старый токен работает не дольше
+-- суток от перевыпуска (блок 6, пункт 5).
+CREATE FUNCTION app.dm_tokens_guard()
+  RETURNS trigger
+  LANGUAGE plpgsql
+  SET search_path = pg_catalog, pg_temp
+  AS $$
+  BEGIN
+    IF OLD.revoked_at IS NOT NULL AND (NEW.revoked_at IS DISTINCT FROM OLD.revoked_at
+        OR NEW.revoked_by IS DISTINCT FROM OLD.revoked_by) THEN
+      RAISE EXCEPTION 'dm_tokens: отозванный токен не меняется'
+        USING ERRCODE = '23514', CONSTRAINT = 'dm_tokens_guard';
+    END IF;
+    IF OLD.revoked_at IS NULL AND NEW.revoked_at IS NOT NULL
+        AND NEW.revoked_at NOT BETWEEN now() - interval '1 minute' AND now() + interval '1 minute' THEN
+      RAISE EXCEPTION 'dm_tokens: отзыв — сейчас'
+        USING ERRCODE = '23514', CONSTRAINT = 'dm_tokens_guard';
+    END IF;
+    IF OLD.replaced_by IS NOT NULL AND (NEW.replaced_by IS DISTINCT FROM OLD.replaced_by
+        OR NEW.grace_until IS DISTINCT FROM OLD.grace_until) THEN
+      RAISE EXCEPTION 'dm_tokens: перевыпуск не меняется'
+        USING ERRCODE = '23514', CONSTRAINT = 'dm_tokens_guard';
+    END IF;
+    IF OLD.replaced_by IS NULL AND NEW.replaced_by IS NOT NULL AND NOT EXISTS (
+        SELECT 1 FROM public.dm_tokens n
+        WHERE n.id = NEW.replaced_by AND n.id <> NEW.id AND n.org_id IS NOT DISTINCT FROM NEW.org_id
+          AND n.revoked_at IS NULL AND n.replaced_by IS NULL) THEN
+      RAISE EXCEPTION 'dm_tokens: перевыпуск — на живой токен той же организации'
+        USING ERRCODE = '23514', CONSTRAINT = 'dm_tokens_guard';
+    END IF;
+    RETURN NEW;
+  END
+  $$;--> statement-breakpoint
+CREATE TRIGGER dm_tokens_guard
+  BEFORE UPDATE ON public.dm_tokens
+  FOR EACH ROW EXECUTE FUNCTION app.dm_tokens_guard();--> statement-breakpoint
+REVOKE ALL ON FUNCTION app.dm_tokens_guard() FROM PUBLIC, buhuchet_app;--> statement-breakpoint
 -- Открывает ли чек доступ до проверки, решает база (блок 4, пункт 6; прототип subPaySend): новый чек
 -- после отклонения доступ заранее не открывает — если последняя проверенная заявка владельца отклонена.
 -- Непроверенная заявка меняется только так (блок 5, пункт 5; блок 6, пункт 3): владелец заменяет файл

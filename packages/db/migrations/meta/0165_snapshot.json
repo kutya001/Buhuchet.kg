@@ -1,5 +1,5 @@
 {
-  "id": "41832d18-3be8-4135-8bd3-72be357b6fed",
+  "id": "91b96a4d-8512-4569-b558-7bbf654c8c9a",
   "prevId": "ad0471b1-a7c2-4bf6-9b66-acfba2d9b770",
   "version": "7",
   "dialect": "postgresql",
@@ -7639,7 +7639,7 @@
           "to": [
             "buhuchet_app"
           ],
-          "withCheck": "\"subscription_payments\".\"created_by\" = app.current_user_id() and ((\"subscription_payments\".\"status\" = 'pending' and \"subscription_payments\".\"kind\" in ('renew', 'grow', 'mem') and \"subscription_payments\".\"decided_by\" is null and \"subscription_payments\".\"paid_until\" is null and \"subscription_payments\".\"reason\" is null and not app.is_platform_admin()) or (app.is_platform_admin() and \"subscription_payments\".\"kind\" in ('free', 'admin') and \"subscription_payments\".\"decided_by\" = app.current_user_id()))"
+          "withCheck": "\"subscription_payments\".\"created_by\" = app.current_user_id() and (\"subscription_payments\".\"updated_by\" is null or \"subscription_payments\".\"updated_by\" = app.current_user_id()) and ((\"subscription_payments\".\"status\" = 'pending' and \"subscription_payments\".\"kind\" in ('renew', 'grow', 'mem') and \"subscription_payments\".\"decided_by\" is null and \"subscription_payments\".\"paid_until\" is null and \"subscription_payments\".\"reason\" is null and \"subscription_payments\".\"created_at\" between now() - interval '1 minute' and now() + interval '1 minute' and not app.is_platform_admin()) or (app.is_platform_admin() and \"subscription_payments\".\"kind\" in ('free', 'admin') and \"subscription_payments\".\"decided_by\" = app.current_user_id()))"
         },
         "subscription_payments_update_guard": {
           "name": "subscription_payments_update_guard",
@@ -7649,7 +7649,7 @@
             "buhuchet_app"
           ],
           "using": "\"subscription_payments\".\"status\" = 'pending'",
-          "withCheck": "\"subscription_payments\".\"status\" = 'pending' or (app.is_platform_admin() and \"subscription_payments\".\"decided_by\" = app.current_user_id())"
+          "withCheck": "(\"subscription_payments\".\"updated_by\" is null or \"subscription_payments\".\"updated_by\" = app.current_user_id()) and (\"subscription_payments\".\"status\" = 'pending' or (app.is_platform_admin() and \"subscription_payments\".\"decided_by\" = app.current_user_id()))"
         }
       },
       "checkConstraints": {
@@ -22978,7 +22978,7 @@
           "to": [
             "buhuchet_app"
           ],
-          "withCheck": "\"file_trash\".\"deleted_by\" is not distinct from app.current_user_id() and \"file_trash\".\"deleted_at\" between now() - interval '5 minutes' and now() + interval '5 minutes' and \"file_trash\".\"erased_at\" is null and \"file_trash\".\"restored_at\" is null and \"file_trash\".\"attempts\" = 0 and \"file_trash\".\"last_error\" is null and (\"file_trash\".\"why\" <> 'extra' or app.is_platform_admin()) and (\"file_trash\".\"why\" <> 'del' or exists (select 1 from public.files f where f.id = \"file_trash\".\"file_id\" and f.org_id = \"file_trash\".\"org_id\" and f.storage_key = \"file_trash\".\"storage_key\" and f.state = 'deleted'))"
+          "withCheck": "\"file_trash\".\"deleted_by\" is not distinct from app.current_user_id() and \"file_trash\".\"deleted_at\" between now() - interval '5 minutes' and now() + interval '5 minutes' and \"file_trash\".\"erased_at\" is null and \"file_trash\".\"restored_at\" is null and \"file_trash\".\"attempts\" = 0 and \"file_trash\".\"last_error\" is null and (\"file_trash\".\"why\" <> 'extra' or app.is_platform_admin()) and (\"file_trash\".\"why\" <> 'del' or exists (select 1 from public.files f where f.id = \"file_trash\".\"file_id\" and f.org_id = \"file_trash\".\"org_id\" and f.storage_key = \"file_trash\".\"storage_key\" and f.state = 'deleted')) and (\"file_trash\".\"why\" = 'del' or not exists (select 1 from public.files f where f.storage_key = \"file_trash\".\"storage_key\" and f.state <> 'deleted'))"
         },
         "file_trash_update_guard": {
           "name": "file_trash_update_guard",
@@ -22994,7 +22994,7 @@
       "checkConstraints": {
         "file_trash_fields_check": {
           "name": "file_trash_fields_check",
-          "value": "\"file_trash\".\"why\" in ('del', 'rep', 'auto', 'extra') and (\"file_trash\".\"why\" = 'del') = (\"file_trash\".\"file_id\" is not null) and (\"file_trash\".\"why\" = 'extra' or \"file_trash\".\"org_id\" is not null) and char_length(\"file_trash\".\"name\") between 1 and 255 and char_length(\"file_trash\".\"storage_key\") between 1 and 300 and (\"file_trash\".\"org_id\" is null or starts_with(\"file_trash\".\"storage_key\", 'org/' || \"file_trash\".\"org_id\"::text || '/')) and char_length(coalesce(\"file_trash\".\"source\", '')) <= 100 and \"file_trash\".\"size_bytes\" >= 0"
+          "value": "\"file_trash\".\"why\" in ('del', 'rep', 'auto', 'extra') and (\"file_trash\".\"why\" = 'del') = (\"file_trash\".\"file_id\" is not null) and (\"file_trash\".\"why\" = 'extra' or \"file_trash\".\"org_id\" is not null) and char_length(\"file_trash\".\"name\") between 1 and 255 and char_length(\"file_trash\".\"storage_key\") between 1 and 300 and (\"file_trash\".\"org_id\" is null or starts_with(\"file_trash\".\"storage_key\", 'org/' || \"file_trash\".\"org_id\"::text || '/')) and \"file_trash\".\"storage_key\" !~ '(^|/)[.]{1,2}(/|$)' and (\"file_trash\".\"why\" = 'extra' or \"file_trash\".\"storage_key\" ~ ('^org/' || \"file_trash\".\"org_id\"::text || '/(files|sent)/[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}([.]up|[.]chk-[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12})?$')) and (\"file_trash\".\"org_id\" is not null or \"file_trash\".\"contractor_id\" is null) and char_length(coalesce(\"file_trash\".\"source\", '')) <= 100 and \"file_trash\".\"size_bytes\" >= 0"
         },
         "file_trash_erase_try_check": {
           "name": "file_trash_erase_try_check",
