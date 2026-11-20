@@ -8,6 +8,7 @@ import {
   formatMomentRu,
   formatSom,
   formatSomWithUnit,
+  type IsoDate,
   LEAD_DOC_TEXT_KEYS,
   monthLabel,
   ORG_TIMEZONES,
@@ -47,6 +48,9 @@ import { fileSizeText } from '../files/files-data';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { ORG_CARD_KEY } from './org-actions';
+import { useSubActions } from './sub-actions';
+import { SubOrgTab, SubStatusPill } from './sub-org-window';
+import { subCardQuery } from './subs-data';
 import {
   ORG_REPORTS_VIEW,
   OrgContractorsTab,
@@ -72,6 +76,7 @@ const TAB_ICONS: Readonly<Record<OrgCardTab, IconName>> = {
   money: 'coins',
   set: 'sliders',
   files: 'folder',
+  sub: 'wallet',
   hist: 'history',
 };
 
@@ -146,6 +151,11 @@ export function OrgCard({
     onClose();
   }, [missing, toast, t, onClose]);
   const [tab, setTab] = useState<OrgCardTab>('main');
+  // «Подписка» (доработки 20.11.2026, блок 6, пункт 7; прототип `subOrgBody` во вкладке `sub`): статус
+  // в шапке ведёт на вкладку, чек на проверке — красная отметка у вкладки.
+  const sub = useQuery(subCardQuery(id));
+  const subs = useSubActions();
+  const subWait = sub.data?.payments.some((p) => p.status === 'pending') ?? false;
   // Плитка, поиск и «По месяцам» вкладки «Отчёты» живут, пока открыта карточка (прототип `st.rf`).
   const [repView, setRepView] = useState<OrgReportsView>(ORG_REPORTS_VIEW);
   const overdue = card?.summary.reports.overdue ?? 0;
@@ -159,6 +169,9 @@ export function OrgCard({
       : {}),
     ...(k === 'rep' && overdue
       ? { count: { value: overdue, tone: 'red' as const, title: t('orgs.card.sum.overdue') } }
+      : {}),
+    ...(k === 'sub' && subWait
+      ? { count: { value: 1, tone: 'red' as const, title: t('subs.wait.title') } }
       : {}),
   }));
   const owner = card?.owner ?? null;
@@ -284,6 +297,29 @@ export function OrgCard({
                   {t('orgs.card.demo')}
                 </Pill>
               ) : null}
+              {sub.data ? (
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1.5"
+                  title={t('subs.win.title')}
+                  data-org-sub=""
+                  onClick={() => setTab('sub')}
+                >
+                  <SubStatusPill
+                    t={t}
+                    status={sub.data.status}
+                    late={sub.data.late}
+                    days={sub.data.checkDays}
+                  />
+                  {sub.data.sub ? (
+                    <span className="text-[12px] text-muted">
+                      {t('subs.state.paid_to', {
+                        date: formatDateRu(sub.data.sub.paidUntil as IsoDate),
+                      })}
+                    </span>
+                  ) : null}
+                </button>
+              ) : null}
             </div>
             {tab === 'main' ? <MainTab t={t} card={card} onUser={onUser} onLead={onLead} /> : null}
             {tab === 'sum' ? (
@@ -320,6 +356,8 @@ export function OrgCard({
                 bytes={card.summary.files.bytes}
               />
             ) : null}
+            {tab === 'sub' ? <SubOrgTab orgId={id} act={subs.act} /> : null}
+            {subs.nodes}
             {tab === 'hist' ? (
               <Box>
                 {card.history.length ? (

@@ -10,6 +10,7 @@ import type { AdminOrgCard } from '@buhuchet/shared';
 import type { TimelineItem } from '@buhuchet/ui';
 import type { Translate } from '../l10n/translate';
 import { policyHistoryItem } from '../org/policy-history';
+import { subHistoryText } from './subs-model';
 
 // Карточка организации в Админке (прототип v83, admin/admin-cards.js: orgCard, ocMain, ocHist):
 // вкладки, строки «Истории» и «Блокировок с причинами», объём файлов и адрес #orgs/<адрес>.
@@ -24,6 +25,7 @@ export const ORG_CARD_TABS = [
   'money',
   'set',
   'files',
+  'sub',
   'hist',
 ] as const;
 export type OrgCardTab = (typeof ORG_CARD_TABS)[number];
@@ -150,6 +152,10 @@ export function orgHistoryText(t: Translate, h: HistoryEntry): string {
     return own ? `${own}; ${text}` : text;
   }
   if (h.entity === 'role') return roleText(t, h);
+  // Подписка (доработки 20.11.2026, блок 6, пункт 4): те же слова, что в окне «Подписка организации»;
+  // вид сервер отдаёт названием.
+  if (h.entity === 'subscription')
+    return subHistoryText(t, h, { planName: (x) => x, paidUntil: null });
   if (h.action === 'create') {
     const lead = h.changes.find((c) => c.field === 'fromLead');
     return lead

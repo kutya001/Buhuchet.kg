@@ -4,10 +4,10 @@ import type { UiTextDefault } from './texts';
 
 const S = 'Подписки';
 const A = 'Админка: подписки';
-const err = (m: Record<string, string>) =>
+const err = <K extends string>(m: Record<K, string>) =>
   Object.fromEntries(
     Object.entries(m).map(([code, ru]) => [`err.${code}`, { ru, section: 'Ошибки' }]),
-  ) as Record<`err.${string}`, UiTextDefault>;
+  ) as Record<`err.${K}`, UiTextDefault>;
 
 /**
  * Подписки организаций (доработки 20.11.2026, блоки 4 и 6): ответы бота сотрудникам при закрытом
@@ -85,9 +85,9 @@ export const SUBSCRIPTIONS_TEXTS = {
   'subs.col.first': { ru: 'Первая оплата', section: A },
   'subs.col.last': { ru: 'Последняя оплата', section: A },
   'subs.col.owner': { ru: 'Владелец', section: A },
-  'subs.noun.one': { ru: 'организация', section: A },
-  'subs.noun.few': { ru: 'организации', section: A },
-  'subs.noun.many': { ru: 'организаций', section: A },
+  'subs.count.one': { ru: '{n} организация', section: A },
+  'subs.count.few': { ru: '{n} организации', section: A },
+  'subs.count.many': { ru: '{n} организаций', section: A },
   'subs.act.open': { ru: 'Открыть подписку', section: A },
   'subs.act.edit': { ru: 'Изменить подписку', section: A },
   'subs.act.org': { ru: 'Открыть организацию', section: A },
@@ -97,6 +97,10 @@ export const SUBSCRIPTIONS_TEXTS = {
   // Окно «Подписка организации» (блок 6, пункты 2–4, 7).
   'subs.win.title': { ru: 'Подписка организации', section: A },
   'subs.win.done': { ru: 'Готово', section: A },
+  'subs.win.load_error': { ru: 'Не удалось загрузить подписку', section: A },
+  // Карточка организации: статус подписки в шапке и вкладка «Подписка» (блок 6, пункт 7).
+  'subs.state.paid_to': { ru: 'оплачено до {date}', section: A },
+  'orgs.card.tab.sub': { ru: 'Подписка', section: A },
   'subs.wait.title': { ru: 'Чек на проверке', section: A },
   'subs.k.what': { ru: 'Что оплачено', section: A },
   'subs.k.term': { ru: 'Вид и срок', section: A },
@@ -284,9 +288,9 @@ export const SUBSCRIPTIONS_TEXTS = {
   'subs.kinds.col.active': { ru: 'Действует', section: A },
   'subs.kinds.yes': { ru: 'Да', section: A },
   'subs.kinds.no': { ru: 'Нет', section: A },
-  'subs.kinds.noun.one': { ru: 'вид подписки', section: A },
-  'subs.kinds.noun.few': { ru: 'вида подписки', section: A },
-  'subs.kinds.noun.many': { ru: 'видов подписки', section: A },
+  'subs.kinds.count.one': { ru: '{n} вид подписки', section: A },
+  'subs.kinds.count.few': { ru: '{n} вида подписки', section: A },
+  'subs.kinds.count.many': { ru: '{n} видов подписки', section: A },
   'subs.kinds.edit': { ru: 'Изменить', section: A },
   'subs.kinds.off': { ru: 'Выключить', section: A },
   'subs.kinds.on': { ru: 'Включить', section: A },
@@ -341,6 +345,10 @@ export const SUBSCRIPTIONS_TEXTS = {
   'subs.prices.f.purpose': { ru: 'Назначение платежа', section: A },
   'subs.prices.purpose.hint': { ru: 'Подстановки: {организация}, {ИНН}', section: A },
   'subs.prices.example': { ru: 'Пример для «{org}»: {text}', section: A },
+  // Пример назначения платежа (прототип: первая организация списка) — на условной организации.
+  'subs.prices.example_org': { ru: 'Пример', section: A },
+  'subs.prices.example_inn': { ru: '01234567890123', section: A },
+  'subs.prices.load_error': { ru: 'Не удалось загрузить цены и реквизиты', section: A },
   'subs.prices.saved': { ru: 'Цены и реквизиты сохранены', section: A },
   'subs.prices.fix': { ru: 'Исправьте отмеченные поля', section: A },
   // Строки истории видов подписок и цен (прототип subCfgLog).
