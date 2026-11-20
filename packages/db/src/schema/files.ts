@@ -143,6 +143,10 @@ export const files = pgTable(
     index('files_pending_idx')
       .on(t.orgId, t.createdAt)
       .where(sql`${t.state} = 'pending'`),
+    // Занятая память организации (`app.org_usage`): сумма размеров загруженных файлов без чтения строк.
+    index('files_usage_idx')
+      .on(t.orgId, t.sizeBytes)
+      .where(sql`${t.state} = 'ready'`),
     orgIsolation('files_isolation', t.orgId),
     // Загрузил тот, кто вошёл: подставить другого автора (и обойти «свой файл в течение суток») нельзя.
     pgPolicy('files_insert_guard', {
@@ -404,5 +408,204 @@ export const storageDeleteRetries = pgTable(
       'storage_delete_retries_key_check',
       sql`${t.key} ~ ${sql.raw(`'${STORAGE_RETRY_KEY_RE}'`)}`,
     ),
+  ],
+).enableRLS();
+
+/**
+ * Что нашла сверка хранилища (пакет 2, блок 3, «Проверка хранилища»; прототип `DB.storage.check`):
+ * «Есть в базе, нет в хранилище», «Лишний в хранилище», «Зависшая загрузка», «Не стёрт».
+ */
+export const STORAGE_CHECK_KINDS = ['missing', 'extra', 'stuck', 'failed'] as const;
+export type StorageCheckKind = (typeof STORAGE_CHECK_KINDS)[number];
+export const STORAGE_CHECK_RUN_STATES = ['running', 'done', 'failed'] as const;
+
+/**
+ * Почему файл ждёт стирания (прототип `FT_WHY`): удалён сотрудником, прежняя версия после «Изменить
+ * файл», не принят от контрагента за 30 дней, лишний файл хранилища — удалён администратором.
+ */
+export const FILE_TRASH_REASONS = ['del', 'rep', 'auto', 'extra'] as const;
+export type FileTrashReason = (typeof FILE_TRASH_REASONS)[number];
+/** Через сколько часов после удаления файл стирается из хранилища (прототип `FT_HOURS`). */
+export const FILE_TRASH_HOURS = 24;
+
+const currentUserId = sql`app.current_user_id()`;
+const isPlatformAdmin = sql`app.is_platform_admin()`;
+const adminOutsideOrg = sql`${currentOrgId} is null and ${isPlatformAdmin}`;
+
+/**
+ * «Ждут удаления» (доработки 20.11.2026, пакет 2, блок 5, пункты 3–4; прототип `DB.storage.trash`;
+ * миграция 0165): объект хранилища стирается не сразу, а через сутки (`erase_at`); до этого
+ * администратор платформы видит его в Админке → «Файлы» → «Хранилище» и может «Вернуть» удалённый
+ * сотрудником файл (`del`, строка файла — `file_id`) и лишний файл хранилища (`extra`). Удалённый файл
+ * сразу пропадает из списков и из памяти организации (`files.state = 'deleted'`). Ставит строку тот, кто
+ * удалил: сотрудник и задача — в контексте своей организации, администратор — лишний файл вне её; стирает
+ * задача «Файлы: стирание удалённых» функциями этапа 1. Своей «Корзины» у организации нет.
+ */
+export const fileTrash = pgTable(
+  'file_trash',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** Организация файла; пусто — лишний файл хранилища без организации. */
+    orgId: uuid('org_id')
+      .default(currentOrgId)
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    why: text('why', { enum: FILE_TRASH_REASONS }).notNull(),
+    /** Удалённый файл (`del`) — для «Вернуть». */
+    fileId: uuid('file_id'),
+    storageKey: text('storage_key').notNull(),
+    contractorId: uuid('contractor_id'),
+    name: text('name').notNull(),
+    sizeBytes: bigint('size_bytes', { mode: 'number' }).notNull(),
+    /** Откуда файл — как в «Все файлы»: «Отчёт», «Поступление», «Лишний файл хранилища»… */
+    source: text('source'),
+    /** Кто удалил; пусто — система (не принят за 30 дней). */
+    deletedBy: uuid('deleted_by')
+      .default(currentUserId)
+      .references(() => users.id),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }).notNull().defaultNow(),
+    /** Когда стереть — через сутки после удаления; раньше нельзя (`file_trash_erase_check`). */
+    eraseAt: timestamp('erase_at', { withTimezone: true })
+      .notNull()
+      .default(sql`now() + interval '${sql.raw(String(FILE_TRASH_HOURS))} hours'`),
+    erasedAt: timestamp('erased_at', { withTimezone: true }),
+    restoredAt: timestamp('restored_at', { withTimezone: true }),
+    restoredBy: uuid('restored_by').references(() => users.id),
+  },
+  (t) => [
+    foreignKey({
+      name: 'file_trash_file_fk',
+      columns: [t.fileId, t.orgId],
+      foreignColumns: [files.id, files.orgId],
+    }).onDelete('cascade'),
+    check(
+      'file_trash_fields_check',
+      sql`${t.why} in (${oneOf(FILE_TRASH_REASONS)}) and (${t.why} = 'del') = (${t.fileId} is not null) and (${t.why} = 'extra' or ${t.orgId} is not null) and char_length(${t.name}) between 1 and ${sql.raw(String(FILE_NAME_MAX_LENGTH))} and char_length(${t.storageKey}) between 1 and 300 and char_length(coalesce(${t.source}, '')) <= 100 and ${t.sizeBytes} >= 0`,
+    ),
+    // Не раньше суток — у всех: «стереть сразу» через эту таблицу нельзя.
+    check(
+      'file_trash_erase_check',
+      sql`${t.eraseAt} >= ${t.deletedAt} + interval '${sql.raw(String(FILE_TRASH_HOURS))} hours'`,
+    ),
+    check(
+      'file_trash_restore_check',
+      sql`(${t.restoredAt} is null) = (${t.restoredBy} is null) and (${t.restoredAt} is null or (${t.why} in ('del', 'extra') and ${t.erasedAt} is null))`,
+    ),
+    // Один и тот же объект ждёт стирания один раз.
+    uniqueIndex('file_trash_live_key')
+      .on(t.storageKey)
+      .where(sql`${t.erasedAt} is null and ${t.restoredAt} is null`),
+    index('file_trash_erase_idx')
+      .on(t.eraseAt)
+      .where(sql`${t.erasedAt} is null and ${t.restoredAt} is null`),
+    index('file_trash_org_idx').on(t.orgId, t.deletedAt),
+    orgIsolation('file_trash_isolation', t.orgId),
+    pgPolicy('file_trash_admin', {
+      as: 'permissive',
+      for: 'all',
+      to: appRole,
+      using: adminOutsideOrg,
+      withCheck: adminOutsideOrg,
+    }),
+    // Ставит тот, кто вошёл (задача — без пользователя); лишний файл — только администратор.
+    pgPolicy('file_trash_insert_guard', {
+      as: 'restrictive',
+      for: 'insert',
+      to: appRole,
+      withCheck: sql`${t.deletedBy} is not distinct from ${currentUserId} and ${t.erasedAt} is null and ${t.restoredAt} is null and (${t.why} <> 'extra' or ${isPlatformAdmin})`,
+    }),
+    // «Вернуть» — только администратор платформы, от своего имени.
+    pgPolicy('file_trash_update_guard', {
+      as: 'restrictive',
+      for: 'update',
+      to: appRole,
+      using: sql`${isPlatformAdmin} and ${t.erasedAt} is null and ${t.restoredAt} is null`,
+      withCheck: sql`${isPlatformAdmin} and ${t.restoredBy} = ${currentUserId}`,
+    }),
+  ],
+).enableRLS();
+
+/**
+ * Запуски сверки хранилища с базой (пакет 2, блок 3; задача `files.storage-reconcile`, раз в день;
+ * миграция 0165): когда, чем кончилась и сколько чего найдено. Данные платформы: читает только
+ * администратор платформы, пишут функции задачи (этап 1).
+ */
+export const storageCheckRuns = pgTable(
+  'storage_check_runs',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+    state: text('state', { enum: STORAGE_CHECK_RUN_STATES }).notNull().default('running'),
+    /** Сколько объектов хранилища просмотрено. */
+    objects: integer('objects').notNull().default(0),
+    missing: integer('missing').notNull().default(0),
+    extra: integer('extra').notNull().default(0),
+    stuck: integer('stuck').notNull().default(0),
+    failed: integer('failed').notNull().default(0),
+    /** Почему не закончилась — без ключей и адресов. */
+    error: text('error'),
+  },
+  (t) => [
+    check(
+      'storage_check_runs_state_check',
+      sql`${t.state} in (${oneOf(STORAGE_CHECK_RUN_STATES)}) and (${t.state} = 'running') = (${t.finishedAt} is null) and char_length(coalesce(${t.error}, '')) <= 500`,
+    ),
+    check(
+      'storage_check_runs_counts_check',
+      sql`${t.objects} >= 0 and ${t.missing} >= 0 and ${t.extra} >= 0 and ${t.stuck} >= 0 and ${t.failed} >= 0`,
+    ),
+    index('storage_check_runs_started_idx').on(t.startedAt.desc()),
+    pgPolicy('storage_check_runs_admin_read', {
+      as: 'permissive',
+      for: 'select',
+      to: appRole,
+      using: isPlatformAdmin,
+    }),
+  ],
+).enableRLS();
+
+/**
+ * Что нашла сверка — строка списка «Проверки хранилища». Одна открытая строка на вид и ключ: найдено
+ * снова — обновляется `last_*`; пропало или решено («Удалить» лишнего — строка `file_trash` с `extra`)
+ * — `resolved_at`. Организация (`key_org_id`) — из ключа, без внешнего ключа: объект может пережить свою
+ * организацию; строки сверки — данные платформы, не организации.
+ */
+export const storageCheckItems = pgTable(
+  'storage_check_items',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    kind: text('kind', { enum: STORAGE_CHECK_KINDS }).notNull(),
+    key: text('key').notNull(),
+    keyOrgId: uuid('key_org_id'),
+    sizeBytes: bigint('size_bytes', { mode: 'number' }),
+    /** Когда объект появился в хранилище (у «Есть в базе, нет в хранилище» — пусто). */
+    objectAt: timestamp('object_at', { withTimezone: true }),
+    firstRunId: bigint('first_run_id', { mode: 'number' })
+      .notNull()
+      .references(() => storageCheckRuns.id, { onDelete: 'restrict' }),
+    lastRunId: bigint('last_run_id', { mode: 'number' })
+      .notNull()
+      .references(() => storageCheckRuns.id, { onDelete: 'restrict' }),
+    firstSeenAt: timestamp('first_seen_at', { withTimezone: true }).notNull().defaultNow(),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  },
+  (t) => [
+    check(
+      'storage_check_items_kind_check',
+      sql`${t.kind} in (${oneOf(STORAGE_CHECK_KINDS)}) and char_length(${t.key}) between 1 and 300 and (${t.sizeBytes} is null or ${t.sizeBytes} >= 0)`,
+    ),
+    uniqueIndex('storage_check_items_open_key')
+      .on(t.kind, t.key)
+      .where(sql`${t.resolvedAt} is null`),
+    index('storage_check_items_open_idx')
+      .on(t.kind, t.firstSeenAt)
+      .where(sql`${t.resolvedAt} is null`),
+    pgPolicy('storage_check_items_admin_read', {
+      as: 'permissive',
+      for: 'select',
+      to: appRole,
+      using: isPlatformAdmin,
+    }),
   ],
 ).enableRLS();
