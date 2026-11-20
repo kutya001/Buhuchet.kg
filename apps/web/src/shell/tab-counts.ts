@@ -10,6 +10,7 @@ import { contractorTabCountsQuery } from '../contractors/contractor-data';
 import { sentCountQuery } from '../files/sent-data';
 import { finSummaryQuery } from '../finance/journal-data';
 import { leadSummaryQuery } from '../admin/leads-data';
+import { storageSummaryQuery } from '../afiles/afiles-data';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { videoAdminStatusValuesQuery } from '../kb/video/video-data';
@@ -46,6 +47,7 @@ export function useTabCounts(modules: readonly MenuModuleId[]): TabCounts {
     enabled: modules.includes('kbadm'),
   });
   const leads = useQuery({ ...leadSummaryQuery, enabled: modules.includes('orgs') });
+  const storage = useQuery({ ...storageSummaryQuery, enabled: modules.includes('afiles') });
   const sent = useQuery({ ...sentCountQuery, enabled: modules.includes('files') });
   return useMemo(
     () => ({
@@ -63,6 +65,8 @@ export function useTabCounts(modules: readonly MenuModuleId[]): TabCounts {
         : {}),
       // «Заявки» — новых заявок с сайта (прототип registry.js: `count: leadNew()`).
       ...(leads.data ? { orgs: { leads: { value: leads.data.fresh } } } : {}),
+      // «Проверка хранилища» — расхождений последней сверки (прототип `afTabs`: `count: afDiffN() || ''`).
+      ...(storage.data?.diff ? { afiles: { check: { value: storage.data.diff } } } : {}),
       // «Файлы от контрагентов» — новых файлов (прототип v112 `filesTabs`: `count: sntNew() || null`).
       ...(sent.data ? { files: { sent: { value: sent.data, title: t('files.sent.badge') } } } : {}),
     }),
@@ -78,6 +82,7 @@ export function useTabCounts(modules: readonly MenuModuleId[]): TabCounts {
       kbadm.data,
       videoStatus.data,
       leads.data,
+      storage.data,
       sent.data,
       t,
     ],

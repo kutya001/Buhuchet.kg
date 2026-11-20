@@ -384,6 +384,18 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
     ],
     add: [{ id: 'org', icon: 'building', label: 'add.orgs.org' }],
   },
+  // «Файлы» (доработки 20.11.2026, пакет 2, блок 3; прототип v154): хранилище платформы, добавлять нечего.
+  afiles: {
+    icon: 'folder',
+    title: 'nav.afiles',
+    short: 'nav.short.afiles',
+    desc: 'nav.desc.afiles',
+    tabs: [
+      { id: 'store', icon: 'db', label: 'tab.afiles.store' },
+      { id: 'all', icon: 'folder', label: 'tab.afiles.all' },
+      { id: 'check', icon: 'alert', label: 'tab.afiles.check' },
+    ],
+  },
   // Способы добавления содержимого «Базы знаний» зависят от вкладки — придут с его экраном (поток Д).
   pdicts: {
     icon: 'book',

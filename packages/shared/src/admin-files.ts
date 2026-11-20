@@ -111,6 +111,7 @@ export const AdminTrashRow = z.object({
   /** Пробовали стереть и не вышло. */
   attempts: z.number().int(),
 });
+export type AdminTrashRow = z.infer<typeof AdminTrashRow>;
 export const AdminTrashList = z.object({
   items: z.array(AdminTrashRow),
   total: z.number().int(),
@@ -140,6 +141,7 @@ export const AdminStorageCheckRow = z.object({
   deletable: z.boolean(),
   ageHours: z.number().int().nullable(),
 });
+export type AdminStorageCheckRow = z.infer<typeof AdminStorageCheckRow>;
 export const AdminStorageCheck = z.object({
   checkedAt: Moment.nullable(),
   missing: z.object({ items: z.array(AdminStorageCheckRow), total: z.number().int() }),

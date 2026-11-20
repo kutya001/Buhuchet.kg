@@ -23,6 +23,7 @@ export type CountKey =
   | 'kpi.missing.count'
   | 'files.count'
   | 'files.sent.count'
+  | 'afiles.count'
   | 'accounts.count'
   | 'orgs.count'
   | 'orgs.card.repm.count'

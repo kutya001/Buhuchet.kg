@@ -67,6 +67,11 @@ export interface FileViewerProps<F extends ViewerFile = ViewerFile> {
   info?: (file: F) => ReactNode;
   /** Свои кнопки после «Скачать»; по умолчанию — «Закрыть». */
   footer?: (file: F) => ReactNode;
+  /**
+   * Перед «Скачать» (Админка: непринятый файл от контрагента — сначала предупреждение): true — переход
+   * ждёт ответа, `go()` скачивает.
+   */
+  beforeDownload?: (file: F, go: () => void) => boolean;
 }
 
 /**
@@ -270,6 +275,7 @@ export function FileViewer<F extends ViewerFile>({
   sub,
   info,
   footer,
+  beforeDownload,
 }: FileViewerProps<F>) {
   const t = useT();
   const labels = useMemo(() => viewLabels(t), [t]);
@@ -313,8 +319,17 @@ export function FileViewer<F extends ViewerFile>({
   const dl = download(file.id);
   const ext = fileExt(file.name).toUpperCase();
   const kind = fileViewKind(file.name);
+  const guard = (e: { preventDefault: () => void }) => {
+    if (beforeDownload?.(file, () => globalThis.location.assign(dl))) e.preventDefault();
+  };
   const dlButton = (
-    <a href={dl} data-fdl="" className={buttonClass('cta')} rel="noopener noreferrer">
+    <a
+      href={dl}
+      data-fdl=""
+      className={buttonClass('cta')}
+      rel="noopener noreferrer"
+      onClick={guard}
+    >
       <Icon name="download" size="sm" />
       {t('files.act.download')}
     </a>
@@ -438,6 +453,7 @@ export function FileViewer<F extends ViewerFile>({
             data-fv-download=""
             className={buttonClass('default')}
             rel="noopener noreferrer"
+            onClick={guard}
           >
             <Icon name="download" size="sm" />
             {t('files.act.download')}

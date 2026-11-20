@@ -46,6 +46,7 @@ import { ModuleStub } from '../shell/module-stub';
 import { StaffList } from '../staff/staff-list';
 import { TasksList, type TaskTab } from '../tasks/tasks-list';
 import { RunsScreen } from '../runs/runs-screen';
+import { AdminFilesScreen } from '../afiles/afiles-screen';
 import { TgAdmScreen } from '../tgadm/tgadm-screen';
 
 /**
@@ -142,6 +143,7 @@ export function ModuleScreen({
     if (tabId === 'act') return <OrgsActivity />;
     return tabId === 'leads' ? <LeadsList /> : <OrgsList />;
   }
+  if (moduleId === 'afiles') return <AdminFilesScreen tab={tabId ?? 'store'} />;
   if (moduleId === 'pdicts') return <PlatformDictsAdmin tabId={tabId ?? 'types'} />;
   if (moduleId === 'l10n') return <L10nList />;
   if (moduleId === 'tdocs') return <TechDocsScreen tab={tabId ?? 'db'} />;

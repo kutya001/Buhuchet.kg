@@ -100,6 +100,7 @@ export const ADMIN_FILES_TEXTS = {
   'afiles.orgs.files': { ru: 'Файлы организации', section: S },
   // «Все файлы» и окно файла (прототип `afGrid`, `afOpen`, `afDl`).
   'afiles.empty': { ru: 'Файлов пока нет', section: S },
+  'afiles.load_error': { ru: 'Не удалось загрузить данные хранилища', section: S },
   'afiles.act.open': { ru: 'Открыть', section: S },
   'afiles.act.download': { ru: 'Скачать', section: S },
   'afiles.act.org': { ru: 'Открыть организацию', section: S },
