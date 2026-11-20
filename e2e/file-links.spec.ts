@@ -156,11 +156,14 @@ async function windowSource(page: Page, fileName: string) {
 }
 
 /**
- * Нажать ссылку записи в «Источнике» окна файла: окно файла закрывается. Окно только что открылось и
- * ещё дорисовывает просмотр файла — ссылка под ним сдвигается, и нажатие по ней теряется молча
- * (docs/typical-mistakes.md № 34), поэтому сначала ждём, что ссылка стоит на месте.
+ * Нажать ссылку записи в «Источнике» окна файла: окно файла закрывается. «Источник» стоит под
+ * просмотром файла: когда файл загрузился, заглушка «Открываем файл…» сменяется рамкой просмотра выше
+ * неё, ссылка уезжает вниз, и нажатие, начатое до этого, уходит в рамку и теряется молча
+ * (docs/typical-mistakes.md № 34). Поэтому сначала ждём конец загрузки просмотра (причину сдвига),
+ * потом — что ссылка стоит на месте.
  */
 async function openLinkFromSource(window: Locator, link: string) {
+  await expect(window.locator('[data-fv-state="loading"]')).toHaveCount(0);
   const button = window.locator(`[data-file-link-open="${link}"]`);
   await stillElement(button);
   await button.click();
