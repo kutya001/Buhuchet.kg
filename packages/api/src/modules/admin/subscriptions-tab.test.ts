@@ -43,6 +43,24 @@ describe.skipIf(!databaseAvailable())('Админка: «Подписки»', ()
     ok(await call('GET', `/api/admin/subscriptions/${orgId}`, admin), (x) =>
       AdminSubscriptionCard.parse(x),
     );
+  /** Строки колокольчика владельца организации Б о подписке (вид события `sub`): ключ и текст. */
+  const ownerBell = async () =>
+    (
+      await f.t.admin.db
+        .select({
+          key: schema.bellNotifications.eventKey,
+          text: schema.bellNotifications.text,
+          kind: schema.bellNotifications.kind,
+          targetKind: schema.bellNotifications.targetKind,
+        })
+        .from(schema.bellNotifications)
+        .where(
+          and(
+            eq(schema.bellNotifications.userId, f.b.ownerUserId),
+            eq(schema.bellNotifications.event, 'sub'),
+          ),
+        )
+    ).sort((x, y) => x.key.localeCompare(y.key));
   /**
    * Чек на проверке от владельца организации Б: продление на 3 месяца, 20 мест; прикреплён накануне
    * по часам теста (18.10.2026) — «Срок проверки» (3 дня) ещё не прошёл.
@@ -257,11 +275,26 @@ describe.skipIf(!databaseAvailable())('Админка: «Подписки»', ()
         { field: 'status', from: 'pending' },
       ]),
     });
+    // Экран «Подписка» владельца в том же ответе (прототип `subScreenHtml(orgId, {admin: true})`).
+    expect(done.screen).toMatchObject({
+      status: 'active',
+      sub: { planId: 'm3', paidUntil: '2100-06-30' },
+    });
+    expect(done.screen.payments.find((p) => p.id === id)?.status).toBe('confirmed');
+    // Владельцам — «Оплата подтверждена» (поток Т): строка колокольчика, открывает «Подписку».
+    expect(await ownerBell()).toContainEqual({
+      key: `sub_paid:${id}`,
+      text: expect.stringContaining('30.06.2100'),
+      kind: 'other',
+      targetKind: 'sub',
+    });
     const again = await fail(
       await confirm({ months: 6, paidUntil: '2100-06-30', version: 2 }),
       409,
     );
     expect(again.code).toBe('sub_pay_decided');
+    // Решённую второй раз не решить — и второго сообщения нет.
+    expect((await ownerBell()).filter((r) => r.key === `sub_paid:${id}`)).toHaveLength(1);
     expect(
       (
         await fail(
@@ -307,6 +340,13 @@ describe.skipIf(!databaseAvailable())('Админка: «Подписки»', ()
     });
     // Подписка не изменилась.
     expect(done.sub).toMatchObject({ planId: 'm3', seats: 20, paidUntil: '2100-06-30' });
+    // Владельцам — «Чек отклонён» с причиной (поток Т).
+    expect(await ownerBell()).toContainEqual({
+      key: `sub_rejected:${id}`,
+      text: expect.stringContaining('Сумма не совпадает'),
+      kind: 'other',
+      targetKind: 'sub',
+    });
     const [row] = await f.t.admin.db
       .select({ reason: schema.subscriptionPayments.reason })
       .from(schema.subscriptionPayments)

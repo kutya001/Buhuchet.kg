@@ -20,7 +20,15 @@ import { SUB_RECEIPT_RATE_LIMIT } from './subscription';
  * пакет 2, блок 6 — защита загрузки; прототип v154 `modules/org-sub.js`; этап 1, П7, поток И).
  */
 
-const { auditLog, organizations, orgSubscriptions, subscriptionPayments, users } = schema;
+const {
+  auditLog,
+  organizations,
+  orgSubscriptions,
+  subscriptionPayments,
+  telegramLinks,
+  telegramOutbox,
+  users,
+} = schema;
 
 type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
 
@@ -92,6 +100,10 @@ describe.skipIf(!databaseAvailable())('«Подписка» владельца: 
       .from(users)
       .where(eq(users.login, 'platform-admin'));
     adminId = row!.id;
+    // У администратора платформы привязан Telegram: «Новый чек на проверку» ставится ему в очередь.
+    await f.t.admin.db
+      .insert(telegramLinks)
+      .values({ userId: adminId, orgId: null, chatId: 7_700_001, username: 'platform_admin' });
     // У А — месячная подписка на 10 мест до конца года, первый месяц уже оплачен; у Б подписки нет
     // (подписку тестовых организаций из `createStaffFixture` убираем: тесту нужны свои условия).
     const both = [f.a.orgId, f.b.orgId];
@@ -270,6 +282,14 @@ describe.skipIf(!databaseAvailable())('«Подписка» владельца: 
         expect.objectContaining({ field: 'amount', to: calc.total }),
       ]),
     );
+    // Администраторам платформы — «Новый чек на проверку» (поток Т), один раз на чек.
+    const notices = await f.t.admin.db
+      .select({ text: telegramOutbox.text, key: telegramOutbox.dedupeKey })
+      .from(telegramOutbox)
+      .where(and(eq(telegramOutbox.userId, adminId), eq(telegramOutbox.kind, 'sub_check')));
+    expect(notices).toEqual([
+      { text: expect.stringContaining('Организация А'), key: `sub_check:new:${paid}:${adminId}` },
+    ]);
     // Одна непроверенная заявка за раз: новая оплата — после проверки.
     res = await start(owner, renew('m1', 20));
     expect(res.status).toBe(409);
