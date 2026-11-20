@@ -9,6 +9,7 @@
 -- Был ли файл файлом контрагента: контрагента удалили — ключ контрагента стал пустым (ON DELETE SET
 -- NULL), и «Вернуть» такой файл не возвращает, иначе он вернулся бы общим файлом организации.
 ALTER TABLE "file_trash" ADD COLUMN "contractor_bound" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+UPDATE "file_trash" SET "contractor_bound" = true WHERE "contractor_id" IS NOT NULL;--> statement-breakpoint
 ALTER TABLE "file_trash" ADD CONSTRAINT "file_trash_contractor_check" CHECK ("file_trash"."contractor_bound" or "file_trash"."contractor_id" is null);--> statement-breakpoint
 CREATE FUNCTION app.storage_key_in_use(p_key text)
   RETURNS boolean
@@ -141,6 +142,10 @@ CREATE FUNCTION app.file_trash_restore(p_id uuid, p_links jsonb)
               AND f.source_kind IN ('manual', 'contractor', 'sent_file'))
         ON CONFLICT DO NOTHING;
     ELSE
+      -- Лишний файл — вне организации, как и «Удалить» его.
+      IF app.current_org_id() IS NOT NULL THEN
+        RETURN 'missing';
+      END IF;
       INSERT INTO public.storage_check_items (kind, key, key_org_id, size_bytes, object_at,
           first_run_id, last_run_id, first_seen_at, last_seen_at)
         SELECT 'extra', i.key, i.key_org_id, i.size_bytes, i.object_at, i.first_run_id, i.last_run_id,
