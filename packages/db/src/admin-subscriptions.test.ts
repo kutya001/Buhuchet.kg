@@ -217,7 +217,9 @@ describe.skipIf(!databaseAvailable())('Админка: подписки орга
     });
     expect(await asAdmin((tx) => subscriptionPaymentOrg(tx, latePay))).toBe(c.orgId);
     expect(
-      await withUserContext(db.app.db, a.ownerUserId, (tx) => adminSubscriptionReceipt(tx, latePay)),
+      await withUserContext(db.app.db, a.ownerUserId, (tx) =>
+        adminSubscriptionReceipt(tx, latePay),
+      ),
     ).toBeNull();
     expect(
       await withUserContext(db.app.db, c.ownerUserId, (tx) => subscriptionPaymentOrg(tx, latePay)),
@@ -231,9 +233,9 @@ describe.skipIf(!databaseAvailable())('Админка: подписки орга
         decidePayment(tx, { id: latePay, version: 1 }, { status: 'rejected', reason: 'Сам' }),
       ),
     ).rejects.toEqual(pgError('23514'));
-    await expect(
-      adminIn(c.orgId, (tx) => lockPendingPayment(tx, latePay, 7)),
-    ).rejects.toThrow(RecordChangedError);
+    await expect(adminIn(c.orgId, (tx) => lockPendingPayment(tx, latePay, 7))).rejects.toThrow(
+      RecordChangedError,
+    );
     await adminIn(c.orgId, async (tx) => {
       const p = await lockPendingPayment(tx, latePay, 1);
       const cur = await lockSubscription(tx, c.orgId);
@@ -244,11 +246,15 @@ describe.skipIf(!databaseAvailable())('Админка: подписки орга
         TODAY,
       );
       await saveSubscription(tx, c.orgId, cur, r.sub);
-      await decidePayment(tx, { id: latePay, version: p.version }, {
-        status: 'confirmed',
-        months: r.months,
-        paidUntil: r.paidUntil,
-      });
+      await decidePayment(
+        tx,
+        { id: latePay, version: p.version },
+        {
+          status: 'confirmed',
+          months: r.months,
+          paidUntil: r.paidUntil,
+        },
+      );
       await writeSubscriptionHistory(tx, c.orgId, 'sub_paid', [
         { field: 'paidUntil', from: '2026-11-25', to: '2027-02-25' },
       ]);
@@ -285,7 +291,14 @@ describe.skipIf(!databaseAvailable())('Админка: подписки орга
       expect(cur).toBeNull();
       const r = subscriptionEdit(
         cur,
-        { planId: 'm1', seats: 10, extraGb: 0, paidUntil: '2026-12-20', extraDiscountPct: 0, free: true },
+        {
+          planId: 'm1',
+          seats: 10,
+          extraGb: 0,
+          paidUntil: '2026-12-20',
+          extraDiscountPct: 0,
+          free: true,
+        },
         150,
       )!;
       await saveSubscription(tx, b.orgId, cur, r.sub);
@@ -344,9 +357,9 @@ describe.skipIf(!databaseAvailable())('Админка: подписки орга
         { field: 'months', from: 2, to: 36 },
       ]);
     });
-    await expect(
-      asAdmin((tx) => lockSubscriptionPlan(tx, 'k2m', 1)),
-    ).rejects.toThrow(RecordChangedError);
+    await expect(asAdmin((tx) => lockSubscriptionPlan(tx, 'k2m', 1))).rejects.toThrow(
+      RecordChangedError,
+    );
     // Срок вида — не больше 36 месяцев (миграция 0167).
     await expect(
       asAdmin((tx) =>

@@ -219,7 +219,10 @@ export const SUBSCRIPTIONS_TEXTS = {
     ru: 'Организация увидит причину на экране «Подписка», владельцы получат сообщение «Чек отклонён».',
     section: A,
   },
-  'subs.rej.note_open': { ru: 'Срок подписки ещё не прошёл — доступ остаётся открытым.', section: A },
+  'subs.rej.note_open': {
+    ru: 'Срок подписки ещё не прошёл — доступ остаётся открытым.',
+    section: A,
+  },
   'subs.rej.note_close': {
     ru: 'Срок подписки прошёл — доступ, открытый по чеку, закроется.',
     section: A,
@@ -352,7 +355,10 @@ export const SUBSCRIPTIONS_TEXTS = {
   'subs.prices.saved': { ru: 'Цены и реквизиты сохранены', section: A },
   'subs.prices.fix': { ru: 'Исправьте отмеченные поля', section: A },
   // Строки истории видов подписок и цен (прототип subCfgLog).
-  'subs.cfg.kind_added': { ru: 'Виды подписок: добавлен «{name}» — {months} мес., скидка {disc} %', section: A },
+  'subs.cfg.kind_added': {
+    ru: 'Виды подписок: добавлен «{name}» — {months} мес., скидка {disc} %',
+    section: A,
+  },
   'subs.cfg.kind_changed': { ru: 'Виды подписок: «{name}» — {changes}', section: A },
   'subs.cfg.kind_deleted': { ru: 'Виды подписок: «{name}» удалён', section: A },
   'subs.cfg.kind.name': { ru: 'название «{from}» → «{to}»', section: A },

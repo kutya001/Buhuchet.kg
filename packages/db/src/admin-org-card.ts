@@ -246,7 +246,6 @@ const HISTORY_VALUE_FIELDS: Readonly<Record<string, ReadonlySet<string>>> = {
   subscription: new Set(SUBSCRIPTION_HISTORY_VALUE_FIELDS),
 };
 
-
 /** Названия видов подписки — для «было → стало» вида в истории (удалённый вид — кодом). */
 export async function subscriptionPlanNames(tx: Tx): Promise<ReadonlyMap<string, string>> {
   const rows = await tx

@@ -65,7 +65,12 @@ describe('«Подтвердить оплату» — subPayOk', () => {
   it('«Оплачено до» в окне: продление — от дня после срока, после закрытия — от дня чека', () => {
     expect(subscriptionConfirmUntil(sub, pay({}), 3, TODAY)).toBe('2027-03-05');
     expect(
-      subscriptionConfirmUntil({ paidUntil: '2026-11-10' }, pay({ sentDay: '2026-11-18' }), 1, TODAY),
+      subscriptionConfirmUntil(
+        { paidUntil: '2026-11-10' },
+        pay({ sentDay: '2026-11-18' }),
+        1,
+        TODAY,
+      ),
     ).toBe('2026-12-17');
     expect(subscriptionConfirmUntil(sub, pay({ kind: 'grow' }), 0, TODAY)).toBe('2026-12-05');
     expect(subscriptionConfirmUntil(null, pay({ kind: 'mem' }), 0, TODAY)).toBe(TODAY);
@@ -73,7 +78,14 @@ describe('«Подтвердить оплату» — subPayOk', () => {
 
   it('продление: вид, пакет, память и срок из заявки, первый месяц оплачен, бесплатный и «следующий» сняты', () => {
     const r = subscriptionConfirm(
-      { ...sub, free: true, firstPaid: false, nextSeats: 80, nextExtraGb: 1, nextFrom: '2026-12-01' },
+      {
+        ...sub,
+        free: true,
+        firstPaid: false,
+        nextSeats: 80,
+        nextExtraGb: 1,
+        nextFrom: '2026-12-01',
+      },
       pay({}),
       { months: 6, paidUntil: '2027-06-05' },
       TODAY,
@@ -94,15 +106,36 @@ describe('«Подтвердить оплату» — subPayOk', () => {
   });
 
   it('первая оплата без подписки ставит подписку', () => {
-    const r = subscriptionConfirm(null, pay({ months: 1 }), { months: 1, paidUntil: '2026-12-17' }, TODAY);
-    expect(r.sub).toMatchObject({ planId: 'm3', seats: 70, extraGb: 2, paidUntil: '2026-12-17', firstPaid: true });
+    const r = subscriptionConfirm(
+      null,
+      pay({ months: 1 }),
+      { months: 1, paidUntil: '2026-12-17' },
+      TODAY,
+    );
+    expect(r.sub).toMatchObject({
+      planId: 'm3',
+      seats: 70,
+      extraGb: 2,
+      paidUntil: '2026-12-17',
+      firstPaid: true,
+    });
   });
 
   it('расширение «Сейчас» — пакет сразу; память «Сейчас» — память сразу; «Оплачено до» из окна', () => {
-    const g = subscriptionConfirm(sub, pay({ kind: 'grow', seats: 80 }), { months: 1, paidUntil: '2026-12-05' }, TODAY);
+    const g = subscriptionConfirm(
+      sub,
+      pay({ kind: 'grow', seats: 80 }),
+      { months: 1, paidUntil: '2026-12-05' },
+      TODAY,
+    );
     expect(g.sub).toMatchObject({ seats: 80, extraGb: 1, paidUntil: '2026-12-05' });
     expect(g.months).toBe(3);
-    const m = subscriptionConfirm(sub, pay({ kind: 'mem', extraGb: 5 }), { months: 1, paidUntil: '2026-12-10' }, TODAY);
+    const m = subscriptionConfirm(
+      sub,
+      pay({ kind: 'mem', extraGb: 5 }),
+      { months: 1, paidUntil: '2026-12-10' },
+      TODAY,
+    );
     expect(m.sub).toMatchObject({ seats: 60, extraGb: 5, paidUntil: '2026-12-10' });
   });
 
@@ -114,7 +147,12 @@ describe('«Подтвердить оплату» — subPayOk', () => {
       { months: 2, paidUntil: '2027-02-05' },
       TODAY,
     );
-    expect(g.sub).toMatchObject({ seats: 60, nextSeats: 90, nextExtraGb: 1, nextFrom: '2026-12-06' });
+    expect(g.sub).toMatchObject({
+      seats: 60,
+      nextSeats: 90,
+      nextExtraGb: 1,
+      nextFrom: '2026-12-06',
+    });
   });
 
   it('наступивший «Со следующего месяца» сначала становится пакетом (п. О-91)', () => {
@@ -129,7 +167,14 @@ describe('«Подтвердить оплату» — subPayOk', () => {
 });
 
 describe('«Изменить подписку» — subSet', () => {
-  const x = { planId: 'm1', seats: 60, extraGb: 1, paidUntil: '2026-12-05', extraDiscountPct: 0, free: false };
+  const x = {
+    planId: 'm1',
+    seats: 60,
+    extraGb: 1,
+    paidUntil: '2026-12-05',
+    extraDiscountPct: 0,
+    free: false,
+  };
 
   it('без изменений — null («Изменений нет»)', () => {
     expect(subscriptionEdit(sub, x, 150)).toBeNull();
@@ -194,7 +239,9 @@ describe('«Виды подписок» — subKindDlg', () => {
 
   it('преимущества — по строкам без пустых; изменения — по полям', () => {
     expect(subscriptionPerksOf(' a \n\n b ')).toEqual(['a', 'b']);
-    expect(subscriptionPlanChanges(plan, { ...plan, months: 6, perks: ['a'], active: false })).toEqual([
+    expect(
+      subscriptionPlanChanges(plan, { ...plan, months: 6, perks: ['a'], active: false }),
+    ).toEqual([
       { field: 'months', from: 3, to: 6 },
       { field: 'perks', from: '', to: 'a' },
       { field: 'active', from: true, to: false },
@@ -247,13 +294,17 @@ describe('«Цены и реквизиты» — subPricesPart', () => {
       'bik:sub_cfg_bik',
     ]);
     const [p] = subscriptionSettingsProblems({ ...ok, purpose: 'За {месяц} {ИНН} {org}' });
-    expect(p).toEqual({ field: 'purpose', code: 'sub_cfg_purpose', params: { bad: '{месяц}, {org}' } });
+    expect(p).toEqual({
+      field: 'purpose',
+      code: 'sub_cfg_purpose',
+      params: { bad: '{месяц}, {org}' },
+    });
   });
 
   it('назначение платежа организации', () => {
-    expect(subscriptionPurposeText(ok.purpose, { name: 'ОсОО «Альфа»', inn: '01234567891234' })).toBe(
-      'Подписка Buhuchet.kg: ОсОО «Альфа», ИНН 01234567891234',
-    );
+    expect(
+      subscriptionPurposeText(ok.purpose, { name: 'ОсОО «Альфа»', inn: '01234567891234' }),
+    ).toBe('Подписка Buhuchet.kg: ОсОО «Альфа», ИНН 01234567891234');
   });
 
   it('тексты отказов — в словаре', () => {
