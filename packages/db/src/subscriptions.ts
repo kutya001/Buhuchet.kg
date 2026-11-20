@@ -23,7 +23,10 @@ export interface OrgUsage {
   extraGb: number | null;
   /** Занято, байт; null — спрошено без суммы (`bytes: false`). */
   bytesUsed: number | null;
-  /** Предел памяти, байт; у демо — null. */
+  /**
+   * Предел памяти, байт; null — предела нет: у демо и без подписки, пока нет чека, открывшего доступ
+   * (прототип `afMem`; без подписки доступ и так закрыт — `closed`).
+   */
   bytesLimit: number | null;
   /** «Оплачено до», включительно; null — подписки нет. */
   paidUntil: IsoDate | null;

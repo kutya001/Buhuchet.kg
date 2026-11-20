@@ -256,7 +256,11 @@ export const subscriptionPayments = pgTable(
     planId: text('plan_id')
       .notNull()
       .references(() => subscriptionPlans.id, { onDelete: 'restrict' }),
-    /** Месяцев оплачено; 0 — у бесплатного периода и записи администратора. */
+    /**
+     * Месяцев оплачено; 0 — у бесплатного периода и записи администратора. Расширение пакета и память
+     * оплачиваются до «Оплачено до» — до 120 месяцев, если администратор поставил срок дальше года
+     * (прототип `subMonthsLeft`).
+     */
     months: integer('months').notNull(),
     /** Пакет и память сверх после этой оплаты (прототип `pack`, `extraGb`). */
     seats: integer('seats').notNull(),
@@ -295,12 +299,13 @@ export const subscriptionPayments = pgTable(
     ),
     check(
       'subscription_payments_values_check',
-      sql`${t.months} between 0 and 12 and ${t.seats} between 0 and 100000 and ${t.extraGb} between 0 and 100000 and ${t.amount} >= 0 and jsonb_typeof(${t.lines}) = 'array'`,
+      sql`${t.months} between 0 and 120 and ${t.seats} between 0 and 100000 and ${t.extraGb} between 0 and 100000 and ${t.amount} >= 0 and case when jsonb_typeof(${t.lines}) = 'array' then jsonb_array_length(${t.lines}) <= 20 else false end`,
     ),
-    // Чек есть у заявки владельца и только у неё; ключ — в папке оплат своей организации.
+    // Чек есть у заявки владельца и только у неё; ключ — в папке оплат своей организации; тип и размер
+    // чека — обязательно (пустое значение дало бы проверке null, и она бы строку пропустила).
     check(
       'subscription_payments_receipt_check',
-      sql`(${t.kind} in (${oneOf(SUBSCRIPTION_OWNER_PAYMENT_KINDS)})) = (${t.receiptKey} is not null) and (${t.receiptKey} is null or (${t.receiptKey} = ('org/' || ${t.orgId}::text || '/subs/' || ${t.id}::text) and char_length(coalesce(${t.receiptName}, '')) between 1 and 255 and ${t.receiptType} in (${oneOf(SUBSCRIPTION_RECEIPT_TYPES)}) and ${t.receiptBytes} between 1 and ${sql.raw(String(SUBSCRIPTION_RECEIPT_MAX_BYTES))}))`,
+      sql`(${t.kind} in (${oneOf(SUBSCRIPTION_OWNER_PAYMENT_KINDS)})) = (${t.receiptKey} is not null) and (${t.receiptKey} is null or (${t.receiptKey} = ('org/' || ${t.orgId}::text || '/subs/' || ${t.id}::text) and char_length(coalesce(${t.receiptName}, '')) between 1 and 255 and ${t.receiptType} is not null and ${t.receiptType} in (${oneOf(SUBSCRIPTION_RECEIPT_TYPES)}) and ${t.receiptBytes} is not null and ${t.receiptBytes} between 1 and ${sql.raw(String(SUBSCRIPTION_RECEIPT_MAX_BYTES))}))`,
     ),
     check(
       'subscription_payments_status_check',
@@ -326,12 +331,13 @@ export const subscriptionPayments = pgTable(
       using: adminOutsideOrg,
     }),
     // Заявку с чеком отправляет сотрудник организации от своего имени (что это владелец — проверяет
-    // API); запись без чека — только администратор платформы, сразу подтверждённой.
+    // API), непроверенной и без полей решения; запись без чека — только администратор платформы, сразу
+    // подтверждённой.
     pgPolicy('subscription_payments_insert_guard', {
       as: 'restrictive',
       for: 'insert',
       to: appRole,
-      withCheck: sql`${t.createdBy} = ${currentUserId} and ((${t.status} = 'pending' and ${t.kind} in (${oneOf(SUBSCRIPTION_OWNER_PAYMENT_KINDS)}) and not ${isPlatformAdmin}) or (${isPlatformAdmin} and ${t.kind} in (${oneOf(SUBSCRIPTION_ADMIN_PAYMENT_KINDS)}) and ${t.decidedBy} = ${currentUserId}))`,
+      withCheck: sql`${t.createdBy} = ${currentUserId} and ((${t.status} = 'pending' and ${t.kind} in (${oneOf(SUBSCRIPTION_OWNER_PAYMENT_KINDS)}) and ${t.decidedBy} is null and ${t.paidUntil} is null and ${t.reason} is null and not ${isPlatformAdmin}) or (${isPlatformAdmin} and ${t.kind} in (${oneOf(SUBSCRIPTION_ADMIN_PAYMENT_KINDS)}) and ${t.decidedBy} = ${currentUserId}))`,
     }),
     // Меняется только непроверенная заявка: владелец заменяет чек, решает администратор (какие столбцы
     // кто меняет — триггер `subscription_payments_guard`, миграция 0165).

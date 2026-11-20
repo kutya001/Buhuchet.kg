@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { SUBSCRIPTION_LAUNCH_REASON } from '@buhuchet/domain';
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withUserContext } from './auth';
@@ -29,6 +30,17 @@ const MB = 1024 * 1024;
 const denied = expect.objectContaining({
   cause: expect.objectContaining({ code: expect.stringMatching(/^(42501|23514)$/) }),
 });
+const pgError = (code: string, constraint?: string) =>
+  expect.objectContaining({
+    cause: expect.objectContaining({
+      code,
+      ...(constraint ? { constraint_name: constraint } : {}),
+    }),
+  });
+/** Отказ политики RLS (не проверки и не триггера). */
+const rls = pgError('42501');
+/** Отказ триггера `app.subscription_payments_guard`: это поле после отправки не меняется. */
+const guard = pgError('23514', 'subscription_payments_guard');
 
 const contractor = (inn: string, name: string): ContractorFields => ({
   name,
@@ -88,9 +100,15 @@ describe.skipIf(!databaseAvailable())(
       );
       return Number(rows[0]!.n);
     };
-    const addFile = (orgId: string, userId: string, sizeBytes: number, state = 'ready') => {
+    const addFile = async (
+      orgId: string,
+      userId: string,
+      sizeBytes: number,
+      state = 'ready',
+      over: Partial<typeof files.$inferInsert> = {},
+    ) => {
       const id = randomUUID();
-      return db.admin.db.insert(files).values({
+      await db.admin.db.insert(files).values({
         id,
         orgId,
         sourceKind: 'manual',
@@ -101,8 +119,35 @@ describe.skipIf(!databaseAvailable())(
         state: state as 'ready',
         createdBy: userId,
         ...(state === 'deleted' ? { deletedAt: new Date(), deletedBy: userId } : {}),
+        ...over,
       });
+      return id;
     };
+    const addContractors = async (
+      org: CreatedOrganization,
+      from: number,
+      n: number,
+      prefix: string,
+    ) => {
+      const ids: string[] = [];
+      for (let i = from; i < from + n; i++)
+        ids.push(
+          await withOrgContext(db.app.db, { orgId: org.orgId, userId: org.ownerUserId }, (tx) =>
+            createContractor(
+              tx,
+              org.orgId,
+              contractor(`0380781946${String(1900 + i)}`, `ОсОО «${prefix}${i}»`),
+              null,
+            ),
+          ),
+        );
+      return ids;
+    };
+    const archive = (ids: string[]) =>
+      db.admin.db
+        .update(contractors)
+        .set({ serviceStatus: 'archived' })
+        .where(sql`${contractors.id} in ${ids}`);
 
     beforeAll(async () => {
       db = await createTestDatabase();
@@ -131,22 +176,12 @@ describe.skipIf(!databaseAvailable())(
         .update(organizations)
         .set({ isDemo: true })
         .where(eq(organizations.id, demo.orgId));
-      // У А — 12 активных и один архивный контрагент: пакет при запуске — 20.
-      for (let i = 0; i < 13; i++) {
-        const id = await inA((tx) =>
-          createContractor(
-            tx,
-            a.orgId,
-            contractor(`0380781946${String(1900 + i)}`, `ОсОО «А${i}»`),
-            null,
-          ),
-        );
-        if (i === 12)
-          await db.admin.db
-            .update(contractors)
-            .set({ serviceStatus: 'archived' })
-            .where(eq(contractors.id, id));
-      }
+      // У А — 12 активных и один архивный контрагент: пакет при запуске — 20 (округление вверх).
+      const ofA = await addContractors(a, 0, 13, 'А');
+      await archive(ofA.slice(12));
+      // У Б — ровно 10 активных и один архивный: пакет — 10 (архивный не считается, кратное шагу — как есть).
+      const ofB = await addContractors(b, 0, 11, 'Б');
+      await archive(ofB.slice(10));
       const [admin] = await db.admin.db
         .insert(users)
         .values({ login: 'subs-platform', passwordHash: 'x', isPlatformAdmin: true })
@@ -253,10 +288,13 @@ describe.skipIf(!databaseAvailable())(
           seats: 20,
           createdBy: null,
           paidUntil: '2026-12-20',
-          reason:
-            'Запуск подписок: пакет по числу активных контрагентов и 30 дней до первой оплаты',
+          reason: SUBSCRIPTION_LAUNCH_REASON,
         }),
       ]);
+      // Вид, у которого есть подписки, удалить нельзя (внешний ключ) — только выключить.
+      await expect(
+        asAdmin((tx) => tx.delete(subscriptionPlans).where(eq(subscriptionPlans.id, 'm1'))),
+      ).rejects.toEqual(pgError('23503'));
       // Роль приложения запуск не вызывает.
       await expect(
         inA((tx) => tx.execute(sql`select app.subscriptions_launch('2026-11-20'::date)`)),
@@ -279,10 +317,25 @@ describe.skipIf(!databaseAvailable())(
           ...receipt(b.orgId, pay),
         }),
       );
+      // У А контрагентов стало больше (21 активный): повтор поднимает пакет до 30 и пишет вторую запись.
+      const more = await addContractors(a, 13, 9, 'А');
       expect(await launch('2026-12-15')).toBe(1);
       const subs = await db.admin.db.select().from(orgSubscriptions);
-      expect(subs.find((s) => s.orgId === a.orgId)!.paidUntil).toBe('2027-01-14');
+      expect(subs.find((s) => s.orgId === a.orgId)).toMatchObject({
+        paidUntil: '2027-01-14',
+        seats: 30,
+      });
       expect(subs.find((s) => s.orgId === b.orgId)!.paidUntil).toBe('2026-12-20');
+      const pays = await db.admin.db
+        .select({ seats: subscriptionPayments.seats, paidUntil: subscriptionPayments.paidUntil })
+        .from(subscriptionPayments)
+        .where(eq(subscriptionPayments.orgId, a.orgId))
+        .orderBy(subscriptionPayments.paidUntil);
+      expect(pays).toEqual([
+        { seats: 20, paidUntil: '2026-12-20' },
+        { seats: 30, paidUntil: '2027-01-14' },
+      ]);
+      await archive(more);
       await db.admin.db.delete(subscriptionPayments).where(eq(subscriptionPayments.id, pay));
     });
 
@@ -290,11 +343,41 @@ describe.skipIf(!databaseAvailable())(
       expect((await inA((tx) => tx.select().from(orgSubscriptions))).map((s) => s.orgId)).toEqual([
         a.orgId,
       ]);
+      const ofB = await db.admin.db
+        .select({ id: subscriptionPayments.id })
+        .from(subscriptionPayments)
+        .where(eq(subscriptionPayments.orgId, b.orgId));
+      expect(ofB.length).toBeGreaterThan(0);
       expect(
-        (await inB((tx) => tx.select().from(subscriptionPayments))).every(
-          (p) => p.orgId === b.orgId,
+        (await inB((tx) => tx.select({ id: subscriptionPayments.id }).from(subscriptionPayments)))
+          .map((p) => p.id)
+          .sort(),
+      ).toEqual(ofB.map((p) => p.id).sort());
+      // Вставить строку с чужой организацией нельзя — ни подписку, ни оплату.
+      const foreign = randomUUID();
+      await expect(
+        inA((tx) =>
+          tx.insert(subscriptionPayments).values({
+            id: foreign,
+            orgId: b.orgId,
+            kind: 'renew',
+            planId: 'm1',
+            months: 1,
+            seats: 10,
+            ...receipt(b.orgId, foreign),
+          }),
         ),
-      ).toBe(true);
+      ).rejects.toEqual(rls);
+      await expect(
+        inA((tx) =>
+          tx.insert(orgSubscriptions).values({
+            orgId: a.orgId,
+            planId: 'm1',
+            seats: 10,
+            paidUntil: '2027-01-01',
+          }),
+        ),
+      ).rejects.toEqual(rls);
       const all = await asAdmin((tx) =>
         tx.select({ id: orgSubscriptions.orgId }).from(orgSubscriptions),
       );
@@ -309,6 +392,19 @@ describe.skipIf(!databaseAvailable())(
           tx.update(orgSubscriptions).set({ seats: 500 }).returning({ id: orgSubscriptions.orgId }),
         ),
       ).toEqual([]);
+      await expect(inA((tx) => tx.delete(orgSubscriptions))).rejects.toEqual(rls);
+      // «Со следующего месяца» — с днём и хотя бы одним значением, либо ничего.
+      for (const next of [
+        { nextFrom: '2027-01-01' },
+        { nextSeats: 30 },
+        { nextFrom: '2027-01-01', nextSeats: -1 },
+      ]) {
+        await expect(
+          adminIn(a.orgId, (tx) =>
+            tx.update(orgSubscriptions).set(next).where(eq(orgSubscriptions.orgId, a.orgId)),
+          ),
+        ).rejects.toEqual(pgError('23514', 'org_subscriptions_next_check'));
+      }
     });
 
     it('оплаты: заявка с чеком — от себя, одна за раз; запись без чека — только администратор; меняются только разрешённые поля', async () => {
@@ -338,12 +434,41 @@ describe.skipIf(!databaseAvailable())(
             .values({ id, ...base, ...receipt(a.orgId, id), createdBy: b.ownerUserId }),
         ),
       ).rejects.toEqual(denied);
-      // Ключ чека — только в папке оплат своей организации и с номером оплаты.
+      // Ключ чека — только в папке оплат своей организации и с номером оплаты; тип и размер — обязательно.
       await expect(
         inA((tx) =>
           tx.insert(subscriptionPayments).values({ id, ...base, ...receipt(b.orgId, id) }),
         ),
       ).rejects.toEqual(denied);
+      for (const bad of [
+        { receiptType: null },
+        { receiptBytes: null },
+        { receiptType: null, receiptBytes: null },
+        { receiptType: 'text/html' },
+        { receiptBytes: 21 * MB },
+      ]) {
+        await expect(
+          inA((tx) =>
+            tx
+              .insert(subscriptionPayments)
+              .values({ id, ...base, ...receipt(a.orgId, id), ...bad }),
+          ),
+        ).rejects.toEqual(pgError('23514', 'subscription_payments_receipt_check'));
+      }
+      // Заявка — без полей решения: «решил» и «Оплачено до» ставит только администратор.
+      for (const bad of [
+        { decidedBy: adminId },
+        { paidUntil: '2027-01-01' },
+        { reason: 'Подтверждено' },
+      ]) {
+        await expect(
+          inA((tx) =>
+            tx
+              .insert(subscriptionPayments)
+              .values({ id, ...base, ...receipt(a.orgId, id), ...bad }),
+          ),
+        ).rejects.toEqual(rls);
+      }
       await inA((tx) =>
         tx.insert(subscriptionPayments).values({ id, ...base, ...receipt(a.orgId, id) }),
       );
@@ -364,12 +489,33 @@ describe.skipIf(!databaseAvailable())(
           .set({ receiptName: 'Чек_новый.pdf' })
           .where(eq(subscriptionPayments.id, id)),
       );
-      for (const set of [{ amount: 1 }, { seats: 500 }]) {
+      for (const set of [
+        { amount: 1 },
+        { seats: 500 },
+        { kind: 'renew' as const },
+        { startMode: 'next' as const },
+        { planId: 'm3' },
+        { extraGb: 5 },
+        { lines: [{ label: 'Скидка', sum: -1 }] },
+        { months: 3 },
+        { paidUntil: '2027-01-01' },
+        { reason: 'Сам' },
+        { createdBy: b.ownerUserId },
+        { opensAccess: false },
+      ]) {
         await expect(
           inA((tx) =>
             tx.update(subscriptionPayments).set(set).where(eq(subscriptionPayments.id, id)),
           ),
-        ).rejects.toEqual(denied);
+        ).rejects.toEqual(guard);
+      }
+      // Тип и размер чека владелец меняет вместе с файлом, но пустыми не оставляет.
+      for (const set of [{ receiptType: null }, { receiptBytes: null }]) {
+        await expect(
+          inA((tx) =>
+            tx.update(subscriptionPayments).set(set).where(eq(subscriptionPayments.id, id)),
+          ),
+        ).rejects.toEqual(pgError('23514', 'subscription_payments_receipt_check'));
       }
       await expect(
         inA((tx) =>
@@ -384,7 +530,38 @@ describe.skipIf(!databaseAvailable())(
             .where(eq(subscriptionPayments.id, id)),
         ),
       ).rejects.toEqual(denied);
-      // Администратор подтверждает от своего имени, сумму не меняет; подтверждённая больше не меняется.
+      // Администратор подтверждает от своего имени, сумму, пакет, чек и расчёт не меняет; подтверждённая
+      // больше не меняется.
+      for (const set of [
+        { receiptName: 'Другой.pdf' },
+        { receiptType: 'image/png' },
+        { receiptBytes: 1 },
+        { seats: 500 },
+        { extraGb: 5 },
+        { kind: 'renew' as const },
+        { startMode: 'next' as const },
+        { opensAccess: false },
+        { lines: [{ label: 'Скидка', sum: -1 }] },
+      ]) {
+        await expect(
+          adminIn(a.orgId, (tx) =>
+            tx.update(subscriptionPayments).set(set).where(eq(subscriptionPayments.id, id)),
+          ),
+        ).rejects.toEqual(guard);
+      }
+      await expect(
+        adminIn(a.orgId, (tx) =>
+          tx
+            .update(subscriptionPayments)
+            .set({
+              status: 'confirmed',
+              decidedAt: new Date(),
+              decidedBy: a.ownerUserId,
+              paidUntil: '2026-12-20',
+            })
+            .where(eq(subscriptionPayments.id, id)),
+        ),
+      ).rejects.toEqual(rls);
       await expect(
         adminIn(a.orgId, (tx) =>
           tx
@@ -459,7 +636,7 @@ describe.skipIf(!databaseAvailable())(
           .where(eq(contractors.orgId, a.orgId))
           .limit(1)
       )[0]!.id;
-      const sent = (status: 'new' | 'accepted' | 'rejected') => {
+      const sent = (status: 'new' | 'accepted' | 'rejected', fileId?: string) => {
         const id = randomUUID();
         return db.admin.db.insert(contractorSentFiles).values({
           id,
@@ -475,10 +652,22 @@ describe.skipIf(!databaseAvailable())(
           ...(status === 'rejected'
             ? { rejectReason: 'Не тот', decidedAt: new Date(), decidedBy: a.ownerUserId }
             : {}),
+          ...(status === 'accepted'
+            ? { fileId, decidedAt: new Date(), decidedBy: a.ownerUserId }
+            : {}),
         });
       };
       await sent('new');
       await sent('rejected');
+      // Принятый файл контрагента считается один раз — своей строкой файла (4 МБ), а не присланным.
+      const kept = await addFile(a.orgId, a.ownerUserId, 4 * MB, 'ready', {
+        sourceKind: 'contractor',
+        contractorId: cp,
+      });
+      await sent('accepted', kept);
+      // Документы заявки и загрузка в процессе — не память организации.
+      await addFile(a.orgId, a.ownerUserId, 9 * MB, 'ready', { sourceKind: 'lead' });
+      await addFile(a.orgId, a.ownerUserId, 8 * MB, 'pending');
 
       const u = await inA((tx) => orgUsage(tx, '2026-11-25'));
       expect(u).toEqual({
@@ -487,8 +676,9 @@ describe.skipIf(!databaseAvailable())(
         seatsUsed: 12,
         seatsLimit: 20,
         extraGb: 0,
-        // Загруженные 3 + 2 МБ и присланные, ещё не принятые 1 + 1 МБ; удалённый — не считается.
-        bytesUsed: 7 * MB,
+        // Загруженные 3 + 2 + 4 МБ и присланные, ещё не принятые 1 + 1 МБ; удалённый, ещё не
+        // загруженный, принятый (уже посчитан файлом) и документы заявки — не считаются.
+        bytesUsed: 11 * MB,
         // 2 ГБ + 200 МБ × 20 мест = 6 000 МБ.
         bytesLimit: 6000 * MB,
         paidUntil: '2026-12-20',
@@ -499,6 +689,7 @@ describe.skipIf(!databaseAvailable())(
         (await inA((tx) => orgUsage(tx, '2026-11-25', { bytes: false })))!.bytesUsed,
       ).toBeNull();
       // «Скоро истекает» — за 7 дней; в последний оплаченный день доступ открыт, на следующий — закрыт.
+      expect((await inA((tx) => orgUsage(tx, '2026-12-12')))!.status).toBe('active');
       expect((await inA((tx) => orgUsage(tx, '2026-12-13')))!.status).toBe('expiring');
       expect(await inA((tx) => orgUsage(tx, '2026-12-20'))).toMatchObject({
         status: 'expiring',
@@ -560,6 +751,15 @@ describe.skipIf(!databaseAvailable())(
         .from(subscriptionPayments)
         .where(eq(subscriptionPayments.id, again));
       expect(row!.open).toBe(false);
+      // Открыть доступ самому владелец не может.
+      await expect(
+        inA((tx) =>
+          tx
+            .update(subscriptionPayments)
+            .set({ opensAccess: true })
+            .where(eq(subscriptionPayments.id, again)),
+        ),
+      ).rejects.toEqual(guard);
       expect(await inA((tx) => orgUsage(tx, '2026-12-21'))).toMatchObject({
         status: 'pending',
         closed: true,
@@ -583,7 +783,7 @@ describe.skipIf(!databaseAvailable())(
       const all = await asAdmin((tx) => adminOrgUsage(tx, '2026-12-25', { bytes: false }));
       const byOrg = new Map(all.map((r) => [r.orgId, r]));
       expect(byOrg.get(b.orgId)).toMatchObject({
-        seatsUsed: 0,
+        seatsUsed: 10,
         seatsLimit: 10,
         status: 'overdue',
         closed: true,
@@ -601,14 +801,14 @@ describe.skipIf(!databaseAvailable())(
       expect(await inB((tx) => adminOrgUsage(tx, '2026-12-25'))).toEqual([
         expect.objectContaining({ orgId: b.orgId }),
       ]);
-      // Организация без подписки — «Нет подписки», доступ закрыт.
+      // Организация без подписки — «Нет подписки», доступ закрыт, предела памяти нет (прототип afMem).
       await db.admin.db.delete(subscriptionPayments).where(eq(subscriptionPayments.orgId, b.orgId));
       await db.admin.db.delete(orgSubscriptions).where(eq(orgSubscriptions.orgId, b.orgId));
       expect(await inB((tx) => orgUsage(tx, '2026-11-25'))).toMatchObject({
         status: 'none',
         closed: true,
         seatsLimit: 0,
-        bytesLimit: 2000 * MB,
+        bytesLimit: null,
         paidUntil: null,
       });
     });

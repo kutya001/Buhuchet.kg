@@ -12,6 +12,7 @@ import {
 } from '@buhuchet/domain';
 import { sql } from 'drizzle-orm';
 import {
+  type AnyPgColumn,
   bigint,
   boolean,
   check,
@@ -48,7 +49,9 @@ const adminOutsideOrg = sql`${currentOrgId} is null and ${isPlatformAdmin}`;
  * Шаблон (блок 2): название, код для адреса, описание, вид, параметры, столбцы, модуль, доступ и
  * состояние. Параметры — `[{ code, name, type, required, default }]`, столбцы — `[{ code, name, type,
  * total, contractor }]` (`contractor` — столбец «Контрагент» для области «Свои»). Организация видит
- * только опубликованные шаблоны «Для организаций», разрешённые ей (права модуля проверяет API).
+ * шаблоны «Для организаций», разрешённые ей, — опубликованные и сломанные (с пометкой «Сломан», как
+ * прототип `dmSee`; права модуля проверяет API). Итог проверки шаблона — в `dm_template_sql`: номер
+ * организации проверки и текст ошибки организациям не видны.
  */
 export const dmTemplates = pgTable(
   'dm_templates',
@@ -64,7 +67,8 @@ export const dmTemplates = pgTable(
     columns: jsonb('columns')
       .notNull()
       .default(sql`'[]'::jsonb`),
-    module: text('module', { enum: DM_MODULES }).notNull(),
+    /** Модуль шаблона «Для организаций»; у шаблона Админки — пусто (прототип `mod: null`). */
+    module: text('module', { enum: DM_MODULES }),
     /** Ещё одно обязательное право из 40 (например, «Видеть плату за обслуживание»). */
     needPermission: text('need_permission'),
     access: text('access', { enum: DM_ACCESS }).notNull().default('all'),
@@ -72,12 +76,6 @@ export const dmTemplates = pgTable(
     /** Готовый шаблон платформы (блок 7). */
     builtin: boolean('builtin').notNull().default(false),
     copiedFrom: uuid('copied_from'),
-    /** Последняя проверка (блок 3, пункт 1; блок 8, пункт 7): когда, на какой организации, итог. */
-    checkedAt: timestamp('checked_at', { withTimezone: true }),
-    checkedOrgId: uuid('checked_org_id').references(() => organizations.id, {
-      onDelete: 'set null',
-    }),
-    checkError: text('check_error'),
     createdBy: uuid('created_by').references(() => users.id),
     updatedBy: uuid('updated_by').references(() => users.id),
     ...timestamps(),
@@ -86,11 +84,11 @@ export const dmTemplates = pgTable(
   (t) => [
     check(
       'dm_templates_fields_check',
-      sql`${t.code} ~ ${sql.raw(`'${DM_CODE_RE}'`)} and char_length(${t.name}) between 1 and 200 and char_length(coalesce(${t.description}, '')) <= 2000 and char_length(coalesce(${t.checkError}, '')) <= 2000 and (${t.needPermission} is null or ${t.needPermission} ~ '^[A-Za-z]{1,40}$')`,
+      sql`${t.code} ~ ${sql.raw(`'${DM_CODE_RE}'`)} and char_length(${t.name}) between 1 and 200 and char_length(coalesce(${t.description}, '')) <= 2000 and (${t.needPermission} is null or ${t.needPermission} ~ '^[A-Za-z]{1,40}$')`,
     ),
     check(
       'dm_templates_enum_check',
-      sql`${t.audience} in (${oneOf(DM_AUDIENCES)}) and ${t.access} in (${oneOf(DM_ACCESS)}) and ${t.state} in (${oneOf(DM_TEMPLATE_STATES)}) and ${t.module} in (${oneOf(DM_MODULES)})`,
+      sql`${t.audience} in (${oneOf(DM_AUDIENCES)}) and ${t.access} in (${oneOf(DM_ACCESS)}) and ${t.state} in (${oneOf(DM_TEMPLATE_STATES)}) and (${t.audience} = 'org') = (${t.module} is not null) and (${t.module} is null or ${t.module} in (${oneOf(DM_MODULES)}))`,
     ),
     check(
       'dm_templates_json_check',
@@ -108,12 +106,15 @@ export const dmTemplates = pgTable(
       as: 'permissive',
       for: 'select',
       to: appRole,
-      using: sql`${currentOrgId} is not null and ${t.audience} = 'org' and ${t.state} = 'published' and (${t.access} = 'all' or exists (select 1 from public.dm_template_orgs o where o.template_id = ${t.id} and o.org_id = ${currentOrgId}))`,
+      using: sql`${currentOrgId} is not null and ${t.audience} = 'org' and ${t.state} in ('published', 'broken') and (${t.access} = 'all' or exists (select 1 from public.dm_template_orgs o where o.template_id = ${t.id} and o.org_id = ${currentOrgId}))`,
     }),
   ],
 ).enableRLS();
 
-/** Текст запроса шаблона — один SELECT (блок 2, пункт 3); видит и меняет только администратор платформы. */
+/**
+ * Текст запроса шаблона — один SELECT (блок 2, пункт 3) — и последняя проверка (блок 3, пункт 1; блок 8,
+ * пункт 7): когда, на какой организации, итог. Видит и меняет только администратор платформы.
+ */
 export const dmTemplateSql = pgTable(
   'dm_template_sql',
   {
@@ -121,13 +122,18 @@ export const dmTemplateSql = pgTable(
       .primaryKey()
       .references(() => dmTemplates.id, { onDelete: 'cascade' }),
     query: text('query').notNull(),
+    checkedAt: timestamp('checked_at', { withTimezone: true }),
+    checkedOrgId: uuid('checked_org_id').references(() => organizations.id, {
+      onDelete: 'set null',
+    }),
+    checkError: text('check_error'),
     updatedBy: uuid('updated_by').references(() => users.id),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     check(
       'dm_template_sql_query_check',
-      sql`char_length(${t.query}) between 1 and ${sql.raw(String(DM_QUERY_MAX))}`,
+      sql`char_length(${t.query}) between 1 and ${sql.raw(String(DM_QUERY_MAX))} and char_length(coalesce(${t.checkError}, '')) <= 2000`,
     ),
     pgPolicy('dm_template_sql_admin', {
       as: 'permissive',
@@ -212,7 +218,8 @@ export const dmTokens = pgTable(
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
     revokedBy: uuid('revoked_by').references(() => users.id),
-    replacedBy: uuid('replaced_by'),
+    /** Новый токен перевыпуска; старый работает до `grace_until` (не дольше 24 часов). */
+    replacedBy: uuid('replaced_by').references((): AnyPgColumn => dmTokens.id),
     graceUntil: timestamp('grace_until', { withTimezone: true }),
     lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
     lastIp: text('last_ip'),
@@ -252,20 +259,24 @@ export const dmTokens = pgTable(
       using: adminOutsideOrg,
       withCheck: adminOutsideOrg,
     }),
-    // Выпускает токен тот, кто вошёл: организация — свой, администратор — только токен Админки.
+    // Выпускает токен тот, кто вошёл, и сейчас (срок «до 180 дней» считается от `created_at`):
+    // организация — свой, на опубликованный шаблон «Для организаций», который она видит (подзапрос идёт
+    // под RLS), администратор — только токен Админки на опубликованный шаблон Админки.
     pgPolicy('dm_tokens_insert_guard', {
       as: 'restrictive',
       for: 'insert',
       to: appRole,
-      withCheck: sql`${t.createdBy} = ${currentUserId} and ${t.revokedAt} is null and ${t.replacedBy} is null and ((${t.orgId} is not null and not ${isPlatformAdmin}) or (${t.orgId} is null and ${isPlatformAdmin}))`,
+      withCheck: sql`${t.createdBy} = ${currentUserId} and ${t.createdAt} between now() - interval '1 minute' and now() + interval '1 minute' and ${t.revokedAt} is null and ${t.replacedBy} is null and ${t.lastUsedAt} is null and ${t.lastIp} is null and ((${t.orgId} is not null and not ${isPlatformAdmin}) or (${t.orgId} is null and ${isPlatformAdmin})) and exists (select 1 from public.dm_templates d where d.id = ${t.templateId} and d.state = 'published' and d.audience = case when ${t.orgId} is null then 'admin' else 'org' end)`,
     }),
-    // Отозванный токен не возвращается; отзывает тот, кто вошёл.
+    // Отозванный токен не возвращается; отзывает тот, кто вошёл; перевыпущенный работает ещё не дольше
+    // суток. Меняются только название, отзыв и перевыпуск (права на столбцы, миграция 0165): срок, шаблон
+    // и хеш после выпуска не меняются; когда и откуда токеном пользовались, пишет исполнитель Витрины.
     pgPolicy('dm_tokens_update_guard', {
       as: 'restrictive',
       for: 'update',
       to: appRole,
       using: sql`${t.revokedAt} is null`,
-      withCheck: sql`${t.revokedAt} is null or ${t.revokedBy} = ${currentUserId}`,
+      withCheck: sql`(${t.revokedAt} is null or ${t.revokedBy} = ${currentUserId}) and (${t.graceUntil} is null or ${t.graceUntil} <= now() + interval '24 hours')`,
     }),
     // Токены не удаляются: журнал запросов ссылается на них.
     pgPolicy('dm_tokens_no_delete', {
@@ -297,13 +308,15 @@ export const dmRequests = pgTable(
     rowCount: integer('row_count'),
     durationMs: integer('duration_ms'),
     outcome: text('outcome', { enum: DM_REQUEST_OUTCOMES }).notNull(),
+    /** «Ошибка» журнала (прототип): «Слишком часто, повторите через N секунд» — без текста запроса. */
+    error: text('error'),
     ip: text('ip'),
     at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     check(
       'dm_requests_fields_check',
-      sql`${t.via} in (${oneOf(DM_REQUEST_VIA)}) and ${t.outcome} in (${oneOf(DM_REQUEST_OUTCOMES)}) and jsonb_typeof(${t.params}) = 'object' and (${t.rowCount} is null or ${t.rowCount} >= 0) and (${t.durationMs} is null or ${t.durationMs} >= 0) and char_length(coalesce(${t.ip}, '')) <= 64`,
+      sql`${t.via} in (${oneOf(DM_REQUEST_VIA)}) and ${t.outcome} in (${oneOf(DM_REQUEST_OUTCOMES)}) and jsonb_typeof(${t.params}) = 'object' and (${t.rowCount} is null or ${t.rowCount} >= 0) and (${t.durationMs} is null or ${t.durationMs} >= 0) and char_length(coalesce(${t.ip}, '')) <= 64 and char_length(coalesce(${t.error}, '')) <= 300`,
     ),
     index('dm_requests_org_idx').on(t.orgId, t.at),
     index('dm_requests_token_idx').on(t.tokenId, t.at),

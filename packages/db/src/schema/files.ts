@@ -17,6 +17,7 @@ import {
   foreignKey,
   index,
   integer,
+  jsonb,
   pgPolicy,
   pgTable,
   primaryKey,
@@ -143,10 +144,11 @@ export const files = pgTable(
     index('files_pending_idx')
       .on(t.orgId, t.createdAt)
       .where(sql`${t.state} = 'pending'`),
-    // Занятая память организации (`app.org_usage`): сумма размеров загруженных файлов без чтения строк.
+    // Занятая память организации (`app.org_usage`): сумма размеров загруженных файлов без чтения строк;
+    // документы заявки в память не входят (прототип `afOrgRows`: `mem` у них нет).
     index('files_usage_idx')
       .on(t.orgId, t.sizeBytes)
-      .where(sql`${t.state} = 'ready'`),
+      .where(sql`${t.state} = 'ready' and ${t.sourceKind} <> 'lead'`),
     orgIsolation('files_isolation', t.orgId),
     // Загрузил тот, кто вошёл: подставить другого автора (и обойти «свой файл в течение суток») нельзя.
     pgPolicy('files_insert_guard', {
@@ -452,12 +454,27 @@ export const fileTrash = pgTable(
     why: text('why', { enum: FILE_TRASH_REASONS }).notNull(),
     /** Удалённый файл (`del`) — для «Вернуть». */
     fileId: uuid('file_id'),
+    /** Ключ хранилища; у организации — только в её папке `org/<org_id>/`, у `del` — ключ файла `file_id`. */
     storageKey: text('storage_key').notNull(),
+    /**
+     * Контрагент файла: составной внешний ключ (contractor_id, org_id) на контрагента своей организации с
+     * ON DELETE SET NULL (contractor_id) — в миграции 0165 (Drizzle не умеет SET NULL части ключа).
+     */
     contractorId: uuid('contractor_id'),
     name: text('name').notNull(),
     sizeBytes: bigint('size_bytes', { mode: 'number' }).notNull(),
     /** Откуда файл — как в «Все файлы»: «Отчёт», «Поступление», «Лишний файл хранилища»… */
     source: text('source'),
+    /**
+     * Ссылки файла на записи до удаления (`file_links`: `[{ sourceKind, sourceId }]`) — «Вернуть»
+     * возвращает и их (прототип `ftRestore`); пишет удаление этапа 1.
+     */
+    links: jsonb('links')
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    /** «Не удалось стереть» (прототип): сколько раз задача пыталась и последняя ошибка без ключей. */
+    attempts: integer('attempts').notNull().default(0),
+    lastError: text('last_error'),
     /** Кто удалил; пусто — система (не принят за 30 дней). */
     deletedBy: uuid('deleted_by')
       .default(currentUserId)
@@ -479,7 +496,11 @@ export const fileTrash = pgTable(
     }).onDelete('cascade'),
     check(
       'file_trash_fields_check',
-      sql`${t.why} in (${oneOf(FILE_TRASH_REASONS)}) and (${t.why} = 'del') = (${t.fileId} is not null) and (${t.why} = 'extra' or ${t.orgId} is not null) and char_length(${t.name}) between 1 and ${sql.raw(String(FILE_NAME_MAX_LENGTH))} and char_length(${t.storageKey}) between 1 and 300 and char_length(coalesce(${t.source}, '')) <= 100 and ${t.sizeBytes} >= 0`,
+      sql`${t.why} in (${oneOf(FILE_TRASH_REASONS)}) and (${t.why} = 'del') = (${t.fileId} is not null) and (${t.why} = 'extra' or ${t.orgId} is not null) and char_length(${t.name}) between 1 and ${sql.raw(String(FILE_NAME_MAX_LENGTH))} and char_length(${t.storageKey}) between 1 and 300 and (${t.orgId} is null or starts_with(${t.storageKey}, 'org/' || ${t.orgId}::text || '/')) and char_length(coalesce(${t.source}, '')) <= 100 and ${t.sizeBytes} >= 0`,
+    ),
+    check(
+      'file_trash_erase_try_check',
+      sql`${t.attempts} >= 0 and char_length(coalesce(${t.lastError}, '')) <= 500 and case when jsonb_typeof(${t.links}) = 'array' then jsonb_array_length(${t.links}) <= 500 else false end`,
     ),
     // Не раньше суток — у всех: «стереть сразу» через эту таблицу нельзя.
     check(
@@ -506,14 +527,17 @@ export const fileTrash = pgTable(
       using: adminOutsideOrg,
       withCheck: adminOutsideOrg,
     }),
-    // Ставит тот, кто вошёл (задача — без пользователя); лишний файл — только администратор.
+    // Ставит тот, кто вошёл (задача — без пользователя), сейчас — значит, не раньше суток от сейчас;
+    // лишний файл — только администратор; удалённый файл (`del`) — только с ключом этого файла своей
+    // организации, уже удалённого (под RLS: чужой файл не виден).
     pgPolicy('file_trash_insert_guard', {
       as: 'restrictive',
       for: 'insert',
       to: appRole,
-      withCheck: sql`${t.deletedBy} is not distinct from ${currentUserId} and ${t.erasedAt} is null and ${t.restoredAt} is null and (${t.why} <> 'extra' or ${isPlatformAdmin})`,
+      withCheck: sql`${t.deletedBy} is not distinct from ${currentUserId} and ${t.deletedAt} between now() - interval '5 minutes' and now() + interval '5 minutes' and ${t.erasedAt} is null and ${t.restoredAt} is null and ${t.attempts} = 0 and ${t.lastError} is null and (${t.why} <> 'extra' or ${isPlatformAdmin}) and (${t.why} <> 'del' or exists (select 1 from public.files f where f.id = ${t.fileId} and f.org_id = ${t.orgId} and f.storage_key = ${t.storageKey} and f.state = 'deleted'))`,
     }),
-    // «Вернуть» — только администратор платформы, от своего имени.
+    // «Вернуть» — только администратор платформы, от своего имени; меняются только отметки «Вернуть»
+    // (права на столбцы, миграция 0165), стирание и попытки пишут функции задачи этапа 1.
     pgPolicy('file_trash_update_guard', {
       as: 'restrictive',
       for: 'update',

@@ -1,5 +1,5 @@
 {
-  "id": "d295a74f-e745-4b71-bf0f-b6dffeb9dec3",
+  "id": "41832d18-3be8-4135-8bd3-72be357b6fed",
   "prevId": "ad0471b1-a7c2-4bf6-9b66-acfba2d9b770",
   "version": "7",
   "dialect": "postgresql",
@@ -7639,7 +7639,7 @@
           "to": [
             "buhuchet_app"
           ],
-          "withCheck": "\"subscription_payments\".\"created_by\" = app.current_user_id() and ((\"subscription_payments\".\"status\" = 'pending' and \"subscription_payments\".\"kind\" in ('renew', 'grow', 'mem') and not app.is_platform_admin()) or (app.is_platform_admin() and \"subscription_payments\".\"kind\" in ('free', 'admin') and \"subscription_payments\".\"decided_by\" = app.current_user_id()))"
+          "withCheck": "\"subscription_payments\".\"created_by\" = app.current_user_id() and ((\"subscription_payments\".\"status\" = 'pending' and \"subscription_payments\".\"kind\" in ('renew', 'grow', 'mem') and \"subscription_payments\".\"decided_by\" is null and \"subscription_payments\".\"paid_until\" is null and \"subscription_payments\".\"reason\" is null and not app.is_platform_admin()) or (app.is_platform_admin() and \"subscription_payments\".\"kind\" in ('free', 'admin') and \"subscription_payments\".\"decided_by\" = app.current_user_id()))"
         },
         "subscription_payments_update_guard": {
           "name": "subscription_payments_update_guard",
@@ -7659,11 +7659,11 @@
         },
         "subscription_payments_values_check": {
           "name": "subscription_payments_values_check",
-          "value": "\"subscription_payments\".\"months\" between 0 and 12 and \"subscription_payments\".\"seats\" between 0 and 100000 and \"subscription_payments\".\"extra_gb\" between 0 and 100000 and \"subscription_payments\".\"amount\" >= 0 and jsonb_typeof(\"subscription_payments\".\"lines\") = 'array'"
+          "value": "\"subscription_payments\".\"months\" between 0 and 120 and \"subscription_payments\".\"seats\" between 0 and 100000 and \"subscription_payments\".\"extra_gb\" between 0 and 100000 and \"subscription_payments\".\"amount\" >= 0 and case when jsonb_typeof(\"subscription_payments\".\"lines\") = 'array' then jsonb_array_length(\"subscription_payments\".\"lines\") <= 20 else false end"
         },
         "subscription_payments_receipt_check": {
           "name": "subscription_payments_receipt_check",
-          "value": "(\"subscription_payments\".\"kind\" in ('renew', 'grow', 'mem')) = (\"subscription_payments\".\"receipt_key\" is not null) and (\"subscription_payments\".\"receipt_key\" is null or (\"subscription_payments\".\"receipt_key\" = ('org/' || \"subscription_payments\".\"org_id\"::text || '/subs/' || \"subscription_payments\".\"id\"::text) and char_length(coalesce(\"subscription_payments\".\"receipt_name\", '')) between 1 and 255 and \"subscription_payments\".\"receipt_type\" in ('application/pdf', 'image/jpeg', 'image/png') and \"subscription_payments\".\"receipt_bytes\" between 1 and 20971520))"
+          "value": "(\"subscription_payments\".\"kind\" in ('renew', 'grow', 'mem')) = (\"subscription_payments\".\"receipt_key\" is not null) and (\"subscription_payments\".\"receipt_key\" is null or (\"subscription_payments\".\"receipt_key\" = ('org/' || \"subscription_payments\".\"org_id\"::text || '/subs/' || \"subscription_payments\".\"id\"::text) and char_length(coalesce(\"subscription_payments\".\"receipt_name\", '')) between 1 and 255 and \"subscription_payments\".\"receipt_type\" is not null and \"subscription_payments\".\"receipt_type\" in ('application/pdf', 'image/jpeg', 'image/png') and \"subscription_payments\".\"receipt_bytes\" is not null and \"subscription_payments\".\"receipt_bytes\" between 1 and 20971520))"
         },
         "subscription_payments_status_check": {
           "name": "subscription_payments_status_check",
@@ -22777,6 +22777,26 @@
           "primaryKey": false,
           "notNull": false
         },
+        "links": {
+          "name": "links",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "attempts": {
+          "name": "attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "last_error": {
+          "name": "last_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "deleted_by": {
           "name": "deleted_by",
           "type": "uuid",
@@ -22958,7 +22978,7 @@
           "to": [
             "buhuchet_app"
           ],
-          "withCheck": "\"file_trash\".\"deleted_by\" is not distinct from app.current_user_id() and \"file_trash\".\"erased_at\" is null and \"file_trash\".\"restored_at\" is null and (\"file_trash\".\"why\" <> 'extra' or app.is_platform_admin())"
+          "withCheck": "\"file_trash\".\"deleted_by\" is not distinct from app.current_user_id() and \"file_trash\".\"deleted_at\" between now() - interval '5 minutes' and now() + interval '5 minutes' and \"file_trash\".\"erased_at\" is null and \"file_trash\".\"restored_at\" is null and \"file_trash\".\"attempts\" = 0 and \"file_trash\".\"last_error\" is null and (\"file_trash\".\"why\" <> 'extra' or app.is_platform_admin()) and (\"file_trash\".\"why\" <> 'del' or exists (select 1 from public.files f where f.id = \"file_trash\".\"file_id\" and f.org_id = \"file_trash\".\"org_id\" and f.storage_key = \"file_trash\".\"storage_key\" and f.state = 'deleted'))"
         },
         "file_trash_update_guard": {
           "name": "file_trash_update_guard",
@@ -22974,7 +22994,11 @@
       "checkConstraints": {
         "file_trash_fields_check": {
           "name": "file_trash_fields_check",
-          "value": "\"file_trash\".\"why\" in ('del', 'rep', 'auto', 'extra') and (\"file_trash\".\"why\" = 'del') = (\"file_trash\".\"file_id\" is not null) and (\"file_trash\".\"why\" = 'extra' or \"file_trash\".\"org_id\" is not null) and char_length(\"file_trash\".\"name\") between 1 and 255 and char_length(\"file_trash\".\"storage_key\") between 1 and 300 and char_length(coalesce(\"file_trash\".\"source\", '')) <= 100 and \"file_trash\".\"size_bytes\" >= 0"
+          "value": "\"file_trash\".\"why\" in ('del', 'rep', 'auto', 'extra') and (\"file_trash\".\"why\" = 'del') = (\"file_trash\".\"file_id\" is not null) and (\"file_trash\".\"why\" = 'extra' or \"file_trash\".\"org_id\" is not null) and char_length(\"file_trash\".\"name\") between 1 and 255 and char_length(\"file_trash\".\"storage_key\") between 1 and 300 and (\"file_trash\".\"org_id\" is null or starts_with(\"file_trash\".\"storage_key\", 'org/' || \"file_trash\".\"org_id\"::text || '/')) and char_length(coalesce(\"file_trash\".\"source\", '')) <= 100 and \"file_trash\".\"size_bytes\" >= 0"
+        },
+        "file_trash_erase_try_check": {
+          "name": "file_trash_erase_try_check",
+          "value": "\"file_trash\".\"attempts\" >= 0 and char_length(coalesce(\"file_trash\".\"last_error\", '')) <= 500 and case when jsonb_typeof(\"file_trash\".\"links\") = 'array' then jsonb_array_length(\"file_trash\".\"links\") <= 500 else false end"
         },
         "file_trash_erase_check": {
           "name": "file_trash_erase_check",
@@ -23227,7 +23251,7 @@
             }
           ],
           "isUnique": false,
-          "where": "\"files\".\"state\" = 'ready'",
+          "where": "\"files\".\"state\" = 'ready' and \"files\".\"source_kind\" <> 'lead'",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -23861,6 +23885,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "error": {
+          "name": "error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "ip": {
           "name": "ip",
           "type": "text",
@@ -24014,7 +24044,7 @@
       "checkConstraints": {
         "dm_requests_fields_check": {
           "name": "dm_requests_fields_check",
-          "value": "\"dm_requests\".\"via\" in ('screen', 'api') and \"dm_requests\".\"outcome\" in ('ok', 'denied', 'bad_param', 'rate', 'timeout', 'broken', 'closed', 'error') and jsonb_typeof(\"dm_requests\".\"params\") = 'object' and (\"dm_requests\".\"row_count\" is null or \"dm_requests\".\"row_count\" >= 0) and (\"dm_requests\".\"duration_ms\" is null or \"dm_requests\".\"duration_ms\" >= 0) and char_length(coalesce(\"dm_requests\".\"ip\", '')) <= 64"
+          "value": "\"dm_requests\".\"via\" in ('screen', 'api') and \"dm_requests\".\"outcome\" in ('ok', 'denied', 'bad_param', 'rate', 'timeout', 'broken', 'closed', 'error') and jsonb_typeof(\"dm_requests\".\"params\") = 'object' and (\"dm_requests\".\"row_count\" is null or \"dm_requests\".\"row_count\" >= 0) and (\"dm_requests\".\"duration_ms\" is null or \"dm_requests\".\"duration_ms\" >= 0) and char_length(coalesce(\"dm_requests\".\"ip\", '')) <= 64 and char_length(coalesce(\"dm_requests\".\"error\", '')) <= 300"
         }
       },
       "isRLSEnabled": true
@@ -24186,6 +24216,24 @@
           "primaryKey": false,
           "notNull": true
         },
+        "checked_at": {
+          "name": "checked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "checked_org_id": {
+          "name": "checked_org_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "check_error": {
+          "name": "check_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "updated_by": {
           "name": "updated_by",
           "type": "uuid",
@@ -24213,6 +24261,19 @@
             "id"
           ],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "dm_template_sql_checked_org_id_organizations_id_fk": {
+          "name": "dm_template_sql_checked_org_id_organizations_id_fk",
+          "tableFrom": "dm_template_sql",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "checked_org_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         },
         "dm_template_sql_updated_by_users_id_fk": {
@@ -24246,7 +24307,7 @@
       "checkConstraints": {
         "dm_template_sql_query_check": {
           "name": "dm_template_sql_query_check",
-          "value": "char_length(\"dm_template_sql\".\"query\") between 1 and 20000"
+          "value": "char_length(\"dm_template_sql\".\"query\") between 1 and 20000 and char_length(coalesce(\"dm_template_sql\".\"check_error\", '')) <= 2000"
         }
       },
       "isRLSEnabled": true
@@ -24305,7 +24366,7 @@
           "name": "module",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "need_permission": {
           "name": "need_permission",
@@ -24337,24 +24398,6 @@
         "copied_from": {
           "name": "copied_from",
           "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "checked_at": {
-          "name": "checked_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "checked_org_id": {
-          "name": "checked_org_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "check_error": {
-          "name": "check_error",
-          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -24416,19 +24459,6 @@
         }
       },
       "foreignKeys": {
-        "dm_templates_checked_org_id_organizations_id_fk": {
-          "name": "dm_templates_checked_org_id_organizations_id_fk",
-          "tableFrom": "dm_templates",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "checked_org_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
         "dm_templates_created_by_users_id_fk": {
           "name": "dm_templates_created_by_users_id_fk",
           "tableFrom": "dm_templates",
@@ -24484,17 +24514,17 @@
           "to": [
             "buhuchet_app"
           ],
-          "using": "app.current_org_id() is not null and \"dm_templates\".\"audience\" = 'org' and \"dm_templates\".\"state\" = 'published' and (\"dm_templates\".\"access\" = 'all' or exists (select 1 from public.dm_template_orgs o where o.template_id = \"dm_templates\".\"id\" and o.org_id = app.current_org_id()))"
+          "using": "app.current_org_id() is not null and \"dm_templates\".\"audience\" = 'org' and \"dm_templates\".\"state\" in ('published', 'broken') and (\"dm_templates\".\"access\" = 'all' or exists (select 1 from public.dm_template_orgs o where o.template_id = \"dm_templates\".\"id\" and o.org_id = app.current_org_id()))"
         }
       },
       "checkConstraints": {
         "dm_templates_fields_check": {
           "name": "dm_templates_fields_check",
-          "value": "\"dm_templates\".\"code\" ~ '^[a-z0-9][a-z0-9-]{1,59}$' and char_length(\"dm_templates\".\"name\") between 1 and 200 and char_length(coalesce(\"dm_templates\".\"description\", '')) <= 2000 and char_length(coalesce(\"dm_templates\".\"check_error\", '')) <= 2000 and (\"dm_templates\".\"need_permission\" is null or \"dm_templates\".\"need_permission\" ~ '^[A-Za-z]{1,40}$')"
+          "value": "\"dm_templates\".\"code\" ~ '^[a-z0-9][a-z0-9-]{1,59}$' and char_length(\"dm_templates\".\"name\") between 1 and 200 and char_length(coalesce(\"dm_templates\".\"description\", '')) <= 2000 and (\"dm_templates\".\"need_permission\" is null or \"dm_templates\".\"need_permission\" ~ '^[A-Za-z]{1,40}$')"
         },
         "dm_templates_enum_check": {
           "name": "dm_templates_enum_check",
-          "value": "\"dm_templates\".\"audience\" in ('org', 'admin') and \"dm_templates\".\"access\" in ('all', 'selected') and \"dm_templates\".\"state\" in ('draft', 'published', 'off', 'broken') and \"dm_templates\".\"module\" in ('cps', 'reports', 'fin', 'projects', 'kpi', 'staff')"
+          "value": "\"dm_templates\".\"audience\" in ('org', 'admin') and \"dm_templates\".\"access\" in ('all', 'selected') and \"dm_templates\".\"state\" in ('draft', 'published', 'off', 'broken') and (\"dm_templates\".\"audience\" = 'org') = (\"dm_templates\".\"module\" is not null) and (\"dm_templates\".\"module\" is null or \"dm_templates\".\"module\" in ('cps', 'reports', 'fin', 'projects', 'kpi', 'staff'))"
         },
         "dm_templates_json_check": {
           "name": "dm_templates_json_check",
@@ -24680,6 +24710,19 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
+        "dm_tokens_replaced_by_dm_tokens_id_fk": {
+          "name": "dm_tokens_replaced_by_dm_tokens_id_fk",
+          "tableFrom": "dm_tokens",
+          "tableTo": "dm_tokens",
+          "columnsFrom": [
+            "replaced_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
         "dm_tokens_created_by_users_id_fk": {
           "name": "dm_tokens_created_by_users_id_fk",
           "tableFrom": "dm_tokens",
@@ -24732,7 +24775,7 @@
           "to": [
             "buhuchet_app"
           ],
-          "withCheck": "\"dm_tokens\".\"created_by\" = app.current_user_id() and \"dm_tokens\".\"revoked_at\" is null and \"dm_tokens\".\"replaced_by\" is null and ((\"dm_tokens\".\"org_id\" is not null and not app.is_platform_admin()) or (\"dm_tokens\".\"org_id\" is null and app.is_platform_admin()))"
+          "withCheck": "\"dm_tokens\".\"created_by\" = app.current_user_id() and \"dm_tokens\".\"created_at\" between now() - interval '1 minute' and now() + interval '1 minute' and \"dm_tokens\".\"revoked_at\" is null and \"dm_tokens\".\"replaced_by\" is null and \"dm_tokens\".\"last_used_at\" is null and \"dm_tokens\".\"last_ip\" is null and ((\"dm_tokens\".\"org_id\" is not null and not app.is_platform_admin()) or (\"dm_tokens\".\"org_id\" is null and app.is_platform_admin())) and exists (select 1 from public.dm_templates d where d.id = \"dm_tokens\".\"template_id\" and d.state = 'published' and d.audience = case when \"dm_tokens\".\"org_id\" is null then 'admin' else 'org' end)"
         },
         "dm_tokens_update_guard": {
           "name": "dm_tokens_update_guard",
@@ -24742,7 +24785,7 @@
             "buhuchet_app"
           ],
           "using": "\"dm_tokens\".\"revoked_at\" is null",
-          "withCheck": "\"dm_tokens\".\"revoked_at\" is null or \"dm_tokens\".\"revoked_by\" = app.current_user_id()"
+          "withCheck": "(\"dm_tokens\".\"revoked_at\" is null or \"dm_tokens\".\"revoked_by\" = app.current_user_id()) and (\"dm_tokens\".\"grace_until\" is null or \"dm_tokens\".\"grace_until\" <= now() + interval '24 hours')"
         },
         "dm_tokens_no_delete": {
           "name": "dm_tokens_no_delete",
