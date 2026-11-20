@@ -29,4 +29,5 @@ const SLUG_BUSY=['api','admin','login','logout','auth','signup','register','rese
 const slugFree=(base,taken)=>{let b=base.length>=3?base:(base?base+'-org':'org').slice(0,30),s=b,i=2;while(taken.includes(s)||SLUG_BUSY.includes(s)){const t='-'+i++;s=b.slice(0,30-t.length).replace(/-+$/,'')+t}return s};
 // Временный пароль вида Bh-7K4M-Q9TX: заглавные латинские буквы и цифры без похожих 0/O и 1/I/L (расхождение продукта п. 17, 27.10.2026)
 const TMP_ABC='ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-const tmpPass=()=>{const a=new Uint32Array(8);crypto.getRandomValues(a);const t=[...a].map(x=>TMP_ABC[x%TMP_ABC.length]).join('');return `Bh-${t.slice(0,4)}-${t.slice(4)}`};
+// Временный пароль: 8 знаков из 31 без смещения — старшие 5 бит байта (0…31), значение 31 отбрасывается, остатка от деления нет (20.11.2026)
+const tmpPass=()=>{const b=new Uint8Array(1);let t='';while(t.length<8){crypto.getRandomValues(b);const k=b[0]>>>3;if(k<TMP_ABC.length)t+=TMP_ABC[k]}return `Bh-${t.slice(0,4)}-${t.slice(4)}`};
