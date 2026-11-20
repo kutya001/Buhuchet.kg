@@ -21,12 +21,9 @@ import type { ApiDeps } from '../../deps';
 
 /** Закрыт ли доступ организации контекста `tx` (`withOrgContext`) на день `today`. */
 export async function orgAccessClosed(tx: Tx, today: IsoDate): Promise<boolean> {
+  // Организация без подписки закрыта так же, как с просроченной (блок 4, пункт 5): как вход сотрудников.
   const usage = await orgUsage(tx, today, { bytes: false });
-  if (!usage?.closed) return false;
-  // Организация без подписки закрыта так же (блок 4, пункт 5), но вход для неё закрывает этап 1, П1 треда
-  // сборки вместе с бесплатным периодом у тестовых организаций; до сборки этапа 1 «Нет подписки» здесь не
-  // закрывает — строку убирает сборка.
-  return usage.status !== 'none';
+  return usage?.closed ?? false;
 }
 
 /** То же вне транзакции: своя короткая транзакция организации без пользователя. */

@@ -5,11 +5,14 @@ import { newOrgOwner, uniqueLogin } from './helpers';
 // Закрытый доступ по подписке (доработки 20.11.2026, блок 4, пункт 4; этап 1, П1; прототип v153
 // `subClosed`, core/login.js): у своей организации теста администратор ставит «Оплачено до» вчерашним
 // днём — сотрудник после верного пароля видит «Доступ закрыт…», с неверным — то же «Неверный логин или
-// пароль», что и все. Что видит владелец (только экран «Подписка» потока И) — с общей сборкой этапа 1.
+// пароль», что и все; владелец входит и видит только «Моя организация» → «Подписка» с заметкой
+// «Подписка закончилась …» (экран потока И, общая сборка этапа 1).
 
 const CLOSED =
   'Доступ закрыт: подписка организации не оплачена. Обратитесь к владельцу организации.';
 const DAY = 86_400_000;
+/** Пароль владельца после `newOrgOwner` (свой пароль вместо временного). */
+const OWNER_PASSWORD = 'Свой-пароль-e2e-1';
 const bishkekYesterday = () => new Date(Date.now() + 6 * 3600_000 - DAY).toISOString().slice(0, 10);
 
 async function signInByForm(page: Page, login: string, password: string) {
@@ -82,5 +85,17 @@ test('(доработки 20.11.2026, блок 4, пункт 4; прототип
     await signInByForm(page, login, temporaryPassword);
     await expect(page.locator('main form').getByRole('alert')).toHaveText(CLOSED);
     await expect(page).toHaveURL(/\/login$/);
+  });
+  await test.step('владелец входит: только «Моя организация» → «Подписка», «Подписка закончилась …»', async () => {
+    await signInByForm(page, ownerLogin, OWNER_PASSWORD);
+    await expect(page).toHaveURL(/\/app(\/|$)/);
+    await page.goto('/app/org/sub');
+    const screen = page.locator('[data-sub-screen="own"]');
+    await expect(screen).toContainText(
+      `Подписка закончилась ${bishkekYesterday().split('-').reverse().join('.')}`,
+    );
+    await expect(screen.locator('[data-sub-pay-open="renew"]')).toBeEnabled();
+    await expect(page.getByRole('tab', { selected: true })).toContainText('Подписка');
+    await expect(page.locator('[data-sub-closed]')).toHaveCount(0);
   });
 });

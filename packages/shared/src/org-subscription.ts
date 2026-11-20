@@ -8,8 +8,6 @@ import {
   SUBSCRIPTION_STATUSES,
 } from '@buhuchet/domain';
 import { z } from 'zod';
-// Строка расчёта суммы — одна схема с окном оплаты Админки (как `SubscriptionCalcLine` домена).
-import { SubscriptionCalcLineSchema } from './admin-subscriptions';
 import { IsoDate, RecordVersion, Uuid } from './common';
 import { FileUploadTicket } from './files';
 
@@ -22,6 +20,19 @@ import { FileUploadTicket } from './files';
 
 const Moment = z.iso.datetime();
 const Tyiyn = z.number().int();
+
+/**
+ * Строка расчёта суммы (поле `lines` оплаты): что считается, по чём и сколько, тыйыны. Одна схема с
+ * окном оплаты Админки (как `SubscriptionCalcLine` домена).
+ */
+export const SubscriptionCalcLineSchema = z.object({
+  k: z.enum(['seats', 'gb', 'grow', 'mem', 'extra', 'first']),
+  n: z.number().int().optional(),
+  price: z.number().int().optional(),
+  months: z.number().int().optional(),
+  pct: z.number().int().optional(),
+  sum: z.number().int(),
+});
 
 /** Оплата «Истории оплат» (прототип `DB.subPays`). */
 export const SubscriptionPayment = z.object({

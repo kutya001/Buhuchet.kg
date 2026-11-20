@@ -58,9 +58,6 @@ test.describe('Витрина данных: API Токены', () => {
     await platformAdmin(page.request, origin);
     const texts = await dictionary(page.request);
     const form = await tokenForm(page.request, '/api/admin/dm/tokens');
-    // Заглушка до слияния потока К (этап 1, П11): готовые шаблоны «Витрины данных» наполняет его
-    // `seedDmTemplates`; в общей сборке этапа 1 шаблоны есть всегда, и сборка эту строку убирает.
-    test.skip(form.templates.length === 0, 'до слияния потока К: готовых шаблонов Админки ещё нет');
     const tpl = form.templates.find((x) => x.code === ADMIN_TEMPLATE)!;
     expect(tpl, `готовый шаблон Админки «${ADMIN_TEMPLATE}»`).toBeTruthy();
     expect(form.refusal).toBeNull();

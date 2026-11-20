@@ -9,6 +9,7 @@ import {
 import { z } from 'zod';
 import { IsoDate, Uuid } from './common';
 import { listPageSchema } from './list';
+import { OrgSubscriptionView, SubscriptionCalcLineSchema } from './org-subscription';
 
 /**
  * Подписка от администратора платформы (доработки 20.11.2026, блок 6, пункт 4; прототип
@@ -79,16 +80,6 @@ export const AdminSubscriptionsSummary = z.object({
 });
 export type AdminSubscriptionsSummary = z.infer<typeof AdminSubscriptionsSummary>;
 
-/** Строка расчёта суммы (поле `lines` оплаты): что считается, по чём и сколько, тыйыны. */
-export const SubscriptionCalcLineSchema = z.object({
-  k: z.enum(['seats', 'gb', 'grow', 'mem', 'extra', 'first']),
-  n: z.number().int().optional(),
-  price: z.number().int().optional(),
-  months: z.number().int().optional(),
-  pct: z.number().int().optional(),
-  sum: z.number().int(),
-});
-
 /** Оплата «Истории оплат» в окне Админки: кто отправил и кто проверил. */
 export const AdminSubscriptionPayment = z.object({
   id: Uuid,
@@ -158,7 +149,7 @@ export const AdminSubscriptionPlanOption = z.object({
 /**
  * Окно «Подписка организации» (прототип `subOrgBody`): статус, вид, срок, пакет и память, скидки,
  * «Со следующего месяца», продление на тот же срок, чеки на проверке, «История оплат» и «История
- * изменений»; для «Изменить подписку» — виды и шаг пакета.
+ * изменений»; для «Изменить подписку» — виды и шаг пакета; экран «Подписка» владельца — `screen`.
  */
 export const AdminSubscriptionCard = z.object({
   today: IsoDate,
@@ -206,6 +197,11 @@ export const AdminSubscriptionCard = z.object({
   history: z.array(AdminSubscriptionHistoryEntry),
   plans: z.array(AdminSubscriptionPlanOption),
   prices: z.object({ seatStep: z.number().int(), extraDiscountOver: z.number().int() }),
+  /**
+   * Экран «Подписка» организации, как его видит владелец (`GET /api/org/subscription`): в окне — без
+   * кнопок оплаты, как `subScreenHtml(orgId, {admin: true})` прототипа.
+   */
+  screen: OrgSubscriptionView,
 });
 export type AdminSubscriptionCard = z.infer<typeof AdminSubscriptionCard>;
 

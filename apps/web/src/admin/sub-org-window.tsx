@@ -4,7 +4,6 @@ import {
   formatDateRu,
   formatMomentRu,
   formatSomWithUnit,
-  SUBSCRIPTION_MB_BYTES,
   type IsoDate,
   type SubscriptionStatus,
 } from '@buhuchet/domain';
@@ -16,29 +15,22 @@ import {
   Icon,
   KeyValues,
   linkButtonClass,
-  MiniTable,
   Modal,
   Pill,
   Timeline,
   type KeyValueItem,
-  type MiniColumn,
-  type MiniRow,
 } from '@buhuchet/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
+import { SubScreen } from '../org/sub-screen';
 import { subCardQuery } from './subs-data';
 import {
   SUB_PAY_TONE,
   SUB_STATUS_TONE,
-  subBar,
-  subDiscountsText,
-  subGb,
-  subGbLimit,
   subHistoryItems,
   subLineText,
-  subPaidToText,
   subPayStatusText,
   subPayTerm,
   subPayWhat,
@@ -50,8 +42,8 @@ import {
  * Окно «Подписка организации» Админки (доработки 20.11.2026, блок 6, пункты 2–4, 7; прототип
  * admin/subs-admin.js: subOrgWin, subOrgBody, subPayWin): чеки на проверке с «Подтвердить оплату» и
  * «Отклонить», сводка подписки, «История оплат», «История изменений». Тело — одно для окна и вкладки
- * «Подписка» карточки организации. При общей сборке этапа 1 (П15) сводка и «История оплат» — экран
- * «Подписка» потока И (`SubScreen` с `admin`), как `subScreenHtml(orgId, {admin: true})` прототипа.
+ * «Подписка» карточки организации. Сводка и «История оплат» — экран «Подписка» владельца (`SubScreen`
+ * с `admin`, поток И), как `subScreenHtml(orgId, {admin: true})` прототипа.
  */
 
 type Payment = AdminSubscriptionPayment;
@@ -104,24 +96,6 @@ export function SubPayPill({ t, p }: { t: Translate; p: Pick<Payment, 'status'> 
     <Pill tone={tone.tone} icon={tone.icon} size="sm">
       {subPayStatusText(t, p.status)}
     </Pill>
-  );
-}
-
-/** Полоса занятого (прототип `subBar`). */
-function SubBar({ used, limit, label }: { used: number; limit: number | null; label: string }) {
-  const bar = subBar(used, limit);
-  const color = bar.tone === 'bad' ? 'bg-danger' : bar.tone === 'warn' ? 'bg-warn' : 'bg-ok';
-  return (
-    <div
-      role="progressbar"
-      aria-label={label}
-      aria-valuenow={bar.pct}
-      aria-valuemin={0}
-      aria-valuemax={100}
-      className="mt-1 h-1.5 overflow-hidden rounded-full bg-pane-alt shadow-[inset_0_0_0_1px_var(--bu-border)]"
-    >
-      <i className={`block h-full rounded-full ${color}`} style={{ width: `${bar.pct}%` }} />
-    </div>
   );
 }
 
@@ -268,162 +242,6 @@ function SubWaitBox({
   );
 }
 
-/** Сводка подписки (прототип `subSummaryHtml`). */
-function SubSummaryBox({ t, card }: { t: Translate; card: AdminSubscriptionCard }) {
-  const s = card.sub;
-  const items: KeyValueItem[] = [
-    {
-      id: 'st',
-      label: t('subs.k.status'),
-      value: <SubStatusPill t={t} status={card.status} late={card.late} days={card.checkDays} />,
-    },
-    {
-      id: 'kind',
-      label: t('subs.sum.kind'),
-      value: s ? (
-        s.free ? (
-          t('subs.kind.free')
-        ) : (
-          s.planName
-        )
-      ) : (
-        <span className="text-faint">{t('subs.sum.none')}</span>
-      ),
-    },
-    {
-      id: 'paid',
-      label: t('subs.sum.paid_to'),
-      value: subPaidToText(t, s?.paidUntil ?? null, card.today),
-    },
-    {
-      id: 'pack',
-      label: t('subs.sum.pack'),
-      value: (
-        <>
-          {t('subs.sum.pack_used', { used: card.seatsUsed, pack: card.pack })}
-          {card.seatsUsed > card.pack ? (
-            <>
-              {' '}
-              <Pill tone="bad" icon="alert" size="sm">
-                {t('subs.sum.pack_over')}
-              </Pill>
-            </>
-          ) : null}
-          <SubBar used={card.seatsUsed} limit={card.pack} label={t('subs.sum.pack')} />
-        </>
-      ),
-    },
-    {
-      id: 'mem',
-      label: t('subs.sum.mem'),
-      value: (
-        <>
-          {t('subs.sum.mem_used', {
-            used: subGb(card.bytesUsed),
-            limit: subGbLimit(card.bytesLimit),
-          })}
-          <SubBar used={card.bytesUsed} limit={card.bytesLimit} label={t('subs.sum.mem')} />
-          <div className="text-[12px] text-muted">
-            {t('subs.sum.mem_hint', {
-              inc: subGb(card.memIncludedMb * SUBSCRIPTION_MB_BYTES),
-              extra: String(s?.extraGb ?? 0),
-            })}
-          </div>
-        </>
-      ),
-    },
-    { id: 'disc', label: t('subs.sum.disc'), value: subDiscountsText(t, card) },
-    ...(s?.next && s.next.from > card.today
-      ? [
-          {
-            id: 'next',
-            label: t('subs.sum.next'),
-            value: t('subs.sum.next_text', {
-              pack: s.next.seats,
-              gb: s.next.extraGb,
-              date: formatDateRu(s.next.from as IsoDate),
-            }),
-          },
-        ]
-      : []),
-    ...(card.renew
-      ? [
-          {
-            id: 'renew',
-            label: t('subs.sum.renew'),
-            value: t('subs.sum.renew_text', {
-              sum: formatSomWithUnit(card.renew.total),
-              kind: card.renew.planName,
-              pack: card.renew.seats,
-            }),
-          },
-        ]
-      : []),
-  ];
-  return (
-    <Box title={t('subs.sum.title')}>
-      <KeyValues items={items} />
-    </Box>
-  );
-}
-
-/** «История оплат» (прототип `subPaysHtml`): нажатие на строку — окно оплаты. */
-function SubPaysBox({
-  t,
-  card,
-  act,
-}: {
-  t: Translate;
-  card: AdminSubscriptionCard;
-  act: SubBodyActions;
-}) {
-  const columns: MiniColumn[] = [
-    { key: 'at', label: t('subs.pays.at') },
-    { key: 'what', label: t('subs.k.what') },
-    { key: 'term', label: t('subs.k.term') },
-    { key: 'sum', label: t('subs.pays.sum'), numeric: true },
-    { key: 'receipt', label: t('subs.k.receipt') },
-    { key: 'st', label: t('subs.k.status') },
-    { key: 'reason', label: t('subs.k.reason') },
-  ];
-  const rows: MiniRow[] = card.payments.map((p) => ({
-    key: p.id,
-    cells: {
-      at: <span className="tabular-nums">{moment(p.createdAt)}</span>,
-      what: subPayWhat(t, p),
-      term: subPayTerm(t, p),
-      sum:
-        p.kind === 'free' ? (
-          <span className="text-faint">{t('subs.pays.free')}</span>
-        ) : (
-          <span className="tabular-nums">{formatSomWithUnit(p.amount)}</span>
-        ),
-      receipt: p.receipt ? <Icon name="file" size="sm" /> : <span className="text-faint">—</span>,
-      st: <SubPayPill t={t} p={p} />,
-      reason:
-        p.status === 'rejected' || p.kind === 'free' || p.kind === 'admin' ? (p.reason ?? '') : '',
-    },
-  }));
-  const byId = new Map(card.payments.map((p) => [p.id, p]));
-  return (
-    <Box title={t('subs.pays.title')}>
-      <div data-sub-pays="">
-        <MiniTable
-          columns={columns}
-          rows={rows}
-          empty={t('subs.pays.empty')}
-          label={t('subs.pays.title')}
-          phoneCards
-          onOpen={(id) => {
-            const p = byId.get(id);
-            if (p) act.pay(p, card);
-          }}
-        />
-      </div>
-    </Box>
-  );
-}
-
 /** «История изменений» подписки (прототип `subHistHtml`). */
 function SubHistBox({ t, card }: { t: Translate; card: AdminSubscriptionCard }) {
   const items = useMemo(() => subHistoryItems(t, card), [t, card]);
@@ -444,13 +262,23 @@ function SubHistBox({ t, card }: { t: Translate; card: AdminSubscriptionCard }) 
 export function SubOrgBody({ card, act }: { card: AdminSubscriptionCard; act: SubBodyActions }) {
   const t = useT();
   const waiting = card.payments.filter((p) => p.status === 'pending');
+  const byId = new Map(card.payments.map((p) => [p.id, p]));
+  // Строка «Истории оплат» и чек экрана владельца — окна Админки (окно оплаты с решением, просмотр чека).
+  const ofScreen = (fn: (p: Payment) => void) => (sp: { id: string }) => {
+    const p = byId.get(sp.id);
+    if (p) fn(p);
+  };
   return (
     <div className="flex flex-col gap-3" data-sub-body={card.org.id}>
       {waiting.map((p) => (
         <SubWaitBox key={p.id} t={t} card={card} p={p} act={act} />
       ))}
-      <SubSummaryBox t={t} card={card} />
-      <SubPaysBox t={t} card={card} act={act} />
+      <SubScreen
+        view={card.screen}
+        admin
+        onOpen={ofScreen((p) => act.pay(p, card))}
+        onReceipt={ofScreen(act.receipt)}
+      />
       <SubHistBox t={t} card={card} />
     </div>
   );

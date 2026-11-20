@@ -88,6 +88,7 @@ import { apiFail, listQueryOf, listQueryResponses, versionedSaveResponses } from
 import { exportRateResponses, withExportSlot, xlsxContent, xlsxResponse } from '../../lists/export';
 import { requirePlatformAdmin } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
+import { subscriptionScreenOf } from '../org/subscription';
 import { flushEvents } from '../telegram/outbox';
 import { notifySubOwners, subNoticeContext } from '../telegram/subs';
 import { subscriptionEditFail } from './subscriptions';
@@ -405,6 +406,8 @@ async function cardOf(tx: Tx, orgId: string, today: IsoDate): Promise<AdminSubsc
         active: k.active,
       })),
     prices: { seatStep: prices.seatStep, extraDiscountOver: prices.extraDiscountOver },
+    // Экран «Подписка» владельца — та же функция, что у него (прототип `subScreenHtml(orgId, {admin})`).
+    screen: await subscriptionScreenOf(tx, orgId, today),
   };
 }
 

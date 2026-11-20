@@ -1,12 +1,21 @@
-import { expect, test, type Page, type Response } from '@playwright/test';
-import { E2E_SUBSCRIPTION, ownerPassword, platformAdmin, search, uniqueInn } from './admin';
-import { cardTab, uniqueLogin } from './helpers';
+import { randomBytes } from 'node:crypto';
+import { expect, test, type APIRequestContext, type Page, type Response } from '@playwright/test';
+import {
+  ADMIN_PASSWORD,
+  E2E_SUBSCRIPTION,
+  ownerPassword,
+  platformAdmin,
+  search,
+  uniqueInn,
+} from './admin';
+import { cardTab, signIn, uniqueLogin } from './helpers';
 
 // Админка → «Организации» → «Подписки» (доработки 20.11.2026, блок 6, пункты 2–5; прототип v153
 // admin/subs-admin.js): окно подписки организации, «Изменить подписку», «Виды подписок», вкладка
 // «Подписка» карточки организации и блок «Подписка» окна «Новая организация». «Цены и реквизиты» — общие
 // для всей платформы, их меняет только admin-subs-prices.shared.spec.ts. Проверка чека («Подтвердить
-// оплату», «Отклонить») ждёт чек владельца с экрана «Подписка» — её тест приходит с общей сборкой этапа 1.
+// оплату», «Отклонить») — с чеком, который владелец прикрепил на экране «Подписка» (поток И, общая сборка
+// этапа 1).
 
 type Created = { organization: { id: string; slug: string } };
 
@@ -15,19 +24,63 @@ type Created = { organization: { id: string; slug: string } };
  * не бесплатный период — иначе «Вид подписки» в строке — «Бесплатный период».
  */
 async function newOrg(page: Page, origin: string, name: string, seats: number) {
+  const ownerLogin = uniqueLogin('e2e-sub');
   const res = await page.request.post('/api/admin/organizations', {
     headers: { origin },
     data: {
       name,
       inn: uniqueInn(),
       ownerFullName: 'Подпискина Сквозная',
-      ownerLogin: uniqueLogin('e2e-sub'),
+      ownerLogin,
       temporaryPassword: ownerPassword(),
       subscription: { ...E2E_SUBSCRIPTION, seats, free: false },
     },
   });
   expect(res.status(), await res.text()).toBe(201);
-  return ((await res.json()) as Created).organization;
+  return { ...((await res.json()) as Created).organization, ownerLogin };
+}
+
+/** Тексты словаря интерфейса (`GET /api/l10n`): тест не копирует строки экрана владельца. */
+async function dictionary(api: APIRequestContext): Promise<Record<string, string>> {
+  const res = await api.get('/api/l10n');
+  expect(res.status()).toBe(200);
+  return ((await res.json()) as { texts: Record<string, string> }).texts;
+}
+
+/** Чек PDF: тип проверяется по содержимому — первые байты «%PDF-». */
+const PDF = Buffer.from('%PDF-1.4\n% e2e\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n');
+
+/**
+ * Владелец на экране «Подписка» (поток И): «Продлить» («Прикрепить другой чек» — `again`) на «3 месяца»
+ * с чеком PDF → «Отправить на проверку». Отвечает номером оплаты.
+ */
+async function ownerSendsReceipt(page: Page, receipt: string, again = false): Promise<string> {
+  await page.goto('/app/org/sub');
+  const screen = page.locator('[data-sub-screen="own"]');
+  await screen.locator(again ? '[data-sub-again-open]' : '[data-sub-pay-open="renew"]').click();
+  const form = page.locator('[data-sub-pay="renew"]');
+  await form.locator('[data-sub-kind="m3"]').click();
+  await expect(form.locator('[data-sub-kind="m3"]')).toHaveAttribute('aria-checked', 'true');
+  await form
+    .locator('[data-sub-drop] input[type="file"]')
+    .setInputFiles({ name: receipt, mimeType: 'application/pdf', buffer: PDF });
+  await expect(form.locator('[data-sub-file]')).toContainText(receipt);
+  const sent = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'POST' &&
+      new URL(r.url()).pathname === '/api/org/subscription/payments/complete',
+  );
+  await page.locator('[data-sub-pay-send]').click();
+  const res = await sent;
+  expect(res.status()).toBe(201);
+  return ((await res.json()) as { id: string }).id;
+}
+
+/** Смена входа — после ухода со страницы (e2e-test: открытая страница не шлёт запросов чужим входом). */
+async function switchTo(page: Page, origin: string, login: string, password: string) {
+  await page.goto('about:blank');
+  await page.request.post('/api/auth/logout', { headers: { origin } });
+  await signIn(page.request, origin, login, password);
 }
 
 const subsListWith = (q: string) => (r: Response) => {
@@ -231,12 +284,113 @@ test.describe('Админка → «Подписки»', () => {
     expect(sub.sub?.seats).toBe(20);
     expect(sub.payments.map((p) => p.kind)).toEqual(['free']);
 
-    // Следующее окно — строка организации во вкладке «Подписки»: пакет 20 и «Бесплатный период до …».
+    // Следующее окно — строка организации во вкладке «Подписки»: пакет 20 и «Бесплатный период» в
+    // «Истории оплат» экрана «Подписка» (в окне — экран владельца без кнопок оплаты).
     const row = await subsRow(page, isMobile, name);
     await row.click();
     const win = page.getByRole('dialog', { name: 'Подписка организации' });
     const body = win.locator(`[data-sub-body="${org.id}"]`);
     await expect(body).toContainText('Занято 0 из 20');
-    await expect(body.locator('[data-sub-pays]')).toContainText('Бесплатный период до');
+    await expect(body.locator('[data-sub-screen="admin"] [data-sub-pays]')).toContainText(
+      'Бесплатный период',
+    );
+  });
+
+  test('(доработки 20.11.2026, блок 6, пункт 3; блок 5; прототип v153–v154) чек владельца: в окне подписки — первым, открывается в окне просмотра файлов; «Отклонить» с причиной — владелец видит причину и прикрепляет другой чек; «Подтвердить оплату» — подписка продлена, у владельца — «Оплата подтверждена» в колокольчике', async ({
+    page,
+    baseURL,
+    isMobile,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    const admin = await platformAdmin(page.request, origin);
+    const name = `ОсОО «${uniqueLogin('Чек')}»`;
+    const org = await newOrg(page, origin, name, 10);
+
+    // Владелец задаёт свой пароль и отправляет чек на экране «Подписка».
+    const ownPassword = 'Свой-пароль-e2e-1';
+    await switchTo(page, origin, org.ownerLogin, ownerPassword());
+    const changed = await page.request.post('/api/auth/password', {
+      headers: { origin },
+      data: { currentPassword: ownerPassword(), newPassword: ownPassword },
+    });
+    expect(changed.status(), await changed.text()).toBe(200);
+    const texts = await dictionary(page.request);
+    const first = `чек-${randomBytes(3).toString('hex')}.pdf`;
+    const firstId = await ownerSendsReceipt(page, first);
+
+    // Администратор: чек на проверке — первым в окне, открывается в окне просмотра файлов.
+    await switchTo(page, origin, admin, ADMIN_PASSWORD);
+    const win = async () => {
+      const row = await subsRow(page, isMobile, name);
+      await row.click();
+      const dialog = page.getByRole('dialog', { name: 'Подписка организации' });
+      await expect(dialog.locator(`[data-sub-body="${org.id}"]`)).toBeVisible();
+      return dialog;
+    };
+    let dialog = await win();
+    const wait = dialog.locator(`[data-sub-wait="${firstId}"]`);
+    await expect(wait).toBeVisible();
+    await expect(dialog.locator('[data-sub-wait], [data-sub-screen]').first()).toHaveAttribute(
+      'data-sub-wait',
+      firstId,
+    );
+    await wait.locator(`[data-sub-receipt="${firstId}"]`).click();
+    const viewer = page.getByRole('dialog', { name: first });
+    await expect(viewer.locator(`[data-file-viewer="${firstId}"]`)).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(viewer).toBeHidden();
+
+    // «Отклонить» без причины не уходит; с причиной — «Чек отклонён, владельцы получили сообщение».
+    await wait.locator(`[data-sub-reject="${firstId}"]`).click();
+    const reject = page.getByRole('dialog', { name: 'Отклонить чек' });
+    await reject.locator('[data-sub-rej-ok]').click();
+    await expect(reject).toContainText('Укажите причину');
+    const reason = `Сумма в чеке не та ${randomBytes(2).toString('hex')}`;
+    await reject.getByLabel('Причина').fill(reason);
+    await reject.locator('[data-sub-rej-ok]').click();
+    await expect(page.getByRole('status').filter({ hasText: 'Чек отклонён' })).toBeVisible();
+    await expect(dialog.locator(`[data-sub-wait="${firstId}"]`)).toHaveCount(0);
+
+    // Владелец видит причину и прикрепляет другой чек.
+    await switchTo(page, origin, org.ownerLogin, ownPassword);
+    await page.goto('/app/org/sub');
+    await expect(page.locator('[data-sub-screen="own"] [data-sub-again]')).toContainText(reason);
+    const second = `чек-${randomBytes(3).toString('hex')}.pdf`;
+    const secondId = await ownerSendsReceipt(page, second, true);
+    expect(secondId).not.toBe(firstId);
+
+    // Администратор: «Подтвердить оплату» — подписка продлена на 3 месяца.
+    await switchTo(page, origin, admin, ADMIN_PASSWORD);
+    dialog = await win();
+    await dialog.locator(`[data-sub-confirm="${secondId}"]`).click();
+    const confirm = page.getByRole('dialog', { name: 'Подтвердить оплату' });
+    const decided = page.waitForResponse(
+      (r) =>
+        r.request().method() === 'POST' &&
+        new URL(r.url()).pathname === `/api/admin/subscriptions/payments/${secondId}/confirm`,
+    );
+    await confirm.locator('[data-sub-ok]').click();
+    expect((await decided).status()).toBe(200);
+    await expect(page.getByRole('status').filter({ hasText: 'Оплата подтверждена' })).toBeVisible();
+    await expect(dialog.locator('[data-sub-wait]')).toHaveCount(0);
+    const card = (await (
+      await page.request.get(`/api/admin/subscriptions/${org.id}`, { maxRetries: 2 })
+    ).json()) as { sub: { planId: string } | null; payments: { id: string; status: string }[] };
+    expect(card.sub?.planId).toBe('m3');
+    expect(card.payments.find((p) => p.id === secondId)?.status).toBe('confirmed');
+    expect(card.payments.find((p) => p.id === firstId)?.status).toBe('rejected');
+
+    // Владелец: в колокольчике — «Чек отклонён» и «Оплата подтверждена» (Telegram у него не привязан).
+    await switchTo(page, origin, org.ownerLogin, ownPassword);
+    const bell = (await (await page.request.get('/api/bell', { maxRetries: 2 })).json()) as {
+      items: { event: string; text: string }[];
+    };
+    const subRows = bell.items.filter((x) => x.event === 'sub').map((x) => x.text);
+    expect(subRows.some((x) => x.includes(reason))).toBe(true);
+    expect(subRows.some((x) => x.startsWith('✅'))).toBe(true);
+    await page.goto('/app/org/sub');
+    await expect(page.locator('[data-sub-screen="own"] [data-sub-top]')).toContainText(
+      texts['sub.st.active']!,
+    );
   });
 });

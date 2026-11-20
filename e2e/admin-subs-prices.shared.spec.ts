@@ -4,7 +4,7 @@ import { platformAdmin } from './admin';
 
 // «Цены и реквизиты» вкладки «Подписки» Админки (доработки 20.11.2026, блок 6, пункт 6; прототип v153
 // `subPricesPart`): общие для всей платформы — поэтому в *.shared (идут после остальных и по одному);
-// тест меняет цену за контрагента и в конце возвращает прежние значения.
+// тест меняет цену за контрагента и в конце возвращает прежнюю; пустые обязательные реквизиты вносит.
 
 type Settings = { version: number; seatPrice: number } & Record<string, unknown>;
 
@@ -35,9 +35,17 @@ test('(доработки 20.11.2026, блок 6, пункт 6; прототип
     const part = page.locator('[data-subs-prices]');
     await expect(part.locator('[data-sub-purpose-example]')).toContainText('01234567890123');
 
+    // Реквизиты платформы миграция не заводит (docs/deviations.md п. О-87): на чистой базе обязательные
+    // поля вносит сам тест, иначе первым отмеченным полем окажется «Получатель», а не «Банк».
+    const filled = { recipient: 'ОсОО «Проверка e2e»', bik: '109018', account: '1091820000884107' };
+    for (const [key, value] of Object.entries(filled)) {
+      const field = part.locator(`[data-sub-req="${key}"]`);
+      if (!(await field.inputValue()).trim()) await field.fill(value);
+    }
+
     // Пустой «Банк»: «Исправьте отмеченные поля», ошибка и фокус — на поле, ничего не сохранено.
     const bank = part.locator('[data-sub-req="bank"]');
-    const bankWas = await bank.inputValue();
+    const bankWas = (await bank.inputValue()).trim() || 'Банк e2e';
     await bank.fill('');
     const ok = part.locator('[data-sub-prices-ok]');
     await ok.click();
@@ -75,9 +83,10 @@ test('(доработки 20.11.2026, блок 6, пункт 6; прототип
   } finally {
     const now = await read();
     if (now.seatPrice !== before.seatPrice) {
+      // Прежняя цена; реквизиты — как сейчас: внесённые тестом на чистой базе пустыми не сохранить.
       const back = await page.request.put('/api/admin/subscription-settings', {
         headers: { origin },
-        data: { ...before, history: undefined, version: now.version },
+        data: { ...now, seatPrice: before.seatPrice, history: undefined, version: now.version },
       });
       expect(back.status(), await back.text()).toBe(200);
     }
