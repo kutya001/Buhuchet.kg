@@ -889,6 +889,15 @@ export async function contractorSummary(
   };
 }
 
+/**
+ * В организации ещё нет ни одного контрагента, с архивом и без области сотрудника (прототип
+ * ui/empty.js `firstEmpty`: `!CPS.length`): список показывает «Здесь будут ваши клиенты».
+ */
+export async function contractorsOrgEmpty(tx: Tx): Promise<boolean> {
+  const [row] = await tx.select({ id: contractors.id }).from(contractors).limit(1);
+  return !row;
+}
+
 /** Карточка контрагента; null — нет такого в организации или он вне области. */
 export async function getContractor(
   tx: Tx,

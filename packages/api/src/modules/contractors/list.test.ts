@@ -239,6 +239,7 @@ describe.skipIf(!databaseAvailable())(
         // «Плата за обслуживание» выключена — плашки «Должники» нет.
         debtors: null,
         scopeAll: true,
+        orgEmpty: false,
       });
       expect(await summary(acc)).toMatchObject({
         active: 1,
@@ -248,6 +249,7 @@ describe.skipIf(!databaseAvailable())(
         paused: 0,
         archived: 1,
         scopeAll: false,
+        orgEmpty: false,
       });
       const b = await summary(ownerB);
       expect(b).toMatchObject({ active: 1, withOverdue: 0, archived: 0 });

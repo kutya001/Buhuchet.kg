@@ -261,8 +261,9 @@ export function ContractorsList({ tab }: { tab: ContractorTab }) {
       ]
     : [];
 
-  // Контрагентов нет совсем — первый вход на любой вкладке; есть, а вкладка пуста — по вкладке.
-  const first = !!s && s.active + s.archived === 0;
+  // В организации контрагентов нет совсем (при любой области, прототип `!CPS.length`) — первый вход на
+  // любой вкладке; есть, а вкладка пуста — по вкладке.
+  const first = !!s && s.orgEmpty;
   const emptyView = contractorsEmptyView(tab, first, {
     createCp: access.can('createCp'),
     cpImport: access.can('cpImport'),

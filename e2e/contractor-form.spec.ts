@@ -51,7 +51,12 @@ async function workingDayFrom(api: APIRequestContext, date: string): Promise<str
 /** «+ Добавить» → «Контрагент»: окно «Новый контрагент». */
 async function openForm(page: Page): Promise<Locator> {
   await page.goto('/app/cps/all');
-  await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+  // Кнопка «+ Добавить» модуля: у пустой «Все» при контрагентах в архиве своя «Добавить» (прототип
+  // grid.js `emptyadd`).
+  await page
+    .getByRole('button', { name: 'Добавить', exact: true })
+    .and(page.locator('[data-add-button]'))
+    .click();
   await page
     .getByRole('menu', { name: 'Добавить' })
     .getByRole('menuitem', { name: 'Контрагент' })

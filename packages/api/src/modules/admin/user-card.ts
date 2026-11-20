@@ -142,14 +142,14 @@ export function userCardHandler(deps: ApiDeps): RouteHandler<typeof userCardRout
     // Сеансы — по настоящим часам (их сроки ставит база); «Работа» — по часам сайта, как карточка
     // организации и списки самой фирмы: числа сверяются с ними (проверка «Админка на новой организации»).
     const now = new Date();
-    const today = deps.clock.now();
+    const workNow = deps.clock.now();
     const found = await withUserContext(deps.db, adminId, (tx) => adminGetUser(tx, id));
     if (!found) throw new RecordNotFoundError('user', id);
     const orgId = found.orgId;
     const card = orgId
       ? await withOrgContext(deps.db, { orgId, userId: adminId }, async (tx) => {
           await logUserCardView(tx, id, refresh);
-          return adminEmployeeCard(tx, { userId: id, orgId, now: today });
+          return adminEmployeeCard(tx, { userId: id, orgId, now: workNow });
         })
       : await withUserContext(deps.db, adminId, async (tx) => {
           await logAdminCardView(tx, id, refresh);

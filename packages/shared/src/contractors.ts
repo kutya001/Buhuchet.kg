@@ -452,6 +452,11 @@ export const ContractorSummary = z.object({
   debtors: z.object({ count: z.number().int().nonnegative(), sum: Tyiyn }).nullable(),
   /** Область «Все контрагенты» («вся организация» под «На обслуживании»). */
   scopeAll: z.boolean(),
+  /**
+   * В организации ещё нет ни одного контрагента, архивные тоже считаются, — при любой области
+   * сотрудника (прототип ui/empty.js `firstEmpty`: `!CPS.length`): пустой список показывает первый вход.
+   */
+  orgEmpty: z.boolean(),
 });
 export type ContractorSummary = z.infer<typeof ContractorSummary>;
 
