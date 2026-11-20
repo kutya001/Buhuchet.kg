@@ -2,7 +2,7 @@ import { diffDays, type IsoDate } from '../common/dates';
 import {
   SUBSCRIPTION_OWNER_PAYMENT_KINDS,
   SUBSCRIPTION_RECEIPT_MAX_BYTES,
-  SUBSCRIPTION_RECEIPT_TYPES,
+  type SUBSCRIPTION_RECEIPT_TYPES,
   type SubscriptionPaymentKind,
   type SubscriptionPaymentStatus,
 } from './subscriptions';
