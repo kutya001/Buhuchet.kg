@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
-import { ownerPassword, platformAdmin, search, uniqueInn } from './admin';
+import { E2E_SUBSCRIPTION, ownerPassword, platformAdmin, search, uniqueInn } from './admin';
 import {
   botMessages,
   botSent,
@@ -79,6 +79,7 @@ test.describe('Этап 2: Админка → «Телеграм»', () => {
         ownerFullName: 'Телеграмова Сквозная',
         ownerLogin,
         temporaryPassword: temporary,
+        subscription: E2E_SUBSCRIPTION,
       },
     });
     expect(created.status(), await created.text()).toBe(201);

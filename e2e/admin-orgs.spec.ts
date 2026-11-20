@@ -1,5 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
-import { ADMIN_PASSWORD, ownerPassword, platformAdmin, search, uniqueInn } from './admin';
+import {
+  ADMIN_PASSWORD,
+  E2E_SUBSCRIPTION,
+  ownerPassword,
+  platformAdmin,
+  search,
+  uniqueInn,
+} from './admin';
 import { cardTab, showStats, signIn, uniqueLogin } from './helpers';
 
 // Админка → «Организации» (ТЗ «Админка» → «Модуль организаций»; просьба заказчика 27.10.2026 —
@@ -135,6 +142,7 @@ test.describe('Админка: организации', () => {
         ownerFullName: 'Показателева Сквозная',
         ownerLogin: owner,
         temporaryPassword: OWNER_PASSWORD,
+        subscription: E2E_SUBSCRIPTION,
       },
     });
     expect(created.status(), await created.text()).toBe(201);
@@ -181,6 +189,7 @@ test.describe('Админка: организации', () => {
         ownerFullName: 'Блокова Сквозная',
         ownerLogin: owner,
         temporaryPassword: OWNER_PASSWORD,
+        subscription: E2E_SUBSCRIPTION,
       },
     });
     expect(created.status(), await created.text()).toBe(201);
@@ -361,6 +370,7 @@ test.describe('Админка: организации', () => {
         ownerFullName: 'Карточкин Сквозной',
         ownerLogin: owner,
         temporaryPassword: OWNER_PASSWORD,
+        subscription: E2E_SUBSCRIPTION,
       },
     });
     expect(created.status(), await created.text()).toBe(201);

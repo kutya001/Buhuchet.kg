@@ -32,6 +32,19 @@ export async function platformAdmin(api: APIRequestContext, origin: string): Pro
   return login;
 }
 
+/**
+ * Блок «Подписка» новой организации теста (доработки 20.11.2026, блок 6, пункт 4): без него у
+ * организации «Нет подписки» — сотрудники не войдут, владельцу открыта только «Подписка».
+ */
+export const E2E_SUBSCRIPTION = {
+  planId: 'm1',
+  seats: 1000,
+  extraGb: 0,
+  paidUntil: '2099-12-31',
+  extraDiscountPct: 0,
+  free: true,
+} as const;
+
 /** Свой ИНН (14 цифр) на каждый запуск: второй организации с тем же ИНН быть не может. */
 export const uniqueInn = () =>
   `9${Date.now().toString().slice(-9)}${Math.floor(Math.random() * 10_000)

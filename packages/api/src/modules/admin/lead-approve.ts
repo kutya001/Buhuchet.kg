@@ -159,6 +159,9 @@ export function approveLeadHandler(deps: ApiDeps): RouteHandler<typeof approveLe
         createdBy: adminId,
         today: bishkekDate(now),
         lead: { id, now, version: body.version, docs: true },
+        // «Одобрить» подписку не ставит (прототип ldApproveDlg): «Нет подписки» — владелец сначала
+        // увидит экран оплаты; поставить — «Изменить подписку» (доработки 20.11.2026, блок 6, пункт 4).
+        subscription: null,
         within: async (tx, created) => {
           if (!(await linkLeadOwnerTelegram(tx, { leadId: id, userId: created.ownerUserId }))) {
             apiFail(409, 'lead_no_telegram', LEAD_APPROVE_MESSAGES.lead_no_telegram);

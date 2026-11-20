@@ -98,6 +98,11 @@ export const MeResponse = z.object({
   /** «Сдача отчёта только после оплаты» действует (при «Учёте оплаты налогов», задача 2.19). */
   payFirst: z.boolean(),
   modules: z.array(MenuModuleIdSchema),
+  /**
+   * Доступ организации закрыт по подписке (доработки 20.11.2026, блок 4, пункты 4–5): так входит только
+   * владелец, ему открыта лишь «Моя организация» → «Подписка» (прототип subLockMods). Нет — открыт.
+   */
+  subClosed: z.boolean().optional(),
 });
 export type MeResponse = z.infer<typeof MeResponse>;
 

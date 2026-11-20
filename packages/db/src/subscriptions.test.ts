@@ -154,23 +154,27 @@ describe.skipIf(!databaseAvailable())(
       await seedAccessReference(db.admin.db);
       await seedAllPlatformDictionaries(db.admin.db);
       const owner = (login: string) => ({ fullName: 'Владелец', login, passwordHash: 'x' });
+      // Без подписки (как до запуска тарификации): запуск ставит её сам.
       a = await createOrganization(db.app.db, {
         name: 'Организация А',
         inn: '01811201810460',
         slug: 'subs-a',
         owner: owner('subs-owner-a'),
+        subscription: null,
       });
       b = await createOrganization(db.app.db, {
         name: 'Организация Б',
         inn: '02811201810461',
         slug: 'subs-b',
         owner: owner('subs-owner-b'),
+        subscription: null,
       });
       demo = await createOrganization(db.app.db, {
         name: 'Демо',
         inn: '02811201810462',
         slug: 'subs-demo',
         owner: owner('subs-owner-demo'),
+        subscription: null,
       });
       await db.admin.db
         .update(organizations)

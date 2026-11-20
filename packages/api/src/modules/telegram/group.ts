@@ -51,6 +51,7 @@ import {
 } from '@buhuchet/shared';
 import type { Context } from 'hono';
 import type { ApiDeps } from '../../deps';
+import { closedBotText, orgClosedNow } from '../../subscription-access';
 import type { AppEnv } from '../../env';
 import { apiError, apiFail, versionedSaveResponses } from '../../errors';
 import { orgContextOf, requireEmployee, requirePermission } from '../../middleware/access';
@@ -459,6 +460,8 @@ export async function handleGroupPress(deps: ApiDeps, press: GroupPress): Promis
   if (loginDenial(user) || user.mustChangePassword || user.relinkFree) {
     return refuse('tgActNoRight');
   }
+  // Доступ организации закрыт по подписке (доработки 20.11.2026, блок 4, пункт 4).
+  if (await orgClosedNow(deps, org.orgId)) return answer(await closedBotText(deps), true);
   const employeeId = user.employeeId;
   const texts = await botPressTexts(deps);
   const today = bishkekDate(deps.clock.now());

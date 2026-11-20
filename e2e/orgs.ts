@@ -1,5 +1,5 @@
 import { expect, type APIRequestContext } from '@playwright/test';
-import { ownerPassword, platformAdmin, uniqueInn } from './admin';
+import { E2E_SUBSCRIPTION, ownerPassword, platformAdmin, uniqueInn } from './admin';
 import { signIn, uniqueLogin } from './helpers';
 
 // Своя организация теста: создаёт администратор платформы, владелец входит и меняет временный пароль;
@@ -19,6 +19,7 @@ export async function orgWithTypes(api: APIRequestContext, origin: string, conne
       ownerFullName: 'Подборова Сквозная',
       ownerLogin: owner,
       temporaryPassword: temporary,
+      subscription: E2E_SUBSCRIPTION,
     },
   });
   expect(created.status(), await created.text()).toBe(201);

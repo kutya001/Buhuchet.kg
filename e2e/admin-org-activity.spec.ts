@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { ownerPassword, platformAdmin, search, uniqueInn } from './admin';
+import { E2E_SUBSCRIPTION, ownerPassword, platformAdmin, search, uniqueInn } from './admin';
 import { showStats, signIn, uniqueLogin } from './helpers';
 import { newContractor } from './reports';
 
@@ -55,6 +55,7 @@ test.describe('Админка: «Активность» организаций',
         ownerFullName: 'Активнова Сквозная',
         ownerLogin: owner,
         temporaryPassword: temporary,
+        subscription: E2E_SUBSCRIPTION,
       },
     });
     expect(created.status(), await created.text()).toBe(201);

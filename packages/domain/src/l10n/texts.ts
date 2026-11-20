@@ -39,6 +39,7 @@ import { SHELL_TEXTS } from './shell-texts';
 import { STAFF_BONUS_TEXTS } from './staff-bonus-texts';
 import { STAFF_TEXTS } from './staff-texts';
 import { STATUS_TEXTS } from './status-texts';
+import { SUBSCRIPTIONS_TEXTS } from './subscriptions-texts';
 import { TASKS_TEXTS } from './tasks-texts';
 import { TELEGRAM_TEXTS } from './telegram-texts';
 import { BELL_TEXTS } from './bell-texts';
@@ -112,6 +113,7 @@ export const UI_TEXTS = {
   ...STAFF_TEXTS,
   ...STATUS_TEXTS,
   ...ORG_TEXTS,
+  ...SUBSCRIPTIONS_TEXTS,
   ...ONBOARDING_TEXTS,
   ...HOME_TEXTS,
   ...CONTRACTORS_TEXTS,

@@ -48,6 +48,7 @@ import { apiFail, listQueryOf, listQueryResponses, versionedSaveResponses } from
 import { exportRateResponses, withExportSlot, xlsxContent, xlsxResponse } from '../../lists/export';
 import { requirePlatformAdmin } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
+import { isSubscriptionPlanGone, newOrgSubscription, subscriptionEditFail } from './subscriptions';
 
 const error = { 'application/json': { schema: ApiError } };
 const denied = {
@@ -247,7 +248,11 @@ export const createOrganizationRoute = createRoute({
       description: 'Организация и владелец с временным паролем созданы',
       content: { 'application/json': { schema: CreatedOrganization } },
     },
-    400: { description: 'Неверные данные, ИНН или логин заняты', content: error },
+    400: {
+      description:
+        'Неверные данные, ИНН или логин заняты; неверное поле блока «Подписка» (`sub_*`, `details.field`)',
+      content: error,
+    },
     ...denied,
     404: { description: 'Заявки, по которой создаётся организация, нет', content: error },
     409: {
@@ -296,7 +301,8 @@ function inputFail(err: OrganizationInputError): never {
  * — первый свободный по названию (прототип slugFree). Создание пишется в историю организации от имени
  * администратора. По заявке с сайта (`leadId`, прототип addOrgDlg с `lead`) заявка в той же транзакции
  * получает «Подключена» и ссылку на организацию; заявки нет или по ней уже создана организация —
- * организация не создаётся.
+ * организация не создаётся. Блок «Подписка» (доработки 20.11.2026, блок 6, пункт 4) необязателен: без
+ * него у организации «Нет подписки», с ним — подписка от имени администратора (`newOrgSubscription`).
  */
 export function createOrganizationHandler(
   deps: ApiDeps,
@@ -320,7 +326,10 @@ export function createOrganizationHandler(
         apiFail(409, 'lead_has_docs', LEAD_APPROVE_MESSAGES.lead_has_docs);
       }
     }
-    const taken = await withUserContext(deps.db, adminId, (tx) => adminOrgSlugs(tx));
+    const { taken, subscription } = await withUserContext(deps.db, adminId, async (tx) => ({
+      taken: await adminOrgSlugs(tx),
+      subscription: await newOrgSubscription(tx, body.subscription),
+    }));
     const passwordHash = await hashPassword(body.temporaryPassword);
     let orgId: string;
     try {
@@ -332,9 +341,13 @@ export function createOrganizationHandler(
         createdBy: adminId,
         today: bishkekDate(deps.clock.now()),
         lead: body.leadId ? { id: body.leadId, now: deps.clock.now() } : null,
+        subscription,
       }));
     } catch (err) {
       if (err instanceof OrganizationInputError) inputFail(err);
+      if (isSubscriptionPlanGone(err)) {
+        subscriptionEditFail({ field: 'planId', code: 'sub_plan' });
+      }
       if (err instanceof LeadLinkError) leadFail(err.reason);
       throw err;
     }

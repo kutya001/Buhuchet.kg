@@ -38,6 +38,7 @@ import {
   type Translate,
 } from '@buhuchet/domain';
 import type { ApiDeps } from '../../deps';
+import { closedBotText, orgClosedNow } from '../../subscription-access';
 import { serverTexts } from '../l10n/texts';
 import { sendBotMessage, sendNow } from './bot';
 import { clientChatHint, clientMenuRows } from './client';
@@ -162,6 +163,13 @@ async function answerCommand(run: CommandRun, user: BotChatUser): Promise<void> 
     !employeeId
   ) {
     await refuse();
+    return;
+  }
+  // Доступ организации закрыт по подписке (доработки 20.11.2026, блок 4, пункт 4): команды не отвечают
+  // данными организации.
+  if (await orgClosedNow(deps, orgId)) {
+    const text = withOrganization(await closedBotText(deps), user.orgName, shared);
+    await sendNow(deps, chatId, text, 'bot_cmd', { menu });
     return;
   }
   const stale = command.code === 'find' ? await openFindAsks(deps, chatId, user.userId, today) : [];

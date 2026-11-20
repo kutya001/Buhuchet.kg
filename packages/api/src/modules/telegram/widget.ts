@@ -55,6 +55,7 @@ import {
   type WidgetReport,
 } from '@buhuchet/domain';
 import type { ApiDeps, JobContext } from '../../deps';
+import { closedBotText, orgClosedNow } from '../../subscription-access';
 import { serverTexts } from '../l10n/texts';
 import { sendBotMessage } from './bot';
 import { reportCell } from './command-view';
@@ -327,6 +328,8 @@ export async function handleWidgetQuery(deps: ApiDeps, q: WidgetQueryUpdate): Pr
   const { user } = found;
   if (loginDenial(user) || user.mustChangePassword || user.relinkFree)
     return refuse('tgActNoRight');
+  // Доступ организации закрыт по подписке (доработки 20.11.2026, блок 4, пункт 4).
+  if (await orgClosedNow(deps, user.orgId)) return answer(await closedBotText(deps));
   const today = bishkekDate(deps.clock.now());
   const ctxOf = { orgId: user.orgId, userId: user.userId };
   const key = { userId: user.userId, chatId: q.chatId, messageId: q.messageId };

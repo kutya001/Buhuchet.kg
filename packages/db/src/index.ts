@@ -13,6 +13,7 @@ export * from './file-links';
 export * from './sent-files';
 export * from './storage-retries';
 export * from './subscriptions';
+export * from './admin-subscriptions';
 export * from './datamart-roles';
 export * from './datamart-run';
 export * from './auth';

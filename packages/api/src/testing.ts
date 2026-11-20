@@ -232,6 +232,14 @@ export function apiRequest(
   });
 }
 
+/** Подписка организаций `createStaffFixture`: 1 000 мест, оплачено до 2099 года. */
+export const TEST_SUBSCRIPTION = {
+  seats: 1000,
+  paidUntil: '2099-12-31',
+  free: false,
+  reason: 'Подписка тестовой организации',
+} as const;
+
 /** Пароль всех учётных записей `createStaffFixture`. */
 export const TEST_PASSWORD = 'Верный-пароль-1';
 
@@ -257,6 +265,9 @@ export async function createStaffFixture() {
       inn,
       slug,
       owner: { fullName: `Владелец ${owner}`, login: owner, passwordHash },
+      // Подписка без пределов на время тестов (доработки 20.11.2026): закрытие доступа и пакет
+      // проверяют свои тесты на своих организациях.
+      subscription: TEST_SUBSCRIPTION,
     });
   const a = await org('Организация А', '01811201810456', 'org-a', 'owner-a');
   const b = await org('Организация Б', '02811201810457', 'org-b', 'owner-b');
