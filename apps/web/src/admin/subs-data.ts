@@ -6,7 +6,6 @@ import {
   AdminSubscriptionPlans,
   AdminSubscriptionSettings,
   AdminSubscriptionsSummary,
-  FileLink,
   ListValues,
   type AdminSubscriptionRow,
   type SubscriptionConfirmRequest,
@@ -74,13 +73,6 @@ export const subSettingsQuery = queryOptions({
   queryKey: [...SUBS_KEY, 'settings'],
   queryFn: async () => json(await settings.$get(), (v) => AdminSubscriptionSettings.parse(v)),
 });
-
-/** Чек оплаты: ссылка на просмотр на 15 минут. */
-export async function subReceiptLink(id: string) {
-  const res = await callApi(() => subs.payments[':id'].receipt.$get({ param: { id } }));
-  if (!res.ok) return res;
-  return { ...res, data: FileLink.parse(res.data) };
-}
 
 export function confirmSubPayment(id: string, body: SubscriptionConfirmRequest) {
   return callApi(() => subs.payments[':id'].confirm.$post({ param: { id }, json: body }));

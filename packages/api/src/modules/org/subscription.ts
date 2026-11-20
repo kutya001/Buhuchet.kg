@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { createRoute, z, type RouteHandler } from '@hono/zod-openapi';
 import { orgFileKey } from '@buhuchet/adapters';
 import {
+  getOrgProfile,
   insertSubscriptionPayment,
   listSubscriptionPayments,
   listSubscriptionPlans,
@@ -66,6 +67,7 @@ import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiError, apiFail } from '../../errors';
 import { orgContextOf } from '../../middleware/access';
+import { notifySubCheckNew, subNoticeContext } from '../telegram/subs';
 import { error } from './profile';
 
 /*
@@ -555,6 +557,8 @@ async function finishPayment(
     }
     if (!(await deps.storage.copy(checkKey, key))) fail(409, 'sub_receipt_missing');
     placed = true;
+    // Тексты и время сообщения администраторам платформы — до транзакции (внутри неё — только `tx`).
+    const nc = await subNoticeContext(deps, deps.config.APP_BASE_URL);
     const done = await withOrgContext(deps.db, ctx, async (tx) => {
       const plan = await payPlanOf(tx, body.pay, today);
       let row: { opensAccess: boolean };
@@ -594,8 +598,14 @@ async function finishPayment(
           { field: 'receipt', to: stored },
         ],
       });
-      // Стык с потоком Т: «Новый чек на проверку» администраторам платформы — notifySubCheckNew(tx,
-      // ctx, …) здесь, тексты (subNoticeContext) — до транзакции; подключает общая сборка этапа 1.
+      // «Новый чек на проверку» — администраторам платформы в Telegram (поток Т, один раз на чек);
+      // строку их колокольчика кладёт его чтение (`bellSyncPlatform`).
+      await notifySubCheckNew(tx, nc, {
+        payId: body.id,
+        orgName: (await getOrgProfile(tx, ctx.orgId))?.name ?? '',
+        kind: plan.kind,
+        amount: plan.calc.total,
+      });
       return { id: body.id, amount: plan.calc.total, opensAccess: row.opensAccess };
     });
     placed = false;

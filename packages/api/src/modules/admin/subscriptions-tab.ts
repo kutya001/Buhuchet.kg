@@ -88,6 +88,8 @@ import { apiFail, listQueryOf, listQueryResponses, versionedSaveResponses } from
 import { exportRateResponses, withExportSlot, xlsxContent, xlsxResponse } from '../../lists/export';
 import { requirePlatformAdmin } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
+import { flushEvents } from '../telegram/outbox';
+import { notifySubOwners, subNoticeContext } from '../telegram/subs';
 import { subscriptionEditFail } from './subscriptions';
 
 /*
@@ -516,7 +518,9 @@ export function subscriptionConfirmHandler(
     const userId = adminOf(c);
     const today = todayOf(deps);
     const orgId = await paymentOrgOf(deps, userId, id);
-    const card = await withOrgContext(deps.db, { orgId, userId }, async (tx) => {
+    // Тексты и время сообщения владельцам — до транзакции (внутри неё — только `tx`, п. О-46).
+    const nc = await subNoticeContext(deps, deps.config.APP_BASE_URL);
+    const { card, queued } = await withOrgContext(deps.db, { orgId, userId }, async (tx) => {
       const p = await lockPendingPayment(tx, id, body.version).catch(decidedFail);
       const pay = pendingPaymentOf(p);
       if (pay.kind === 'renew' && body.months < 1) {
@@ -546,10 +550,19 @@ export function subscriptionConfirmHandler(
         { field: 'paidUntil', from: cur?.paidUntil ?? null, to: r.paidUntil },
         { field: 'status', from: was },
       ]);
-      // Стык с потоком Т (этап 1, П15): владельцам — «Оплата подписки подтверждена»
-      // (`notifySubOwners`, ключ `subPaid:<оплата>`), очередь — после транзакции.
-      return cardOf(tx, orgId, today);
+      const view = await cardOf(tx, orgId, today);
+      // Владельцам — «Оплата подтверждена» в Telegram и колокольчик (поток Т, `notifySubOwners`; один
+      // раз на оплату), сообщения уходят сразу после транзакции.
+      const sent = await notifySubOwners(
+        tx,
+        nc,
+        orgId,
+        { event: 'paid', org: view.org.name, paidUntil: r.paidUntil },
+        `sub_paid:${id}`,
+      );
+      return { card: view, queued: sent.queued };
     });
+    await flushEvents(deps, orgId, queued);
     return c.json(card, 200);
   };
 }
@@ -583,7 +596,8 @@ export function subscriptionRejectHandler(
     const userId = adminOf(c);
     const today = todayOf(deps);
     const orgId = await paymentOrgOf(deps, userId, id);
-    const card = await withOrgContext(deps.db, { orgId, userId }, async (tx) => {
+    const nc = await subNoticeContext(deps, deps.config.APP_BASE_URL);
+    const { card, queued } = await withOrgContext(deps.db, { orgId, userId }, async (tx) => {
       const p = await lockPendingPayment(tx, id, body.version).catch(decidedFail);
       await decidePayment(tx, p, { status: 'rejected', reason: body.reason });
       await writeSubscriptionHistory(
@@ -596,10 +610,18 @@ export function subscriptionRejectHandler(
         ],
         body.reason,
       );
-      // Стык с потоком Т (этап 1, П15): владельцам — «Чек отклонён» с причиной
-      // (`notifySubOwners`, ключ `subRej:<оплата>`), очередь — после транзакции.
-      return cardOf(tx, orgId, today);
+      const view = await cardOf(tx, orgId, today);
+      // Владельцам — «Чек отклонён» с причиной (поток Т, `notifySubOwners`; один раз на оплату).
+      const sent = await notifySubOwners(
+        tx,
+        nc,
+        orgId,
+        { event: 'rejected', org: view.org.name, reason: body.reason },
+        `sub_rejected:${id}`,
+      );
+      return { card: view, queued: sent.queued };
     });
+    await flushEvents(deps, orgId, queued);
     return c.json(card, 200);
   };
 }

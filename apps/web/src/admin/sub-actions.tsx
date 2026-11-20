@@ -4,16 +4,19 @@ import type { AdminSubscriptionCard, AdminSubscriptionPayment } from '@buhuchet/
 import { useToast } from '@buhuchet/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { storageFileDownloadHref, storageFileViewSrc } from '../afiles/afiles-data';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
-import { useErrorText, useT } from '../l10n/provider';
+import { FileViewer, type ViewerFile } from '../files/file-viewer';
+import { useT } from '../l10n/provider';
 import { SubConfirmDialog, SubEditDialog, SubRejectDialog } from './sub-dialogs';
 import { SubOrgWindow, SubPayWindow, type SubBodyActions } from './sub-org-window';
-import { subCardQuery, subReceiptLink } from './subs-data';
+import { subCardQuery } from './subs-data';
 
 /*
  * Окна вкладки «Подписки» (прототип admin/subs-admin.js, действия `data-subact`): «Подписка
- * организации», окно оплаты, «Подтвердить оплату», «Отклонить чек», «Изменить подписку» и чек в новой
- * вкладке. `nodes` — в разметку экрана; вкладка «Подписка» карточки организации берёт `act`.
+ * организации», окно оплаты, «Подтвердить оплату», «Отклонить чек», «Изменить подписку» и чек в окне
+ * просмотра файлов (прототип `fileView`; байты и «Скачать» — методы модуля «Файлы» Админки, вид
+ * `receipt`). `nodes` — в разметку экрана; вкладка «Подписка» карточки организации берёт `act`.
  */
 
 type Payment = AdminSubscriptionPayment;
@@ -27,13 +30,13 @@ export function useSubActions(opts: { onOrg?: (orgId: string) => void } = {}): {
 } {
   const t = useT();
   const toast = useToast();
-  const errorText = useErrorText();
   const client = useQueryClient();
   const [win, setWin] = useState<DialogSlot<{ orgId: string; name: string }> | null>(null);
   const [pay, setPay] = useState<DialogSlot<{ p: Payment; card: Card }> | null>(null);
   const [ok, setOk] = useState<DialogSlot<{ p: Payment; card: Card }> | null>(null);
   const [rej, setRej] = useState<DialogSlot<{ p: Payment; card: Card }> | null>(null);
   const [edit, setEdit] = useState<DialogSlot<Card> | null>(null);
+  const [view, setView] = useState<DialogSlot<ViewerFile> | null>(null);
   const onOrg = opts.onOrg;
 
   const openWindow = useCallback(
@@ -55,25 +58,18 @@ export function useSubActions(opts: { onOrg?: (orgId: string) => void } = {}): {
     [client, t, toast],
   );
 
-  /**
-   * Чек — в новой вкладке по ссылке на 15 минут: вкладка открывается сразу по нажатию (иначе её закроет
-   * блокировщик всплывающих окон), адрес ей ставится, когда придёт ссылка.
-   */
-  const receipt = useCallback(
-    (p: Payment) =>
-      void (async () => {
-        const tab = window.open('', '_blank');
-        if (tab) tab.opener = null;
-        const res = await subReceiptLink(p.id);
-        if (!res.ok) {
-          tab?.close();
-          return toast(errorText(res.error), { bad: true, icon: 'alert' });
-        }
-        if (tab) tab.location.href = res.data.url;
-        else window.open(res.data.url, '_blank', 'noopener,noreferrer');
-      })(),
-    [errorText, toast],
-  );
+  /** Чек — в окне просмотра поверх окна подписки (номер файла — номер оплаты). */
+  const receipt = useCallback((p: Payment) => {
+    if (!p.receipt) return;
+    setView(
+      openSlot<ViewerFile>({
+        id: p.id,
+        name: p.receipt.name,
+        size: p.receipt.bytes,
+        contentType: p.receipt.type,
+      }),
+    );
+  }, []);
 
   const act = useMemo<SubBodyActions>(
     () => ({
@@ -142,6 +138,17 @@ export function useSubActions(opts: { onOrg?: (orgId: string) => void } = {}): {
           card={edit.data}
           open={edit.open}
           onClose={() => setEdit(closeSlot)}
+        />
+      ) : null}
+      {view ? (
+        <FileViewer
+          key={`sub-receipt-${view.n}`}
+          files={[view.data]}
+          index={0}
+          open={view.open}
+          onClose={() => setView(closeSlot)}
+          src={(id) => storageFileViewSrc({ kind: 'receipt', id })}
+          download={(id) => storageFileDownloadHref({ kind: 'receipt', id })}
         />
       ) : null}
     </>
