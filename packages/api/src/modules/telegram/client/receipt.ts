@@ -272,6 +272,14 @@ async function sayOrgClosed(deps: ApiDeps, chatId: number): Promise<void> {
   await sayTo(deps, chatId, (await serverTexts(deps))('cppage.tg.org_closed'));
 }
 
+/** Доступ организации закрылся, пока файл из чата скачивался: транзакция записи откатывается. */
+class OrgClosedOnSend extends Error {
+  constructor() {
+    super('org_closed');
+    this.name = 'OrgClosedOnSend';
+  }
+}
+
 /** Отправить текст клиенту; ошибка Telegram не роняет разбор. */
 async function sayTo(deps: ApiDeps, chatId: number, text: string): Promise<void> {
   try {
@@ -336,7 +344,7 @@ async function sendClientFile(
     comment: string | null;
     receipt: boolean;
   },
-): Promise<{ ids: string[] } | (Refusal & { close: boolean })> {
+): Promise<{ ids: string[] } | (Refusal & { close: boolean }) | 'closed'> {
   const loaded = await deps.telegram!.loadFile(o.file.fileId, FILE_MAX_BYTES);
   if (!loaded.ok) {
     if (loaded.reason === 'too_large') return refusalOf({ code: 'sent_too_large' }, o.receipt);
@@ -356,14 +364,15 @@ async function sendClientFile(
       tgChatId: o.chatId,
       comment: o.comment,
       receipt: o.receipt,
-      // Доступ организации могли закрыть, пока файл скачивался: проверка — и в транзакциях записи (п. К-24).
+      // Доступ организации могли закрыть, пока файл скачивался: проверка — и в транзакциях записи; ответ —
+      // как при закрытом доступе до скачивания, просьба «Пришлите чек» остаётся (п. К-24).
       guard: async (tx) => {
-        if (await orgAccessClosed(tx, bishkekDate(deps.clock.now())))
-          throw new SentFilesRefused({ code: 'sent_off' });
+        if (await orgAccessClosed(tx, bishkekDate(deps.clock.now()))) throw new OrgClosedOnSend();
       },
       files: [{ name: o.name, bytes: loaded.body }],
     });
   } catch (err) {
+    if (err instanceof OrgClosedOnSend) return 'closed';
     if (err instanceof SentFilesRefused) return refusalOf(err.refusal, o.receipt);
     deps.logger.error({ err }, 'Telegram: файл контрагента не принят');
     deps.errors?.capture(err);
@@ -527,6 +536,10 @@ async function receiptReply(
     comment: caption ? `${note}. ${caption}` : note,
     receipt: true,
   });
+  if (sent === 'closed') {
+    await sayOrgClosed(deps, msg.chatId);
+    return true;
+  }
   if ('key' in sent) {
     if (sent.close) await closeAsk();
     await say(sent);
@@ -635,7 +648,8 @@ async function freeFile(deps: ApiDeps, msg: BotIncoming, today: IsoDate): Promis
   }
   const link = active[0]!;
   const out = await toContractor(deps, link, msg.chatId, file, name, msg.caption);
-  await say('key' in out ? out : { key: 'tgCpFileOk' });
+  if (out === 'closed') await sayOrgClosed(deps, msg.chatId);
+  else await say('key' in out ? out : { key: 'tgCpFileOk' });
   return true;
 }
 
@@ -649,7 +663,7 @@ async function toContractor(
   file: NonNullable<BotIncoming['file']>,
   name: string,
   caption: string | null,
-): Promise<{ ids: string[] } | Refusal> {
+): Promise<{ ids: string[] } | Refusal | 'closed'> {
   const pre = await withOrgContext(
     deps.db,
     { orgId: link.orgId, userId: null },
@@ -847,6 +861,11 @@ async function fileToChosen(
     file.name,
     file.caption,
   );
+  if (out === 'closed') {
+    // Вопрос остаётся: после оплаты выбрать можно снова.
+    await sayOrgClosed(deps, press.chatId);
+    return;
+  }
   if ('key' in out) {
     // Файл не принят — вопрос остаётся: выбрать можно снова (этого или другого контрагента).
     await sayTo(deps, press.chatId, await botTemplateText(deps.db, out.key, out.values));

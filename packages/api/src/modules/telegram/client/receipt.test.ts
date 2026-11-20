@@ -814,7 +814,7 @@ describe.skipIf(!databaseAvailable())(
       expect(tg.sent.length).toBe(count);
     });
 
-    it('доступ организации закрыт по подписке (доработки 20.11.2026, блок 4, пункт 4): файл и чек клиента не принимаются — «Доступ организации закрыт»; контрагентов закрытой фирмы нет в «От какой компании?»; после оплаты просьба «Пришлите чек» снова принимает чек', async () => {
+    it('доступ организации закрыт по подписке (доработки 20.11.2026, блок 4, пункт 4): файл и чек клиента не принимаются — «Доступ организации закрыт»; контрагентов закрытой фирмы нет в «От какой компании?»; закрылся во время скачивания — файл не записан, просьба ждёт; после оплаты просьба «Пришлите чек» снова принимает чек', async () => {
       const subscription = (paidUntil: string) =>
         f.t.admin.db
           .insert(schema.orgSubscriptions)
@@ -862,6 +862,23 @@ describe.skipIf(!databaseAvailable())(
         expect((await sentFiles(cpB)).map((x) => x.name)).toEqual(['Справка.pdf']);
         expect(await sentFiles(cpA)).toEqual([]);
         expect(await sentFiles(cpA2)).toEqual([]);
+
+        // Оплатили, но доступ закрылся, пока файл скачивался: файл не записан, ответ — «Доступ организации
+        // закрыт», просьба «Пришлите чек» не закрывается.
+        await subscription('2026-12-31');
+        const load = tg.loadFile.bind(tg);
+        tg.loadFile = async (fileId, maxBytes) => {
+          await subscription('2026-10-17');
+          return load(fileId, maxBytes);
+        };
+        try {
+          await sendFile(CLIENT_2, { name: 'Скан.pdf' });
+        } finally {
+          tg.loadFile = load;
+        }
+        expect(lastText(CLIENT_2)).toBe(closedText);
+        expect(await sentFiles(cpA)).toEqual([]);
+        expect(await claims(cpA)).toEqual([]);
 
         // Оплатили — просьба «Пришлите чек» ждала: файл становится чеком.
         await subscription('2026-12-31');
