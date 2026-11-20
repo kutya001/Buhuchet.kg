@@ -461,14 +461,18 @@ describe.skipIf(!databaseAvailable())('Telegram заявителя и парол
     // Карточка организации: «Пароль не задан», Telegram есть.
     const card = await apiRequest(app, 'GET', `/api/admin/organizations/${org.orgId}/card`, admin);
     expect(card.status).toBe(200);
-    const body = (await card.json()) as {
-      owner: { passwordUnset: boolean; telegram: boolean };
-      staff: { rows: { userId: string; states: string[] }[] };
-    };
+    const body = (await card.json()) as { owner: { passwordUnset: boolean; telegram: boolean } };
     expect(body.owner).toMatchObject({ passwordUnset: true, telegram: true });
-    expect(body.staff.rows.find((r) => r.userId === org.ownerUserId)?.states).toContain(
-      'no_password',
+    // «Сотрудники» карточки — своим методом страницами (доработки 20.11.2026, пакет 2).
+    const staff = await apiRequest(
+      app,
+      'GET',
+      `/api/admin/organizations/${org.orgId}/staff?size=all`,
+      admin,
     );
+    expect(staff.status).toBe(200);
+    const list = (await staff.json()) as { items: { userId: string; states: string[] }[] };
+    expect(list.items.find((r) => r.userId === org.ownerUserId)?.states).toContain('no_password');
   });
 
   it('повтор заявки через форму: ту же ссылку получает только браузер с cookie; без cookie — без кнопки; после «Старта» — «подключён»', async () => {

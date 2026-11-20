@@ -25,6 +25,7 @@ export type CountKey =
   | 'files.sent.count'
   | 'accounts.count'
   | 'orgs.count'
+  | 'orgs.card.repm.count'
   | 'leads.count'
   | 'locale.count'
   | 'dicts.count'

@@ -5,7 +5,6 @@ import {
   FILE_LIST_KIND_OF,
   formatPhone,
   OPEN_REPORT_STATUSES,
-  tariffAt,
   type Feature,
   type IsoDate,
   type LeadDocKind,
@@ -14,17 +13,31 @@ import {
   type Tyiyn,
   type YearMonth,
 } from '@buhuchet/domain';
-import { and, asc, desc, eq, inArray, lt, ne, not, notInArray, sql, type SQL } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  lt,
+  ne,
+  not,
+  notInArray,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Tx } from './client';
 import { adminGetOrganization, type AdminOrganizationRecord } from './admin-orgs';
-import { ADMIN_CARD_ROWS, adminSessions, capped, countAll, type CardList } from './admin-user-card';
-import { bankNamesOf, feeLedgers, feeSubjectsOf } from './fees';
+import { ADMIN_CARD_ROWS, adminSessions, countAll } from './admin-user-card';
+import { bankNamesOf, feeLedgers } from './fees';
 import { writeHistory } from './history';
 import { adminLeadDocs } from './lead-docs';
 import { adminLeadOfOrganization } from './leads';
 import { getOrgPolicy, getOrgProfile } from './org';
 import {
+  assignments,
   auditLog,
   banks,
   contractors,
@@ -32,16 +45,15 @@ import {
   files,
   orgAccounts,
   orgReportTypes,
-  ownershipForms,
   reports,
   reportTypes,
   rolePermissions,
   roles,
   tasks,
-  taxRegimes,
   telegramLinks,
   users,
 } from './schema';
+import { reportPlateCounts, type ReportPlate } from './report-list';
 import { dateLiteral } from './sql-text';
 import { phoneCodes } from './staff';
 
@@ -88,58 +100,27 @@ export interface AdminOrgCardRecord {
     staffBlocked: number;
     contractors: { regular: number; oneoff: number; paused: number; archived: number };
     month: YearMonth;
-    reports: { todo: number; inWork: number; submitted: number; overdue: number };
+    /**
+     * Плитки «Отчёты» и «Просрочено» (доработки 20.11.2026, пакет 2, блок 1, пункт 4; прототип v150
+     * orgSum): все несданные на сегодня — «в этом месяце» (срок до конца месяца) и «позже», все
+     * просроченные — как на вкладке «Просроченные» самой фирмы.
+     */
+    reports: { open: number; month: number; later: number; overdue: number };
     tasks: number;
     files: { count: number; bytes: number };
     telegram: number;
     logins30: number;
   };
-  staff: CardList<{
-    userId: string;
-    fullName: string;
-    login: string;
-    role: string;
-    telegram: boolean;
-    lastLoginAt: Date | null;
-    blocked: boolean;
-    employeeActive: boolean;
-    loginLocked: boolean;
-    loginLockReason: string | null;
-    mustChangePassword: boolean;
-    passwordUnset: boolean;
-  }>;
-  contractors: CardList<{
-    id: string;
-    name: string;
-    inn: string;
-    form: string;
-    regime: string | null;
-    responsible: string | null;
-    kind: string;
-    /** Стоимость обслуживания по действующей ставке; null — ставки нет или контрагент разовый. */
-    fee: Tyiyn | null;
-    serviceStatus: string;
-  }>;
   reports: {
-    /** По месяцам срока и видам отчётов за последние 6 месяцев: сверху новые. */
-    byMonth: {
-      month: YearMonth;
-      type: string;
-      total: number;
-      submitted: number;
-      overdue: number;
-    }[];
-    overdue: CardList<{
-      id: string;
-      contractor: string;
-      type: string;
-      period: string;
-      periodStart: string;
-      eventDate: string | null;
-      dueDate: string;
-      responsible: string | null;
-      status: string;
-    }>;
+    /** Числа плиток-фильтров списка «Отчёты» (`reportPlateCounts`). */
+    plates: Record<ReportPlate, number>;
+    /** Пустая вкладка: контрагентов без архива и у скольких из них есть действующее назначение. */
+    contractors: number;
+    assigned: number;
+    /** «Учёт оплаты налогов» организации: столбец «Оплачено» списка. */
+    taxpay: boolean;
+    /** «Сдача отчётов требует подтверждения»: отметки подтверждения в статусе. */
+    confirm: boolean;
   };
   money: {
     feeMonth: { charged: Tyiyn; paid: Tyiyn };
@@ -262,7 +243,6 @@ function historyChanges(
 
 const ROLE_ID = sql.raw('"roles"."id"');
 const actor = alias(employees, 'actor');
-const responsible = alias(employees, 'responsible');
 const uploader = alias(employees, 'uploader');
 
 /** Просрочена сдача — как в списке отчётов (report-list.ts, overdueOf) и в карточке пользователя. */
@@ -273,6 +253,33 @@ function overdueOf(today: IsoDate): SQL {
     ne(reports.act, 'pay'),
     ne(contractors.serviceStatus, 'paused'),
   )!;
+}
+
+/** Месяцы блока «По месяцам и видам отчётов»: 6 прошлых, текущий и 3 следующих (пакет 2, блок 1, п. 2). */
+export function adminRepMonths(today: IsoDate): YearMonth[] {
+  const month = today.slice(0, 7) as YearMonth;
+  return Array.from({ length: 10 }, (_, i) => addMonths(month, i - 6));
+}
+
+/**
+ * Строки «По месяцам и видам отчётов» карточки (прототип v150 ocGrids, oc-rep): месяц срока `m`, вид
+ * отчёта `t` (краткое название), всего `n`, сданных `done`, просроченных `over` — по месяцам
+ * `adminRepMonths`, без прежних версий уточнённых. Источник `r` для общего слоя списков.
+ */
+export function adminRepMonthsSource(today: IsoDate): SQL {
+  const months = adminRepMonths(today);
+  const lastDay = sql`(${dateLiteral(`${months[months.length - 1]}-01`)} + interval '1 month' - interval '1 day')::date`;
+  return sql`(select to_char(${reports.dueDate}, 'YYYY-MM') as m,
+      coalesce(${reportTypes.shortName}, ${reportTypes.name}, ${reports.reportTypeCode}) as t,
+      count(*)::int as n,
+      (count(*) filter (where ${reports.status} = 'submitted'))::int as done,
+      (count(*) filter (where ${overdueOf(today)}))::int as over
+    from ${reports}
+    inner join ${contractors} on ${contractors.id} = ${reports.contractorId}
+    left join ${reportTypes} on ${reportTypes.code} = ${reports.reportTypeCode}
+    where ${reports.superseded} = false
+      and ${reports.dueDate} between ${dateLiteral(`${months[0]}-01`)} and ${lastDay}
+    group by 1, 2) as r`;
 }
 
 /**
@@ -287,9 +294,6 @@ export async function adminOrgCard(
   if (!org) return null;
   const today = bishkekDate(input.now);
   const month = today.slice(0, 7) as YearMonth;
-  const monthFrom = dateLiteral(`${month}-01`);
-  const monthTo = sql`(${monthFrom} + interval '1 month' - interval '1 day')::date`;
-  const inMonth = sql`${reports.dueDate} between ${monthFrom} and ${monthTo}`;
   const live = eq(reports.superseded, false);
 
   // «Основное».
@@ -359,16 +363,14 @@ export async function adminOrgCard(
       archived: sql<number>`(count(*) filter (where ${contractors.serviceStatus} = 'archived'))::int`,
     })
     .from(contractors);
-  const [repN = { todo: 0, inWork: 0, submitted: 0, overdue: 0 }] = await tx
-    .select({
-      todo: sql<number>`(count(*) filter (where ${reports.status} = 'todo'))::int`,
-      inWork: sql<number>`(count(*) filter (where ${reports.status} = 'in_progress'))::int`,
-      submitted: sql<number>`(count(*) filter (where ${reports.status} = 'submitted'))::int`,
-      overdue: sql<number>`(count(*) filter (where ${overdueOf(today)}))::int`,
-    })
-    .from(reports)
-    .innerJoin(contractors, eq(contractors.id, reports.contractorId))
-    .where(and(live, inMonth));
+  const policy = await getOrgPolicy(tx, input.orgId);
+  const taxpay = policy?.features.taxpay ?? false;
+  const plateN = await reportPlateCounts(tx, { today, taxpay });
+  const [assignedN = { n: 0 }] = await tx
+    .select({ n: sql<number>`count(distinct ${assignments.contractorId})::int` })
+    .from(assignments)
+    .innerJoin(contractors, eq(contractors.id, assignments.contractorId))
+    .where(and(isNull(assignments.endedOn), ne(contractors.serviceStatus, 'archived')));
   const [taskN = { n: 0 }] = await tx
     .select({ n: countAll })
     .from(tasks)
@@ -400,115 +402,6 @@ export async function adminOrgCard(
         sql`${adminSessions.startedAt} >= ${input.now.toISOString()}::timestamptz - interval '30 days'`,
       ),
     );
-
-  // «Сотрудники».
-  const staff = await capped(
-    await tx
-      .select({
-        userId: users.id,
-        fullName: employees.fullName,
-        login: sql<string>`${users.login}::text`,
-        role: roles.name,
-        telegram: sql<boolean>`${telegramLinks.userId} is not null`,
-        lastLoginAt: users.lastLoginAt,
-        blocked: users.blocked,
-        employeeActive: employees.active,
-        loginLocked: sql<boolean>`${users.loginLockedAt} is not null`,
-        loginLockReason: users.loginLockReason,
-        mustChangePassword: users.mustChangePassword,
-        passwordUnset: sql<boolean>`app.password_unset(${users.id})`,
-      })
-      .from(employees)
-      .innerJoin(users, eq(users.id, employees.userId))
-      .innerJoin(roles, eq(roles.id, employees.roleId))
-      .leftJoin(telegramLinks, eq(telegramLinks.userId, employees.userId))
-      .orderBy(asc(employees.fullName), asc(employees.id))
-      .limit(ADMIN_CARD_ROWS),
-    () => tx.select({ n: countAll }).from(employees),
-  );
-
-  // «Контрагенты»: стоимость — действующая ставка журнала тарифов (прототип `tariffAt(c, ym(TODAY))`).
-  const cpRows = await capped(
-    await tx
-      .select({
-        id: contractors.id,
-        name: contractors.name,
-        inn: contractors.inn,
-        form: sql<string>`coalesce(${ownershipForms.name}, ${contractors.formCode})`,
-        regime: taxRegimes.name,
-        responsible: responsible.shortName,
-        kind: contractors.kind,
-        serviceStatus: contractors.serviceStatus,
-      })
-      .from(contractors)
-      .leftJoin(ownershipForms, eq(ownershipForms.code, contractors.formCode))
-      .leftJoin(taxRegimes, eq(taxRegimes.code, contractors.regimeCode))
-      .leftJoin(responsible, eq(responsible.id, contractors.responsibleEmployeeId))
-      .orderBy(asc(contractors.name), asc(contractors.id))
-      .limit(ADMIN_CARD_ROWS),
-    () => tx.select({ n: countAll }).from(contractors),
-  );
-  const subjects = await feeSubjectsOf(
-    tx,
-    cpRows.rows.map((c) => c.id),
-  );
-  const cps: AdminOrgCardRecord['contractors'] = {
-    count: cpRows.count,
-    rows: cpRows.rows.map((c) => {
-      const s = subjects.get(c.id);
-      const tariff = s && !s.oneOff ? tariffAt(s.tariffs, month) : null;
-      return { ...c, fee: tariff ? tariff.amount : null };
-    }),
-  };
-
-  // «Отчёты».
-  const firstMonth = addMonths(month, -5);
-  const dueMonth = sql<string>`to_char(${reports.dueDate}, 'YYYY-MM')`;
-  const typeName = sql<string>`coalesce(${reportTypes.shortName}, ${reportTypes.name}, ${reports.reportTypeCode})`;
-  const byMonth = await tx
-    .select({
-      month: dueMonth,
-      type: typeName,
-      total: countAll,
-      submitted: sql<number>`(count(*) filter (where ${reports.status} = 'submitted'))::int`,
-      overdue: sql<number>`(count(*) filter (where ${overdueOf(today)}))::int`,
-    })
-    .from(reports)
-    .innerJoin(contractors, eq(contractors.id, reports.contractorId))
-    .leftJoin(reportTypes, eq(reportTypes.code, reports.reportTypeCode))
-    .where(
-      and(live, sql`${reports.dueDate} between ${dateLiteral(`${firstMonth}-01`)} and ${monthTo}`),
-    )
-    .groupBy(dueMonth, typeName)
-    .orderBy(desc(dueMonth), asc(typeName));
-  const overdueCond = and(live, overdueOf(today));
-  const overdue = await capped(
-    await tx
-      .select({
-        id: reports.id,
-        contractor: contractors.name,
-        type: typeName,
-        period: reports.period,
-        periodStart: reports.periodStart,
-        eventDate: reports.eventDate,
-        dueDate: reports.dueDate,
-        responsible: responsible.shortName,
-        status: reports.status,
-      })
-      .from(reports)
-      .innerJoin(contractors, eq(contractors.id, reports.contractorId))
-      .leftJoin(reportTypes, eq(reportTypes.code, reports.reportTypeCode))
-      .leftJoin(responsible, eq(responsible.id, reports.responsibleEmployeeId))
-      .where(overdueCond)
-      .orderBy(asc(reports.dueDate), asc(reports.id))
-      .limit(ADMIN_CARD_ROWS),
-    () =>
-      tx
-        .select({ n: countAll })
-        .from(reports)
-        .innerJoin(contractors, eq(contractors.id, reports.contractorId))
-        .where(overdueCond),
-  );
 
   // «Деньги»: итоги без операций (прототип ocMoney).
   const ledgers = await feeLedgers(tx, { scope: undefined, today });
@@ -546,7 +439,6 @@ export async function adminOrgCard(
     .orderBy(desc(payMonth));
 
   // «Настройки».
-  const policy = await getOrgPolicy(tx, input.orgId);
   const typeRows = await tx
     .select({ name: sql<string>`coalesce(${reportTypes.shortName}, ${reportTypes.name})` })
     .from(orgReportTypes)
@@ -654,7 +546,12 @@ export async function adminOrgCard(
       staffBlocked: staffN.blocked,
       contractors: cpN,
       month,
-      reports: repN,
+      reports: {
+        open: plateN.due,
+        month: plateN.dueMonth,
+        later: plateN.dueLater,
+        overdue: plateN.over,
+      },
       tasks: taskN.n,
       files: {
         count: kinds.reduce((n, k) => n + k.count, 0),
@@ -663,9 +560,19 @@ export async function adminOrgCard(
       telegram: tgN.n,
       logins30: loginN.n,
     },
-    staff,
-    contractors: cps,
-    reports: { byMonth: byMonth.map((r) => ({ ...r, month: r.month as YearMonth })), overdue },
+    reports: {
+      plates: {
+        due: plateN.due,
+        work: plateN.work,
+        done: plateN.done,
+        over: plateN.over,
+        all: plateN.all,
+      },
+      contractors: cpN.regular + cpN.oneoff + cpN.paused,
+      assigned: assignedN.n,
+      taxpay,
+      confirm: policy?.reportConfirm ?? false,
+    },
     money: {
       feeMonth,
       feeYear,

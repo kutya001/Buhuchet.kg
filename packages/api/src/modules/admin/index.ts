@@ -121,6 +121,34 @@ import {
   userValuesRoute,
 } from './users';
 import { orgCardHandler, orgCardRoute, orgLookupHandler, orgLookupRoute } from './org-card';
+import {
+  orgContractorExportHandler,
+  orgContractorExportRoute,
+  orgContractorsHandler,
+  orgContractorsRoute,
+  orgContractorValuesHandler,
+  orgContractorValuesRoute,
+  orgRepMonthExportHandler,
+  orgRepMonthExportRoute,
+  orgRepMonthsHandler,
+  orgRepMonthsRoute,
+  orgRepMonthValuesHandler,
+  orgRepMonthValuesRoute,
+  orgReportExportHandler,
+  orgReportExportRoute,
+  orgReportHandler,
+  orgReportRoute,
+  orgReportsHandler,
+  orgReportsRoute,
+  orgReportValuesHandler,
+  orgReportValuesRoute,
+  orgStaffExportHandler,
+  orgStaffExportRoute,
+  orgStaffHandler,
+  orgStaffRoute,
+  orgStaffValuesHandler,
+  orgStaffValuesRoute,
+} from './org-lists';
 import { ownerSetupHandler, ownerSetupRoute } from './owner-setup';
 import {
   apiMethodCardHandler,
@@ -177,6 +205,20 @@ export function adminModule(deps: ApiDeps) {
       .openapi(orgActivityExportRoute, orgActivityExportHandler(deps))
       .openapi(orgLookupRoute, orgLookupHandler(deps))
       .openapi(orgCardRoute, orgCardHandler(deps))
+      // Списки карточки организации: адреса «values» и «export» — раньше окна отчёта `reports/{reportId}`.
+      .openapi(orgStaffRoute, orgStaffHandler(deps))
+      .openapi(orgStaffValuesRoute, orgStaffValuesHandler(deps))
+      .openapi(orgStaffExportRoute, orgStaffExportHandler(deps))
+      .openapi(orgContractorsRoute, orgContractorsHandler(deps))
+      .openapi(orgContractorValuesRoute, orgContractorValuesHandler(deps))
+      .openapi(orgContractorExportRoute, orgContractorExportHandler(deps))
+      .openapi(orgReportsRoute, orgReportsHandler(deps))
+      .openapi(orgReportValuesRoute, orgReportValuesHandler(deps))
+      .openapi(orgReportExportRoute, orgReportExportHandler(deps))
+      .openapi(orgRepMonthsRoute, orgRepMonthsHandler(deps))
+      .openapi(orgRepMonthValuesRoute, orgRepMonthValuesHandler(deps))
+      .openapi(orgRepMonthExportRoute, orgRepMonthExportHandler(deps))
+      .openapi(orgReportRoute, orgReportHandler(deps))
       .openapi(ownerSetupRoute, ownerSetupHandler(deps))
       .openapi(techDocsMetaRoute, techDocsMetaHandler(deps))
       .openapi(apiMethodValuesRoute, apiMethodValuesHandler(deps))

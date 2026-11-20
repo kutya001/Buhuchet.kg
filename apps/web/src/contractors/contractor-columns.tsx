@@ -54,7 +54,9 @@ export const CONTRACTOR_AUDIT: GridAudit<ContractorRow> = {
  * Подсветка строки (прототип rowClass): без ответственного — оранжевым (ТЗ «Закрепление»: контрагент
  * без ответственного подсвечивается), архивный и приостановленный — приглушённо.
  */
-export function contractorTone(r: ContractorRow): GridRowTone | undefined {
+export function contractorTone(
+  r: Pick<ContractorRow, 'responsible' | 'serviceStatus'>,
+): GridRowTone | undefined {
   if (!r.responsible && r.serviceStatus !== 'archived') return 'warn';
   return r.serviceStatus === 'active' ? undefined : 'muted';
 }
@@ -114,8 +116,14 @@ export function SocfundPill({ t, s }: { t: Translate; s: NonNullable<ContractorR
   );
 }
 
-/** Компактная шкала обслуживания (прототип `scaleMini('svc', …)`). */
-function ServiceCell({ t, r }: { t: Translate; r: ContractorRow }) {
+/** Ячейка «Статус обслуживания»: компактная шкала (прототип `scaleMini('svc', …)`) с тем, кто и когда поставил статус. */
+export function ServiceCell({
+  t,
+  r,
+}: {
+  t: Translate;
+  r: Pick<ContractorRow, 'serviceStatus' | 'serviceSince'>;
+}) {
   const view = miniView(t, {
     scale: 'service',
     status: r.serviceStatus,
