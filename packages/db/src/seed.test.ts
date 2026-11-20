@@ -76,6 +76,12 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
     // он лежит здесь, пока его не перенесут в продукт (docs/deviations.md п. Т-14).
     const keys = (await t.admin.db.select().from(platformReference)).map((r) => r.key);
     for (const key of TABLE_SECTIONS) expect(keys).not.toContain(key);
+    // Подписки и «Витрина данных» (прототип v151, v155): реквизиты платформы и SQL шаблонов в общий
+    // справочник, который читает любая организация, не попадают (docs/deviations.md п. О-86).
+    for (const key of ['subKinds', 'subPrices', 'dmTemplates']) {
+      expect(Object.keys(refDB), key).toContain(key);
+      expect(keys, key).not.toContain(key);
+    }
     const [dictionaries] = await t.admin.db
       .select()
       .from(platformReference)

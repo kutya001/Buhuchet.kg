@@ -228,7 +228,8 @@ test.describe('Админка: справочники платформы — р�
       );
     } finally {
       const now = await template();
-      await page.request.put(`${P}/roletpl/acc`, {
+      // Шаблон общий для следующих тестов: возврат, который молча не прошёл, сбил бы их счёт.
+      const restored = await page.request.put(`${P}/roletpl/acc`, {
         headers: { origin },
         data: {
           name: before.name,
@@ -237,6 +238,7 @@ test.describe('Админка: справочники платформы — р�
           version: now.version,
         },
       });
+      expect(restored.ok()).toBe(true);
     }
   });
 
