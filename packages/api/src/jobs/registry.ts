@@ -12,6 +12,7 @@ import { lt } from 'drizzle-orm';
 import type { Job } from '../deps';
 import { purgeLeadDocsJob } from '../modules/admin/lead-purge';
 import { cleanupPendingFiles } from '../modules/files/cleanup';
+import { eraseDeletedFilesJob } from '../modules/files/erase-deleted';
 import { purgeSentFilesJob } from '../modules/files/sent-purge';
 import { storageRetryJob } from '../modules/files/storage-retry';
 import { syncServiceStatusesJob } from '../modules/contractors/job';
@@ -124,6 +125,7 @@ export const jobs: readonly Job[] = [
   cleanupPendingFilesJob,
   purgeSentFilesJob,
   storageRetryJob,
+  eraseDeletedFilesJob,
   duesRecalcJob,
   cleanupVideoUploadsJob,
   purgeLeadDocsJob,

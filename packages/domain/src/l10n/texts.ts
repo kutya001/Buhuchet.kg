@@ -21,6 +21,7 @@ import { FINANCE_TEXTS } from './finance-texts';
 import { FILES_TEXTS } from './files-texts';
 import { GRID_TEXTS } from './grid-texts';
 import { HOME_TEXTS } from './home-texts';
+import { ADMIN_FILES_TEXTS } from './admin-files-texts';
 import { KB_ADMIN_TEXTS } from './kb-admin-texts';
 import { KB_TEXTS } from './kb-texts';
 import { KB_VIDEO_TEXTS } from './kb-video-texts';
@@ -130,6 +131,7 @@ export const UI_TEXTS = {
   ...ADMIN_TECHDOCS_TEXTS,
   ...ADMIN_L10N_TEXTS,
   ...ADMIN_TEXTS,
+  ...ADMIN_FILES_TEXTS,
   ...LEADS_TEXTS,
   ...DICTS_TEXTS,
   ...MONEY_TEXTS,

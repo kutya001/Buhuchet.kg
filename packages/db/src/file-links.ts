@@ -173,12 +173,22 @@ export async function unlinkFile(tx: Tx, target: FileLinkTarget, fileId: string)
  * Файл удаляется «отовсюду» (прототип `fDelDlg`): все его ссылки — в той же транзакции; ответ — записи,
  * в историю которых вызывающий пишет «Удалён файл».
  */
-export async function dropFileLinks(tx: Tx, fileId: string): Promise<FileLinkTarget[]> {
-  const rows = await tx
-    .delete(fileLinks)
-    .where(eq(fileLinks.fileId, fileId))
-    .returning({ kind: fileLinks.sourceKind, id: fileLinks.sourceId });
-  return rows.flatMap((r) => (isLinkKind(r.kind) ? [{ kind: r.kind, id: r.id }] : []));
+export async function dropFileLinks(
+  tx: Tx,
+  fileId: string,
+): Promise<(FileLinkTarget & { createdBy: string; createdAt: Date })[]> {
+  const rows = await tx.delete(fileLinks).where(eq(fileLinks.fileId, fileId)).returning({
+    kind: fileLinks.sourceKind,
+    id: fileLinks.sourceId,
+    createdBy: fileLinks.createdBy,
+    createdAt: fileLinks.createdAt,
+  });
+  // Кто и когда прикрепил — для «Вернуть» удалённого файла (пакет 20.11.2026, `file_trash.links`).
+  return rows.flatMap((r) =>
+    isLinkKind(r.kind)
+      ? [{ kind: r.kind, id: r.id, createdBy: r.createdBy, createdAt: r.createdAt }]
+      : [],
+  );
 }
 
 /**

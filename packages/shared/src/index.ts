@@ -29,6 +29,7 @@ export * from './files-sent';
 export * from './platform-dicts';
 export * from './admin';
 export * from './admin-techdocs';
+export * from './admin-files';
 export * from './dicts';
 export * from './money';
 export * from './fees';

@@ -12,6 +12,8 @@ export * from './files';
 export * from './file-links';
 export * from './sent-files';
 export * from './storage-retries';
+export * from './file-trash';
+export * from './admin-storage';
 export * from './subscriptions';
 export * from './auth';
 export * from './telegram';

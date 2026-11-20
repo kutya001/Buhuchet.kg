@@ -46,6 +46,10 @@ export const ALERTS_TEXTS = {
     ru: '⚠️ Хранилище: больше суток не удаётся удалить файлы с публичных загрузок (заявки с лендинга, файлы от контрагентов) — задача повторяет каждый час. Таких файлов: {n}.\nПроверьте доступ к хранилищу S3 и журнал сайта.',
     section: S,
   },
+  'alert.file_trash_erase': {
+    ru: '⚠️ Хранилище: больше суток не удаётся стереть удалённые файлы — задача «Файлы: стирание удалённых» повторяет каждый час. Таких файлов: {n}.\nПроверьте доступ к хранилищу S3; список — Админка → «Файлы» → «Проверка хранилища».',
+    section: S,
+  },
   'alert.job.system_cleanup_scheduler_runs': { ru: 'Очистка журналов', section: S },
   'alert.job.auth_cleanup_login_attempts': { ru: 'Очистка счёта неверных паролей', section: S },
   'alert.job.auth_watch_login_locks': { ru: 'Слежение за блокировками входа', section: S },
@@ -80,6 +84,7 @@ export const ALERTS_TEXTS = {
     ru: 'Удаление непринятых файлов от контрагентов через 30 дней',
     section: S,
   },
+  'alert.job.files_erase_deleted': { ru: 'Файлы: стирание удалённых', section: S },
   'alert.job.kb_cleanup_video_uploads': {
     ru: 'Очистка брошенных загрузок видео',
     section: S,

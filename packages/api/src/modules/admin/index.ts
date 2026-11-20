@@ -122,6 +122,28 @@ import {
 } from './users';
 import { orgCardHandler, orgCardRoute, orgLookupHandler, orgLookupRoute } from './org-card';
 import {
+  extraDeleteHandler,
+  extraDeleteRoute,
+  orgFilesHandler,
+  orgFilesRoute,
+  storageCheckHandler,
+  storageCheckRoute,
+  storageFileExportHandler,
+  storageFileExportRoute,
+  storageFileLinkHandler,
+  storageFileLinkRoute,
+  storageFilesHandler,
+  storageFilesRoute,
+  storageFileValuesHandler,
+  storageFileValuesRoute,
+  storageSummaryHandler,
+  storageSummaryRoute,
+  trashListHandler,
+  trashListRoute,
+  trashRestoreHandler,
+  trashRestoreRoute,
+} from './files';
+import {
   orgContractorExportHandler,
   orgContractorExportRoute,
   orgContractorsHandler,
@@ -219,6 +241,17 @@ export function adminModule(deps: ApiDeps) {
       .openapi(orgRepMonthValuesRoute, orgRepMonthValuesHandler(deps))
       .openapi(orgRepMonthExportRoute, orgRepMonthExportHandler(deps))
       .openapi(orgReportRoute, orgReportHandler(deps))
+      .openapi(orgFilesRoute, orgFilesHandler(deps))
+      // «Файлы» (доработки 20.11.2026, пакет 2, блоки 3–5): адреса без номера — раньше ссылки на файл.
+      .openapi(storageSummaryRoute, storageSummaryHandler(deps))
+      .openapi(storageFilesRoute, storageFilesHandler(deps))
+      .openapi(storageFileValuesRoute, storageFileValuesHandler(deps))
+      .openapi(storageFileExportRoute, storageFileExportHandler(deps))
+      .openapi(trashListRoute, trashListHandler(deps))
+      .openapi(trashRestoreRoute, trashRestoreHandler(deps))
+      .openapi(storageCheckRoute, storageCheckHandler(deps))
+      .openapi(extraDeleteRoute, extraDeleteHandler(deps))
+      .openapi(storageFileLinkRoute, storageFileLinkHandler(deps))
       .openapi(ownerSetupRoute, ownerSetupHandler(deps))
       .openapi(techDocsMetaRoute, techDocsMetaHandler(deps))
       .openapi(apiMethodValuesRoute, apiMethodValuesHandler(deps))
