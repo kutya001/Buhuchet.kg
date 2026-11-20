@@ -6,6 +6,10 @@
 -- Нужен ли ключ хранилища живой записи: файл (не удалённый), присланный контрагентом и не принятый (и его
 -- загрузка со страницы, пока она идёт), чек подписки, документ и загрузка заявки, видео, обложка,
 -- загрузка видео, логотип. Такой объект задача стирания не трогает, а «Удалить» лишнего — не ставит.
+-- Был ли файл файлом контрагента: контрагента удалили — ключ контрагента стал пустым (ON DELETE SET
+-- NULL), и «Вернуть» такой файл не возвращает, иначе он вернулся бы общим файлом организации.
+ALTER TABLE "file_trash" ADD COLUMN "contractor_bound" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "file_trash" ADD CONSTRAINT "file_trash_contractor_check" CHECK ("file_trash"."contractor_bound" or "file_trash"."contractor_id" is null);--> statement-breakpoint
 CREATE FUNCTION app.storage_key_in_use(p_key text)
   RETURNS boolean
   LANGUAGE sql STABLE SECURITY DEFINER
@@ -110,6 +114,10 @@ CREATE FUNCTION app.file_trash_restore(p_id uuid, p_links jsonb)
     IF t.why = 'del' THEN
       IF app.current_org_id() IS NULL THEN
         RETURN 'missing';
+      END IF;
+      -- Файл контрагента, которого уже удалили: вернуть его общим файлом организации нельзя.
+      IF t.contractor_bound AND t.contractor_id IS NULL THEN
+        RETURN 'record';
       END IF;
       UPDATE public.files f
         SET state = 'ready', deleted_at = NULL, deleted_by = NULL, version = f.version + 1,

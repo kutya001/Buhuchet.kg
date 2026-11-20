@@ -29,6 +29,7 @@ import {
 } from '../../testing';
 import { createApp } from '../../app';
 import { addSentFiles, SentFilesRefused } from './sent-add';
+import { eraseDeletedFiles } from './erase-deleted';
 import { purgeSentFiles } from './sent-purge';
 import { retryStorageDeletes } from './storage-retry';
 
@@ -1340,6 +1341,23 @@ describe.skipIf(!databaseAvailable())(
       expect(left).toEqual(expect.arrayContaining([young, kept]));
       expect(left).not.toContain(oldNew);
       expect(left).not.toContain(oldRej);
+      // Непринятый файл, удалённый через 30 дней, ещё сутки ждёт стирания (доработки 20.11.2026, пакет 2,
+      // блок 5, пункт 3): вернуть его нельзя, из хранилища его сотрёт «Файлы: стирание удалённых».
+      expect(storage.files.has(keys.oldNew!)).toBe(true);
+      expect(storage.files.has(keys.oldRej!)).toBe(true);
+      const waiting = await f.t.admin.db
+        .select()
+        .from(schema.fileTrash)
+        .where(inArray(schema.fileTrash.storageKey, [keys.oldNew!, keys.oldRej!]));
+      expect(waiting.map((w) => [w.why, w.source, w.name]).sort()).toEqual([
+        ['auto', 'sent', 'Отклонённый.pdf'],
+        ['auto', 'sent', 'Старый.pdf'],
+      ]);
+      await f.t.admin.db
+        .update(schema.fileTrash)
+        .set({ deletedAt: sql`now() - interval '25 hours'`, eraseAt: sql`now() - interval '1 hour'` })
+        .where(inArray(schema.fileTrash.storageKey, [keys.oldNew!, keys.oldRej!]));
+      expect(await eraseDeletedFiles(f.deps)).toBe(2);
       expect(storage.files.has(keys.oldNew!)).toBe(false);
       expect(storage.files.has(keys.oldRej!)).toBe(false);
       const purged = (await history(cpAcc.id)).filter((h) => h.action === 'sent_file_purge');

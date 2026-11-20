@@ -438,6 +438,7 @@ function restoreOutcome(outcome: FileTrashRestoreOutcome): void {
   if (outcome === 'denied') apiFail(403, 'forbidden', 'Нет права на это действие');
   if (outcome === 'missing') apiFail(404, 'not_found', 'Файл не найден');
   if (outcome === 'kind') back('file_back_rep');
+  if (outcome === 'record') back('file_back_record');
   back('file_back_gone');
 }
 
@@ -490,7 +491,11 @@ export function trashRestoreHandler(deps: ApiDeps): RouteHandler<typeof trashRes
       if (!trash!.live || !trash!.fileId) back('file_back_gone');
       const file = await getFile(tx, trash!.fileId!, { lock: true });
       if (!file || file.state !== 'deleted') back('file_back_gone');
-      // Контрагент файла удалён (ключ файла стал пустым) — вернуть некуда.
+      // Контрагент файла удалён (его номер у файла и строки стал пустым) или файл уже не его — вернуть
+      // некуда: общим файлом организации он не возвращается.
+      if (trash!.contractorBound && (trash!.contractorId === null || file!.contractorId === null)) {
+        back('file_back_record');
+      }
       if (trash!.contractorId !== null && file!.contractorId !== trash!.contractorId) {
         back('file_back_record');
       }

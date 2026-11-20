@@ -50,6 +50,7 @@ export async function insertFileTrash(tx: Tx, rows: readonly FileTrashInsert[]):
       fileId: r.fileId ?? null,
       storageKey: r.storageKey,
       contractorId: r.contractorId,
+      contractorBound: r.contractorId !== null,
       name: r.name.slice(0, 255) || '—',
       sizeBytes: Math.max(0, Math.round(r.sizeBytes)),
       source: r.source ? r.source.slice(0, 100) : null,
@@ -172,6 +173,8 @@ export async function fileTrashForRestore(
   why: FileTrashReason;
   fileId: string | null;
   contractorId: string | null;
+  /** Был файлом контрагента (контрагента с тех пор могли удалить). */
+  contractorBound: boolean;
   links: FileTrashLink[];
   live: boolean;
 } | null> {
@@ -180,6 +183,7 @@ export async function fileTrashForRestore(
       why: fileTrash.why,
       fileId: fileTrash.fileId,
       contractorId: fileTrash.contractorId,
+      contractorBound: fileTrash.contractorBound,
       links: fileTrash.links,
       live: sql<boolean>`${fileTrash.erasedAt} is null and ${fileTrash.restoredAt} is null and ${fileTrash.eraseAt} > now()`,
     })
@@ -191,7 +195,7 @@ export async function fileTrashForRestore(
   return { ...row, links };
 }
 
-export type FileTrashRestoreOutcome = 'ok' | 'denied' | 'missing' | 'gone' | 'kind';
+export type FileTrashRestoreOutcome = 'ok' | 'denied' | 'missing' | 'gone' | 'kind' | 'record';
 
 /**
  * «Вернуть» (функция базы `app.file_trash_restore`): удалённый файл — в контексте его организации от
