@@ -9,6 +9,7 @@ export * from './org/profile';
 export * from './org/legal-form';
 export * from './org/modules';
 export * from './subscriptions/subscriptions';
+export * from './subscriptions/calc';
 export * from './onboarding/onboarding';
 export * from './home/home';
 export * from './home/analytics';
