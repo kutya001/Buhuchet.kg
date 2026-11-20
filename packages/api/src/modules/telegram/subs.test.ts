@@ -135,7 +135,11 @@ describe.skipIf(!databaseAvailable())(
         .from(schema.users)
         .where(eq(schema.users.login, 'platform-admin'));
       adminId = admin!.id;
-      // У А — подписка на месяц до 25.11 (за 5 дней — «истекает»); у Б подписки пока нет.
+      // У А — подписка на месяц до 25.11 (за 5 дней — «истекает»); у Б подписки пока нет: подписки
+      // тестовых организаций (`TEST_SUBSCRIPTION`, до 2099 года) тесту не нужны.
+      await f.t.admin.db
+        .delete(orgSubscriptions)
+        .where(inArray(orgSubscriptions.orgId, [f.a.orgId, f.b.orgId]));
       await f.t.admin.db.insert(orgSubscriptions).values({
         orgId: f.a.orgId,
         planId: 'm1',

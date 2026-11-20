@@ -38,6 +38,7 @@ import {
   telegramUpdate,
   TEST_ORIGIN,
   TEST_PASSWORD,
+  TEST_SUBSCRIPTION,
 } from '../../../testing';
 import { sendBotMessage } from '../bot';
 import { contractorDebtJob } from './debt';
@@ -1303,8 +1304,10 @@ describe.skipIf(!databaseAvailable())(
         expect(sentTo(CLIENT_1)).toHaveLength(before + 1);
         expect(await answers()).toHaveLength(1);
       } finally {
+        // Подписка тестовой организации — как была: «Нет подписки» тоже закрывает доступ (п. О-89).
         await f.t.admin.db
-          .delete(schema.orgSubscriptions)
+          .update(schema.orgSubscriptions)
+          .set({ paidUntil: TEST_SUBSCRIPTION.paidUntil })
           .where(eq(schema.orgSubscriptions.orgId, f.a.orgId));
       }
     });
@@ -1687,8 +1690,10 @@ describe.skipIf(!databaseAvailable())(
         expect(sentTo(CLIENT_B).at(-1)!.text).toBe(text('tgCpAskSent'));
         expect(await history(cpB)).toHaveLength(before.length + 1);
       } finally {
+        // Подписка тестовой организации — как была: «Нет подписки» тоже закрывает доступ (п. О-89).
         await f.t.admin.db
-          .delete(schema.orgSubscriptions)
+          .update(schema.orgSubscriptions)
+          .set({ paidUntil: TEST_SUBSCRIPTION.paidUntil })
           .where(eq(schema.orgSubscriptions.orgId, f.b.orgId));
         await autoPay(f.b.orgId, false);
       }
@@ -1875,8 +1880,10 @@ describe.skipIf(!databaseAvailable())(
           await runDebt();
           expect(tg.sent.map((m) => m.chatId)).toEqual([CLIENT_1, CLIENT_2]);
         } finally {
+          // Подписка тестовой организации — как была: «Нет подписки» тоже закрывает доступ (п. О-89).
           await f.t.admin.db
-            .delete(schema.orgSubscriptions)
+            .update(schema.orgSubscriptions)
+            .set({ paidUntil: TEST_SUBSCRIPTION.paidUntil })
             .where(eq(schema.orgSubscriptions.orgId, f.a.orgId));
           await wipe();
         }

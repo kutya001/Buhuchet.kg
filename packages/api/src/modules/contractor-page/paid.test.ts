@@ -34,6 +34,7 @@ import {
   telegramUpdate,
   TEST_ORIGIN,
   TEST_PASSWORD,
+  TEST_SUBSCRIPTION,
 } from '../../testing';
 import { retryStorageDeletes } from '../files/storage-retry';
 
@@ -1105,6 +1106,13 @@ describe.skipIf(!databaseAvailable())(
         const opened = (await history(cpA, 'page_open')).length;
         await read(g.cookie);
         expect(await history(cpA, 'page_open')).toHaveLength(opened);
+        // «Нет подписки» закрывает страницу так же (общая сборка этапа 1, п. О-89).
+        await f.t.admin.db
+          .delete(schema.orgSubscriptions)
+          .where(eq(schema.orgSubscriptions.orgId, f.a.orgId));
+        expect(PublicPage.parse(await (await read(g.cookie)).json())).toEqual({
+          state: 'org_closed',
+        });
         // Оплатили — страница снова открыта тем же браузером, ссылка работает.
         await subscription('2026-12-31');
         expect((await publicPage('org-a', INN_A, g.cookie)).contractor.name).toBe(CP_A);
@@ -1116,8 +1124,10 @@ describe.skipIf(!databaseAvailable())(
           .where(eq(schema.contractorTelegramLinks.chatId, NEWCHAT));
       } finally {
         await f.t.admin.db.delete(schema.files).where(eq(schema.files.id, fileId));
+        // Подписка тестовой организации — как была: «Нет подписки» тоже закрывает доступ (п. О-89).
         await f.t.admin.db
-          .delete(schema.orgSubscriptions)
+          .update(schema.orgSubscriptions)
+          .set({ paidUntil: TEST_SUBSCRIPTION.paidUntil })
           .where(eq(schema.orgSubscriptions.orgId, f.a.orgId));
       }
     });

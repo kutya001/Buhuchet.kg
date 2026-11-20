@@ -31,6 +31,7 @@ import {
   telegramUpdate,
   TEST_ORIGIN,
   TEST_PASSWORD,
+  TEST_SUBSCRIPTION,
 } from '../../../testing';
 import { addSentFiles } from '../../files/sent-add';
 
@@ -910,8 +911,10 @@ describe.skipIf(!databaseAvailable())(
         expect(lastText(CLIENT_2)).toBe(closedText);
         expect((await sentFiles(cpA)).map((x) => x.name)).toEqual(['Скан.pdf']);
       } finally {
+        // Подписка тестовой организации — как была: «Нет подписки» тоже закрывает доступ (п. О-89).
         await f.t.admin.db
-          .delete(schema.orgSubscriptions)
+          .update(schema.orgSubscriptions)
+          .set({ paidUntil: TEST_SUBSCRIPTION.paidUntil })
           .where(eq(schema.orgSubscriptions.orgId, f.a.orgId));
       }
     });

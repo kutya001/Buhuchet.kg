@@ -30,6 +30,7 @@ import {
   telegramUpdate,
   TEST_ORIGIN,
   TEST_PASSWORD,
+  TEST_SUBSCRIPTION,
 } from '../../testing';
 
 type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
@@ -813,8 +814,10 @@ describe.skipIf(!databaseAvailable())('Telegram контрагента: мето
         expect(await statusOf(id)).toBe('on');
         expect(sentTo(CLIENT_1)).toEqual([text('tgCpOn', { контрагент: cpAcc.name })]);
       } finally {
+        // Подписка тестовой организации — как была: «Нет подписки» тоже закрывает доступ (п. О-89).
         await f.t.admin.db
-          .delete(schema.orgSubscriptions)
+          .update(schema.orgSubscriptions)
+          .set({ paidUntil: TEST_SUBSCRIPTION.paidUntil })
           .where(eq(schema.orgSubscriptions.orgId, f.a.orgId));
         await grantPage(false);
         await wipe();
