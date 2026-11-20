@@ -434,6 +434,9 @@ describe('подписка в оболочке', () => {
     const staff = withSub(false, sub('none', true));
     expect(subLock(staff)).toBe('staff');
     expect(lockedMe(staff)).toBe(staff);
+    // Сотруднику сервер подписку не отдаёт — только «доступ закрыт».
+    expect(subLock({ ...withSub(false, null), subClosed: true })).toBe('staff');
+    expect(subLock({ ...withSub(false, null), subClosed: false })).toBeNull();
   });
 
   it('открытый доступ и администратор — без замка', () => {

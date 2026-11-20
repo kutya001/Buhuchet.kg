@@ -529,6 +529,8 @@ export const fileTrash = pgTable(
       .on(t.eraseAt)
       .where(sql`${t.erasedAt} is null and ${t.restoredAt} is null`),
     index('file_trash_org_idx').on(t.orgId, t.deletedAt),
+    // «Проверка хранилища» ищет по ключу и стёртые строки (миграция 0168): строки не удаляются.
+    index('file_trash_key_idx').on(t.storageKey),
     orgIsolation('file_trash_isolation', t.orgId),
     pgPolicy('file_trash_admin', {
       as: 'permissive',

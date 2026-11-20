@@ -95,7 +95,9 @@ describe.skipIf(!databaseAvailable())('«Подписка» владельца: 
     // У А — месячная подписка на 10 мест до конца года, первый месяц уже оплачен; у Б подписки нет
     // (подписку тестовых организаций из `createStaffFixture` убираем: тесту нужны свои условия).
     const both = [f.a.orgId, f.b.orgId];
-    await f.t.admin.db.delete(subscriptionPayments).where(inArray(subscriptionPayments.orgId, both));
+    await f.t.admin.db
+      .delete(subscriptionPayments)
+      .where(inArray(subscriptionPayments.orgId, both));
     await f.t.admin.db.delete(orgSubscriptions).where(inArray(orgSubscriptions.orgId, both));
     await f.t.admin.db.insert(orgSubscriptions).values({
       orgId: f.a.orgId,
@@ -139,14 +141,15 @@ describe.skipIf(!databaseAvailable())('«Подписка» владельца: 
     expect(b.renewTotal).toBeNull();
   });
 
-  it('«кто я»: статус подписки и «Оплачено до» у сотрудника, у администратора платформы — null', async () => {
+  it('«кто я»: статус подписки и «Оплачено до» — владельцу, сотруднику — только «доступ закрыт», у администратора платформы — null', async () => {
     const meOf = async (cookie: string) =>
       MeResponse.parse(await (await call('GET', '/api/auth/me', cookie)).json());
-    expect((await meOf(chief)).subscription).toEqual({
+    expect((await meOf(owner)).subscription).toEqual({
       status: (await view()).status,
       paidUntil: '2026-12-31',
       closed: false,
     });
+    expect(await meOf(chief)).toMatchObject({ subscription: null, subClosed: false });
     expect((await meOf(ownerB)).subscription).toMatchObject({ paidUntil: null });
     expect((await meOf(admin)).subscription).toBeNull();
   });
@@ -271,14 +274,20 @@ describe.skipIf(!databaseAvailable())('«Подписка» владельца: 
     res = await start(owner, renew('m1', 20));
     expect(res.status).toBe(409);
     expect((await apiErr(res)).code).toBe('sub_pending');
-    // Повтор «закончить» тем же номером не кладёт вторую заявку.
+    // Повтор «закончить» тем же номером не кладёт вторую заявку и не подменяет чек: другой файл того
+    // же размера по прежней ссылке загрузки до записанного чека не доходит.
+    const other = new Uint8Array(PDF);
+    other[PDF.length - 2] = 0x21;
+    await upload(t, other);
     res = await call('POST', '/api/org/subscription/payments/complete', owner, {
       id: paid,
       pay: renew('m3', 20, 1),
       file: { name: 'Чек.pdf', size: PDF.length },
     });
     expect(res.status).toBe(409);
+    expect((await apiErr(res)).code).toBe('sub_pending');
     expect(keysOf(f.a.orgId)).toEqual([`org/${f.a.orgId}/subs/${paid}`]);
+    expect([...(await storage.get(`org/${f.a.orgId}/subs/${paid}`))!]).toEqual([...PDF]);
   });
 
   it('чек открывается своей ссылкой: только своей организации, просмотр — с типом из проверки', async () => {
@@ -358,6 +367,33 @@ describe.skipIf(!databaseAvailable())('«Подписка» владельца: 
     });
     expect(res.status).toBe(400);
     expect([...storage.files.get(`org/${f.a.orgId}/subs/${paid}`)!.body]).toEqual([...PNG]);
+    // Новое имя хранится с окончанием типа по содержимому, как у первого чека: «Чек.bat» с PDF — «Чек.bat.pdf».
+    res = await call('POST', `/api/org/subscription/payments/${paid}/receipt`, owner, {
+      file: { name: 'Чек.bat', size: PDF.length },
+      version: after!.version,
+    });
+    expect(res.status).toBe(201);
+    const bat = SubscriptionUploadTicket.parse(await res.json());
+    await upload(bat, PDF);
+    res = await call('POST', `/api/org/subscription/payments/${paid}/receipt/complete`, owner, {
+      uploadId: bat.id,
+      file: { name: 'Чек.bat', size: PDF.length },
+      version: after!.version,
+    });
+    expect(res.status).toBe(200);
+    const [renamed] = (await view()).payments;
+    expect(renamed!.receipt).toEqual({
+      name: 'Чек.bat.pdf',
+      type: 'application/pdf',
+      bytes: PDF.length,
+    });
+    // Порядок строк истории не задан: ищем среди всех замен.
+    const replaced = await historyOf(f.a.orgId, 'sub_receipt_replace');
+    expect(replaced.flatMap((h) => h.changes as unknown[])).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ field: 'receipt', from: 'Фото чека.png', to: 'Чек.bat.pdf' }),
+      ]),
+    );
     // Администратор подтвердил — заменить нельзя.
     await withOrgContext(f.t.app.db, { orgId: f.a.orgId, userId: adminId }, (tx) =>
       tx
@@ -370,9 +406,38 @@ describe.skipIf(!databaseAvailable())('«Подписка» владельца: 
         })
         .where(eq(subscriptionPayments.id, paid)),
     );
-    res = await begin(after!.version);
+    res = await begin(renamed!.version);
     expect(res.status).toBe(409);
     expect((await apiErr(res)).code).toBe('sub_pay_decided');
+  });
+
+  it('имя чека: знаки смены направления письма — отказ до загрузки, «Чек.bat» с PDF внутри хранится как «Чек.bat.pdf»', async () => {
+    let res = await start(ownerB, renew('m1', 10), {
+      name: 'Счёт\u202efdp.bat',
+      size: PDF.length,
+    });
+    expect(res.status).toBe(400);
+    expect((await apiErr(res)).code).toBe('sub_receipt_name');
+    res = await start(ownerB, renew('m1', 10), { name: 'Чек.bat', size: PDF.length });
+    expect(res.status).toBe(201);
+    const t = SubscriptionUploadTicket.parse(await res.json());
+    await upload(t, PDF);
+    res = await call('POST', '/api/org/subscription/payments/complete', ownerB, {
+      id: t.id,
+      pay: renew('m1', 10),
+      file: { name: 'Чек.bat', size: PDF.length },
+    });
+    expect(res.status).toBe(201);
+    const v = await view(ownerB);
+    expect(v.payments.find((p) => p.id === t.id)?.receipt).toEqual({
+      name: 'Чек.bat.pdf',
+      type: 'application/pdf',
+      bytes: PDF.length,
+    });
+    // Следующим тестам у Б нужна организация без заявки на проверке.
+    await f.t.admin.db
+      .delete(subscriptionPayments)
+      .where(eq(subscriptionPayments.orgId, f.b.orgId));
   });
 
   it('не больше 10 попыток отправить чек в час на организацию', async () => {

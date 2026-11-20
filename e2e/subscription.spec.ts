@@ -67,6 +67,7 @@ test.describe('Доработки 20.11. Подписка владельца', (
     expect(before.sub).toMatchObject({ free: true });
 
     await page.goto('/app/org/sub');
+    await expect(page.getByRole('tab', { name: texts['tab.org.sub'], exact: true })).toBeVisible();
     const screen = page.locator('[data-sub-screen="own"]');
     await expect(screen.locator('[data-sub-top]')).toContainText(
       texts['sub.kind.free']!.replace('{date}', ruDate(before.sub!.paidUntil)),
@@ -97,8 +98,12 @@ test.describe('Доработки 20.11. Подписка владельца', (
         new URL(r.url()).pathname === '/api/org/subscription/payments/complete',
     );
     await pay.locator('[data-sub-pay-send]').click();
-    expect((await sent).status()).toBe(201);
+    const sentRes = await sent;
+    expect(sentRes.status()).toBe(201);
     await expect(pay).toBeHidden();
+    // Уведомление после отправки: бесплатный период идёт — доступ открыт, пока чек проверяют.
+    expect(((await sentRes.json()) as { opensAccess: boolean }).opensAccess).toBe(true);
+    await expect(page.getByText(texts['sub.pay.sent_open']!)).toBeVisible();
 
     // Чек на проверке: полоса с «Заменить файл чека», в истории — «Ждёт подтверждения».
     const after = await subView(page.request);
@@ -172,10 +177,14 @@ test.describe('Доработки 20.11. Подписка владельца', (
     expect(((await refused.json()) as { error: { code: string } }).error.code).toBe(
       'sub_owner_only',
     );
+    // Вкладки «Подписка» у сотрудника нет: адрес вкладки ведёт на первую вкладку модуля.
+    const staffTexts = await dictionary(page.request);
     await page.goto('/app/org/sub');
-    await expect(page.locator('[data-org-tabs], [role="tablist"]').first()).toBeVisible();
+    await expect(page.getByRole('tab', { selected: true })).toBeVisible();
+    await expect(
+      page.getByRole('tab', { name: staffTexts['tab.org.sub'], exact: true }),
+    ).toHaveCount(0);
     await expect(page.locator('[data-sub-screen]')).toHaveCount(0);
-    await expect(page.locator('[data-sub-renew]')).toHaveCount(0);
   });
 
   test('(блок 2, пункт 5) загрузку не приняли — «Память организации заполнена»: «К файлам», у владельца «Купить память» открывает окно «Купить память»', async ({
@@ -220,10 +229,12 @@ test.describe('Доработки 20.11. Подписка владельца', (
     await expect(full.locator('[data-mem-full-files]')).toBeVisible();
     await full.locator('[data-mem-full-buy]').click();
     await expect(page).toHaveURL(/\/app\/org\/sub/);
-    await expect(
-      page
-        .getByRole('dialog', { name: texts['sub.pay.title.mem'] })
-        .locator('[data-sub-pay="mem"]'),
-    ).toBeVisible();
+    const mem = page
+      .getByRole('dialog', { name: texts['sub.pay.title.mem'] })
+      .locator('[data-sub-pay="mem"]');
+    await expect(mem).toBeVisible();
+    // Окно «Купить память» — с полем «Память сверх» и расчётом доплаты.
+    await expect(mem.getByLabel(texts['sub.f.gb']!)).toBeVisible();
+    await expect(mem.locator('[data-sub-calc-total]')).not.toBeEmpty();
   });
 });

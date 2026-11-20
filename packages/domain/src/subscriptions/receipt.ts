@@ -1,4 +1,5 @@
 import { diffDays, type IsoDate } from '../common/dates';
+import { fileUploadProblem } from '../files/files';
 import {
   SUBSCRIPTION_OWNER_PAYMENT_KINDS,
   SUBSCRIPTION_RECEIPT_MAX_BYTES,
@@ -22,9 +23,7 @@ export const SUBSCRIPTION_RECEIPT_NAME_MAX = 255;
 
 /** Что мешает начать загрузку чека: имя, пустой файл, больше 20 МБ (прототип `subFileErr`). */
 export type SubscriptionReceiptProblem =
-  | 'sub_receipt_name'
-  | 'sub_receipt_empty'
-  | 'sub_receipt_large';
+  'sub_receipt_name' | 'sub_receipt_empty' | 'sub_receipt_large';
 
 /** Название файла чека как его покажет экран: без пути и лишних пробелов. */
 export const subscriptionReceiptName = (name: string): string =>
@@ -35,9 +34,14 @@ export function subscriptionReceiptProblem(f: {
   size: number;
 }): SubscriptionReceiptProblem | null {
   const name = subscriptionReceiptName(f.name);
-  // Знаки управления в названии не пропускаются: имя уходит в заголовок скачивания.
-  // eslint-disable-next-line no-control-regex
-  if (!name || name.length > SUBSCRIPTION_RECEIPT_NAME_MAX || /[\u0000-\u001f\u007f]/.test(name)) {
+  // Имя уходит в заголовок скачивания администратору платформы: управляющие знаки, знаки смены
+  // направления письма («Чек‮fdp.bat» в списке выглядит как «.pdf») и точка в конце не пропускаются —
+  // то же правило, что у файлов организации (`fileUploadProblem`).
+  if (
+    !name ||
+    name.length > SUBSCRIPTION_RECEIPT_NAME_MAX ||
+    fileUploadProblem({ name, size: 0 }) === 'file_name_invalid'
+  ) {
     return 'sub_receipt_name';
   }
   if (!Number.isInteger(f.size) || f.size <= 0) return 'sub_receipt_empty';
@@ -53,6 +57,27 @@ export function subscriptionReceiptUploadType(name: string): SubscriptionReceipt
   if (/\.pdf$/i.test(name)) return 'application/pdf';
   if (/\.png$/i.test(name)) return 'image/png';
   return 'image/jpeg';
+}
+
+/** Окончания имени, которые подходят к типу чека по содержимому. */
+const RECEIPT_EXTENSIONS: Record<SubscriptionReceiptType, readonly string[]> = {
+  'application/pdf': ['.pdf'],
+  'image/jpeg': ['.jpg', '.jpeg'],
+  'image/png': ['.png'],
+};
+
+/**
+ * Имя, под которым чек хранится и скачивается: содержимое проверено (`subscriptionReceiptSniff`),
+ * поэтому имя оканчивается расширением этого типа — иначе «Чек.bat» с «%PDF-» в начале скачивался бы
+ * администратору как программа («Чек.bat» → «Чек.bat.pdf», «скан» у JPEG → «скан.jpg»); как документы
+ * заявки (`leadDocStoredName`).
+ */
+export function subscriptionReceiptStoredName(name: string, type: SubscriptionReceiptType): string {
+  const exts = RECEIPT_EXTENSIONS[type];
+  const lower = name.toLowerCase();
+  if (exts.some((e) => lower.endsWith(e))) return name;
+  const ext = exts[0]!;
+  return name.slice(0, SUBSCRIPTION_RECEIPT_NAME_MAX - ext.length) + ext;
 }
 
 const startsWith = (head: Uint8Array, sig: readonly number[]) =>
@@ -122,10 +147,9 @@ export const SUBSCRIPTION_MESSAGES = {
   sub_gb_invalid: 'Память сверх — целое число ГБ, 0 и больше',
   sub_gb_not_more: 'Укажите больше, чем сейчас: {now} ГБ сверх',
   sub_gb_used: 'Сначала удалите лишние файлы: с такой памятью занятое не помещается',
-  sub_next_unavailable:
-    'Срок подписки кончается в этом месяце: новый размер укажите при продлении',
+  sub_next_unavailable: 'Срок подписки кончается в этом месяце: новый размер укажите при продлении',
   sub_nothing_to_pay: 'Доплаты нет: выберите больший пакет или память, или «Сейчас»',
-  sub_receipt_name: 'Название файла чека пустое или слишком длинное',
+  sub_receipt_name: 'Название файла чека пустое, слишком длинное или с недопустимыми знаками',
   sub_receipt_empty: 'Файл пустой: выберите другой',
   sub_receipt_large: 'Файл больше 20 МБ: сожмите фото или прикрепите PDF',
   sub_receipt_type: 'Это не PDF и не фото JPG или PNG: прикрепите чек в одном из этих форматов',

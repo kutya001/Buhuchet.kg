@@ -6,6 +6,7 @@ import {
   subscriptionReceiptName,
   subscriptionReceiptProblem,
   subscriptionReceiptSniff,
+  subscriptionReceiptStoredName,
   subscriptionReceiptUploadType,
   type SubscriptionPaymentFacts,
 } from './receipt';
@@ -46,6 +47,12 @@ describe('чек об оплате подписки', () => {
     expect(subscriptionReceiptProblem({ name: `${'я'.repeat(252)}.pdf`, size: 1 })).toBe(
       'sub_receipt_name',
     );
+    // Знаки смены направления письма («Счёт‮fdp.bat» в списке — «Счётtab.pdf») и точка в конце.
+    expect(subscriptionReceiptProblem({ name: 'Счёт\u202efdp.bat', size: 1 })).toBe(
+      'sub_receipt_name',
+    );
+    expect(subscriptionReceiptProblem({ name: 'Чек\u2066.pdf', size: 1 })).toBe('sub_receipt_name');
+    expect(subscriptionReceiptProblem({ name: 'Чек.exe.', size: 1 })).toBe('sub_receipt_name');
     expect(subscriptionReceiptProblem({ name: 'чек.pdf', size: 0 })).toBe('sub_receipt_empty');
     expect(subscriptionReceiptProblem({ name: 'чек.pdf', size: 1.5 })).toBe('sub_receipt_empty');
     expect(
@@ -54,6 +61,20 @@ describe('чек об оплате подписки', () => {
     expect(
       subscriptionReceiptProblem({ name: 'чек.pdf', size: SUBSCRIPTION_RECEIPT_MAX_BYTES + 1 }),
     ).toBe('sub_receipt_large');
+  });
+});
+
+describe('имя хранимого чека — с расширением типа по содержимому', () => {
+  it('«Чек.bat» с «%PDF-» хранится как «Чек.bat.pdf»; подходящее окончание не меняется', () => {
+    expect(subscriptionReceiptStoredName('Чек.bat', 'application/pdf')).toBe('Чек.bat.pdf');
+    expect(subscriptionReceiptStoredName('Чек.PDF', 'application/pdf')).toBe('Чек.PDF');
+    expect(subscriptionReceiptStoredName('скан', 'image/jpeg')).toBe('скан.jpg');
+    expect(subscriptionReceiptStoredName('фото.JPEG', 'image/jpeg')).toBe('фото.JPEG');
+    expect(subscriptionReceiptStoredName('фото.jpg', 'image/png')).toBe('фото.jpg.png');
+    expect(subscriptionReceiptStoredName('чек.png', 'image/png')).toBe('чек.png');
+    const long = subscriptionReceiptStoredName(`${'я'.repeat(255)}`, 'application/pdf');
+    expect(long).toHaveLength(255);
+    expect(long.endsWith('.pdf')).toBe(true);
   });
 });
 
@@ -66,9 +87,9 @@ describe('«История оплат»: отклонённый чек', () => {
 
   it('последняя проверенная заявка владельца отклонена — бесплатный период и правка администратора не в счёт', () => {
     expect(subscriptionLastRejected([])).toBe(false);
-    expect(subscriptionLastRejected([p('a', 'mem', 'rejected'), p('b', 'renew', 'confirmed')])).toBe(
-      true,
-    );
+    expect(
+      subscriptionLastRejected([p('a', 'mem', 'rejected'), p('b', 'renew', 'confirmed')]),
+    ).toBe(true);
     expect(
       subscriptionLastRejected([
         p('w', 'renew', 'pending'),
@@ -76,15 +97,19 @@ describe('«История оплат»: отклонённый чек', () => {
         p('a', 'grow', 'rejected'),
       ]),
     ).toBe(true);
-    expect(subscriptionLastRejected([p('a', 'renew', 'confirmed'), p('b', 'mem', 'rejected')])).toBe(
-      false,
-    );
+    expect(
+      subscriptionLastRejected([p('a', 'renew', 'confirmed'), p('b', 'mem', 'rejected')]),
+    ).toBe(false);
   });
 
   it('«Прикрепить другой чек» — только у самой новой записи, если она отклонена и нового чека нет', () => {
-    expect(subscriptionAgainId([p('a', 'mem', 'rejected'), p('b', 'renew', 'confirmed')])).toBe('a');
+    expect(subscriptionAgainId([p('a', 'mem', 'rejected'), p('b', 'renew', 'confirmed')])).toBe(
+      'a',
+    );
     expect(subscriptionAgainId([p('w', 'renew', 'pending'), p('a', 'mem', 'rejected')])).toBeNull();
-    expect(subscriptionAgainId([p('f', 'admin', 'confirmed'), p('a', 'mem', 'rejected')])).toBeNull();
+    expect(
+      subscriptionAgainId([p('f', 'admin', 'confirmed'), p('a', 'mem', 'rejected')]),
+    ).toBeNull();
     expect(subscriptionAgainId([])).toBeNull();
   });
 

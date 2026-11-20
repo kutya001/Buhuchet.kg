@@ -66,8 +66,10 @@ async function allFilesWithTag(page: Page, isMobile: boolean, tag: string) {
     return url.pathname === '/api/admin/files' && url.searchParams.get('q') === tag;
   });
   await search(page, isMobile, tag);
-  expect((await searched).status()).toBe(200);
+  const res = await searched;
+  expect(res.status()).toBe(200);
   await expect(page.locator('[data-afiles-all] [data-grid] [data-id]')).toHaveCount(1);
+  return new URL(res.url());
 }
 
 test.describe('Доработки 20.11, пакет 2. Админка → «Файлы»', () => {
@@ -84,6 +86,7 @@ test.describe('Доработки 20.11, пакет 2. Админка → «Фа
     const file = await apiUpload(page.request, origin, name, `Справка ${tag}\n`);
     await page.request.post('/api/auth/logout', { headers: { origin } });
     await platformAdmin(page.request, origin);
+    const texts = await dictionary(page.request);
 
     await page.goto('/app/afiles/store');
     const store = page.locator('[data-afiles-store]');
@@ -92,7 +95,9 @@ test.describe('Доработки 20.11, пакет 2. Админка → «Фа
     // «По организациям»: строка демо-организации открывает «Все файлы» с фильтром по ней.
     await store.locator(`[data-afiles-orgs] [data-mini-row="${org.id}"]`).click();
     await expect(page).toHaveURL(/\/app\/afiles\/all/);
-    await allFilesWithTag(page, isMobile, tag);
+    // Список запрошен с фильтром по этой организации, а не по всем.
+    const listed = await allFilesWithTag(page, isMobile, tag);
+    expect(listed.searchParams.get('filters') ?? '').toContain(org.id);
     const row = page.locator(`[data-afiles-all] [data-grid] [data-id="file:${file.id}"]`);
     await expect(row).toContainText(org.name);
 
@@ -107,9 +112,23 @@ test.describe('Доработки 20.11, пакет 2. Админка → «Фа
     // «Открыть организацию» → карточка этой организации сразу на вкладке «Файлы».
     await info.locator('[data-afiles-info-org]').click();
     const card = page.locator(`[data-org-card="${org.id}"]`);
+    // Вкладки карточки — в шапке её окна, над `data-org-card`.
+    const cardWin = page.getByRole('dialog').filter({ has: card });
+    await expect(cardWin.getByRole('tab', { selected: true })).toContainText(
+      texts['orgs.card.tab.files']!,
+    );
     await expect(card.locator('[data-org-files-mem]')).toBeVisible();
     await expect(card.locator('[data-org-files-cats]')).toBeVisible();
-    await expect(card.locator('[data-org-files] [data-grid]')).toBeVisible();
+    // Свой файл — в общем списке её файлов (новые сверху: загружен только что); его окно
+    // закрывается обратно в карточку.
+    const own = card.locator(`[data-org-files] [data-grid] [data-id="file:${file.id}"]`);
+    await expect(own).toBeVisible();
+    await own.getByText(name, { exact: true }).click();
+    const again = page.getByRole('dialog', { name });
+    await expect(again.locator(`[data-file-viewer="file:${file.id}"]`)).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(again).toHaveCount(0);
+    await expect(own).toBeVisible();
   });
 
   test('(блок 5, пункты 3–4) удалённый сотрудником файл сразу пропадает у фирмы и ждёт стирания в «Ждут удаления»; «Вернуть» — файл снова у фирмы', async ({

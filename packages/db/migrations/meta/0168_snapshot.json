@@ -22897,6 +22897,21 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "file_trash_key_idx": {
+          "name": "file_trash_key_idx",
+          "columns": [
+            {
+              "expression": "storage_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {

@@ -47,7 +47,12 @@ export function useTabCounts(modules: readonly MenuModuleId[]): TabCounts {
     enabled: modules.includes('kbadm'),
   });
   const leads = useQuery({ ...leadSummaryQuery, enabled: modules.includes('orgs') });
-  const storage = useQuery({ ...storageSummaryQuery, enabled: modules.includes('afiles') });
+  // Счётчику «Проверки хранилища» хватает сводки минутной давности: экран «Хранилище» берёт свежую.
+  const storage = useQuery({
+    ...storageSummaryQuery,
+    staleTime: 60_000,
+    enabled: modules.includes('afiles'),
+  });
   const sent = useQuery({ ...sentCountQuery, enabled: modules.includes('files') });
   return useMemo(
     () => ({

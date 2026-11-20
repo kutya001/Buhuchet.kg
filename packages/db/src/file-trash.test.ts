@@ -2,7 +2,13 @@ import { randomUUID } from 'node:crypto';
 import { hashPassword } from '@buhuchet/adapters/password';
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { adminStorageCheck, adminStorageCheckItem } from './admin-storage';
+import {
+  adminOrgFileCategories,
+  adminStorageCheck,
+  adminStorageCheckItem,
+  adminStorageFileKey,
+  adminStorageSummary,
+} from './admin-storage';
 import { withUserContext } from './auth';
 import type { Tx } from './client';
 import { withOrgContext, type OrgContext } from './context';
@@ -260,8 +266,12 @@ describe.skipIf(!databaseAvailable())('«Ждут удаления» и «Вер
       .update(files)
       .set({ state: 'ready', deletedAt: null, deletedBy: null })
       .where(eq(files.id, back.file.id));
-    // Вошедший пользователь (не задача) не получает ничего.
+    // Вошедший пользователь (не задача) и транзакция организации без пользователя (бот, страница
+    // контрагента) не получают ничего.
     expect(await withOrgContext(t.app.db, ctxA(), (tx) => fileTrashDue(tx))).toEqual([]);
+    expect(await withOrgContext(t.app.db, { orgId: a.orgId }, (tx) => fileTrashDue(tx))).toEqual(
+      [],
+    );
     const rows = await fileTrashDue(t.app.db);
     const ids = rows.map((r) => r.id);
     expect(ids).toContain(due.trashId);
@@ -324,6 +334,29 @@ describe.skipIf(!databaseAvailable())('«Ждут удаления» и «Вер
     expect(
       await withOrgContext(t.app.db, ctxA(), (tx) => adminFileTrashRow(tx, trashId)),
     ).toBeNull();
+    // «Все файлы», ключ для ссылки, сводка и «Объём по категориям» — тоже пусто не администратору.
+    const { file } = await deletedFile({ name: 'Ключ только администратору.pdf' });
+    await t.admin.db
+      .update(files)
+      .set({ state: 'ready', deletedAt: null, deletedBy: null })
+      .where(eq(files.id, file.id));
+    expect(
+      await withUserContext(t.app.db, adminId, (tx) => adminStorageFileKey(tx, 'file', file.id)),
+    ).toMatchObject({ storageKey: file.storageKey, orgId: a.orgId });
+    expect(
+      await withOrgContext(t.app.db, ctxA(), (tx) => adminStorageFileKey(tx, 'file', file.id)),
+    ).toBeNull();
+    await withOrgContext(t.app.db, ctxA(), async (tx) => {
+      const [all] = await tx.execute<{ n: number }>(
+        sql`select count(*)::int as n from app.admin_storage_files`,
+      );
+      expect(all!.n).toBe(0);
+      expect(await adminOrgFileCategories(tx, a.orgId)).toEqual([]);
+      const summary = await adminStorageSummary(tx, '2026-01-01');
+      expect(summary.orgs).toEqual([]);
+      expect(summary.org).toEqual({ n: 0, bytes: 0 });
+      expect(summary.trash).toEqual({ n: 0, bytes: 0 });
+    });
     expect(await withUserContext(t.app.db, a.ownerUserId, (tx) => adminStorageCheck(tx))).toEqual({
       checkedAt: null,
       lists: {

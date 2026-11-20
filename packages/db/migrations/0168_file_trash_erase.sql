@@ -6,6 +6,10 @@
 -- Нужен ли ключ хранилища живой записи: файл (не удалённый), присланный контрагентом и не принятый (и его
 -- загрузка со страницы, пока она идёт), чек подписки, документ и загрузка заявки, видео, обложка,
 -- загрузка видео, логотип. Такой объект задача стирания не трогает, а «Удалить» лишнего — не ставит.
+--
+-- Откат — новой миграцией: DROP VIEW трёх представлений Админки, DROP FUNCTION функций этой миграции,
+-- DROP INDEX file_trash_key_idx, DROP CONSTRAINT file_trash_contractor_check; столбец contractor_bound —
+-- по правилу двух PR (сначала код перестаёт его читать).
 -- Был ли файл файлом контрагента: контрагента удалили — ключ контрагента стал пустым (ON DELETE SET
 -- NULL), и «Вернуть» такой файл не возвращает, иначе он вернулся бы общим файлом организации.
 ALTER TABLE "file_trash" ADD COLUMN "contractor_bound" boolean DEFAULT false NOT NULL;--> statement-breakpoint
@@ -13,6 +17,9 @@ UPDATE "file_trash" SET "contractor_bound" = true WHERE "contractor_id" IS NOT N
 ALTER TABLE "file_trash" ADD CONSTRAINT "file_trash_contractor_check" CHECK ("file_trash"."contractor_bound" or "file_trash"."contractor_id" is null);--> statement-breakpoint
 -- Новый столбец — роли Админки «Витрины данных», как остальные столбцы file_trash (0166, п. О-62).
 GRANT SELECT ("contractor_bound") ON TABLE "file_trash" TO buhuchet_dm_admin;--> statement-breakpoint
+-- «Проверка хранилища» ищет строку по ключу и среди стёртых: строки file_trash не удаляются, а частичный
+-- file_trash_live_key ей не подходит. Таблица на стенде и рабочей базе пустая — индекс строится сразу.
+CREATE INDEX "file_trash_key_idx" ON "file_trash" USING btree ("storage_key");--> statement-breakpoint
 CREATE FUNCTION app.storage_key_in_use(p_key text)
   RETURNS boolean
   LANGUAGE sql STABLE SECURITY DEFINER
@@ -33,9 +40,10 @@ CREATE FUNCTION app.storage_key_in_use(p_key text)
       OR EXISTS (SELECT 1 FROM public.organizations o WHERE o.logo_key = p_key)
   $$;--> statement-breakpoint
 REVOKE ALL ON FUNCTION app.storage_key_in_use(text) FROM PUBLIC, buhuchet_app;--> statement-breakpoint
--- Задача «Файлы: стирание удалённых» (раз в час): что стереть. Только без вошедшего пользователя (задача
--- по расписанию). Срок — по часам базы: раньше суток после удаления строку не получить никак. Ключ,
--- который снова нужен живой записи, не стирается — строка закрывается с отметкой «in_use». Строки
+-- Задача «Файлы: стирание удалённых» (раз в час): что стереть. Только без вошедшего пользователя и без
+-- организации (задача по расписанию): транзакции бота и страницы контрагента ключей не получат. Срок —
+-- по часам базы: раньше суток после удаления строку не получить никак. Ключ, который снова нужен живой
+-- записи, не стирается — строка закрывается с отметкой «in_use». Строки
 -- берутся с блокировкой: «Вернуть», начатое до срока, задача дождётся и строку уже не получит.
 CREATE FUNCTION app.file_trash_due(p_limit integer)
   RETURNS TABLE (id uuid, storage_key text)
@@ -43,7 +51,7 @@ CREATE FUNCTION app.file_trash_due(p_limit integer)
   SET search_path = pg_catalog, pg_temp
   AS $$
   BEGIN
-    IF app.current_user_id() IS NOT NULL THEN
+    IF app.current_user_id() IS NOT NULL OR app.current_org_id() IS NOT NULL THEN
       RETURN;
     END IF;
     UPDATE public.file_trash t SET erased_at = now(), last_error = 'in_use'
@@ -66,7 +74,7 @@ CREATE FUNCTION app.file_trash_done(p_done uuid[], p_failed uuid[], p_stuck inte
   SET search_path = pg_catalog, pg_temp
   AS $$
   BEGIN
-    IF app.current_user_id() IS NOT NULL THEN
+    IF app.current_user_id() IS NOT NULL OR app.current_org_id() IS NOT NULL THEN
       RETURN;
     END IF;
     UPDATE public.file_trash t SET erased_at = now(), last_error = NULL
@@ -108,7 +116,9 @@ CREATE FUNCTION app.file_trash_restore(p_id uuid, p_links jsonb)
     IF NOT FOUND OR t.org_id IS DISTINCT FROM coalesce(app.current_org_id(), t.org_id) THEN
       RETURN 'missing';
     END IF;
-    IF t.erased_at IS NOT NULL OR t.restored_at IS NOT NULL OR t.erase_at <= now() THEN
+    -- Срок — по часам на этот момент, а не на начало транзакции: задача стирания могла взять строку,
+    -- пока «Вернуть» ждало её блокировку.
+    IF t.erased_at IS NOT NULL OR t.restored_at IS NOT NULL OR t.erase_at <= clock_timestamp() THEN
       RETURN 'gone';
     END IF;
     IF t.why NOT IN ('del', 'extra') THEN

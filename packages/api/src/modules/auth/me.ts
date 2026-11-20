@@ -91,7 +91,9 @@ function meBody(
         : access && features
           ? menuModules(access.subject, features)
           : [],
-    subscription,
+    // Статус и срок подписки — только владельцу: подписку видит и оплачивает он (блок 5, пункт 1);
+    // остальным — лишь «доступ закрыт» (`subClosed`).
+    subscription: access?.subject.isOwner ? subscription : null,
     subClosed: subscription?.closed ?? false,
   };
 }

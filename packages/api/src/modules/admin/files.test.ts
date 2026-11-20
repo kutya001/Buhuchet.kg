@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import type { MemoryStorage } from '@buhuchet/adapters';
-import { schema } from '@buhuchet/db';
-import { databaseAvailable } from '@buhuchet/db/testing';
+import { schema, takeRateLimit } from '@buhuchet/db';
+import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
+import { FILE_TRASH_STUCK_ATTEMPTS } from '@buhuchet/domain';
 import {
   AdminExtraDelete,
   AdminOrgFiles,
@@ -10,22 +11,35 @@ import {
   AdminStorageSummary,
   AdminTrashList,
   ApiError,
+  Contractor,
   FileItem,
   FileLink,
   FileList,
   FileUploadTicket,
 } from '@buhuchet/shared';
 import { and, eq, sql } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../testing';
+import { eraseDeletedFiles } from '../files/erase-deleted';
+import { ADMIN_FILE_OPEN_RATE_LIMIT } from './files';
 
 /*
  * Админка → «Файлы» и «Файлы» карточки организации (доработки 20.11.2026, пакет 2, блоки 3–5; этап 1,
  * П4–П6, поток И): только администратор платформы; «Вернуть» и «Удалить» лишнего — с проверками базы.
  */
 
-const { auditLog, fileTrash, files, platformAuditLog, storageCheckItems, storageCheckRuns } =
-  schema;
+const {
+  auditLog,
+  contractors,
+  fileTrash,
+  files,
+  moneyOperations,
+  orgSettings,
+  platformAuditLog,
+  storageCheckItems,
+  storageCheckRuns,
+  users,
+} = schema;
 
 type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
 
@@ -46,13 +60,14 @@ describe.skipIf(!databaseAvailable())('Админка → «Файлы»: API', 
     return res.json();
   };
 
-  /** Загрузить файл «Загружен вручную» в организации входа. */
-  async function upload(cookie: string, name: string): Promise<FileItem> {
+  /** Загрузить файл «Загружен вручную» в организации входа (с контрагентом — его файл). */
+  async function upload(cookie: string, name: string, contractorId?: string): Promise<FileItem> {
     const body = new Uint8Array([1, 2, 3, 4, 5]);
     const started = await call('POST', '/api/files/uploads', cookie, {
       source: { kind: 'manual', id: null },
       name,
       size: body.length,
+      ...(contractorId ? { contractorId } : {}),
     });
     const ticket = FileUploadTicket.parse(await ok(started, 201));
     const url = new URL(ticket.upload.url);
@@ -112,6 +127,7 @@ describe.skipIf(!databaseAvailable())('Админка → «Файлы»: API', 
       ['GET', '/api/admin/files/values?col=name'],
       ['GET', '/api/admin/files/export'],
       ['GET', `/api/admin/files/file/${id}/link`],
+      ['GET', `/api/admin/files/file/${id}/download`],
       ['GET', '/api/admin/files/trash'],
       ['POST', `/api/admin/files/trash/${id}/restore`],
       ['GET', '/api/admin/files/check'],
@@ -317,7 +333,183 @@ describe.skipIf(!databaseAvailable())('Админка → «Файлы»: API', 
         ),
       );
     expect(card.usedBytes).toBe(ready!.b);
+    // Одно число памяти: строка «По организациям» «Хранилища» — то же, что у владельца и в карточке.
+    const summary = AdminStorageSummary.parse(
+      await ok(await call('GET', '/api/admin/files/summary', admin)),
+    );
+    expect(summary.orgs.find((o) => o.orgId === f.a.orgId)?.bytes).toBe(card.usedBytes);
     expect(card.categories.find((c) => c.src === 'manual')?.n).toBe(ready!.n);
     expect(card.categories.find((c) => c.src === 'trash')?.n).toBe(live!.n);
+  });
+
+  it('открытий файлов — не больше 300 в час на администратора: дальше «Слишком много открытых файлов»', async () => {
+    const pdf = await upload(owner, 'Предел открытий.pdf');
+    const [me] = await f.t.admin.db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.login, 'platform-admin'));
+    const clear = () =>
+      f.t.admin.db.execute(
+        sql`delete from rate_limits where kind = ${ADMIN_FILE_OPEN_RATE_LIMIT.kind}`,
+      );
+    await clear();
+    for (let i = 0; i < ADMIN_FILE_OPEN_RATE_LIMIT.max; i++) {
+      expect((await takeRateLimit(f.t.app.db, ADMIN_FILE_OPEN_RATE_LIMIT, me!.id)).ok).toBe(true);
+    }
+    for (const path of [
+      `/api/admin/files/file/${pdf.id}/link`,
+      `/api/admin/files/file/${pdf.id}/download`,
+    ]) {
+      const res = await call('GET', path, admin);
+      expect(res.status, path).toBe(429);
+      expect((await apiErr(res)).code, path).toBe('file_open_limit');
+    }
+    await clear();
+  });
+
+  it('«Вернуть» файл контрагента: снова у контрагента и в записи, к которой был прикреплён, с историей; контрагент удалён и «удалилось с записью» — нельзя', async () => {
+    await seedAllPlatformDictionaries(f.t.admin.db);
+    await f.t.admin.db
+      .update(orgSettings)
+      .set({ features: { files: true, taxpay: true } })
+      .where(eq(orgSettings.orgId, f.a.orgId));
+    const newContractor = async (name: string, inn: string) => {
+      const res = await call('POST', '/api/contractors', owner, {
+        name,
+        inn,
+        phone: '+996505890076',
+        kind: 'regular',
+        formCode: 'ФС-01',
+        regimeCode: 'РЕЖ-01',
+        gked: '46.34.0',
+        gkedExtra: [],
+        bases: [],
+        startDate: '2024-07-16',
+        responsibleEmployeeId: f.people['acc-a']!.employeeId,
+      });
+      return Contractor.parse(await ok(res, 201));
+    };
+    const cp = await newContractor('ОсОО «Возврат»', '03744097401871');
+    const act = await upload(owner, 'Акт для возврата.pdf', cp.id);
+    const [op] = await f.t.admin.db
+      .insert(moneyOperations)
+      .values({
+        orgId: f.a.orgId,
+        contractorId: cp.id,
+        kind: 'in',
+        amount: 100_000,
+        total: 100_000,
+        opDate: '2026-10-10',
+        holderKind: 'org',
+      })
+      .returning({ id: moneyOperations.id });
+    await ok(
+      await call('POST', '/api/files/links', owner, {
+        kind: 'receipt',
+        id: op!.id,
+        fileIds: [act.id],
+      }),
+    );
+    const inReceipt = async () =>
+      FileList.parse(
+        await ok(await call('GET', `/api/files?kind=receipt&id=${op!.id}`, owner)),
+      ).items.map((i) => i.id);
+    expect(await inReceipt()).toContain(act.id);
+    await ok(await call('DELETE', `/api/files/${act.id}?version=${act.version}`, owner));
+    expect(await inReceipt()).not.toContain(act.id);
+    const [trash] = await f.t.admin.db.select().from(fileTrash).where(eq(fileTrash.fileId, act.id));
+    expect(trash).toMatchObject({ contractorId: cp.id, contractorBound: true });
+
+    expect(
+      await ok(await call('POST', `/api/admin/files/trash/${trash!.id}/restore`, admin)),
+    ).toEqual({ id: trash!.id, restored: true });
+    // Там же, где был: у контрагента и ссылкой в поступлении; история — в обеих записях.
+    const [back] = await f.t.admin.db.select().from(files).where(eq(files.id, act.id));
+    expect(back).toMatchObject({ state: 'ready', contractorId: cp.id });
+    expect(await inReceipt()).toContain(act.id);
+    const restored = await f.t.admin.db
+      .select({ entityId: auditLog.entityId, changes: auditLog.changes })
+      .from(auditLog)
+      .where(and(eq(auditLog.action, 'file_restore'), eq(auditLog.orgId, f.a.orgId)));
+    expect(restored).toContainEqual({
+      entityId: op!.id,
+      changes: [
+        { field: 'file', to: 'Акт для возврата.pdf' },
+        { field: 'linked', to: true },
+      ],
+    });
+
+    // Контрагента удалили — вернуть файл общим файлом организации нельзя.
+    const gone = await newContractor('ИП Удалённый', '03744097401872');
+    const doc = await upload(owner, 'Договор удалённого.pdf', gone.id);
+    await ok(await call('DELETE', `/api/files/${doc.id}?version=${doc.version}`, owner));
+    const [goneTrash] = await f.t.admin.db
+      .select({ id: fileTrash.id })
+      .from(fileTrash)
+      .where(eq(fileTrash.fileId, doc.id));
+    await f.t.admin.db.delete(contractors).where(eq(contractors.id, gone.id));
+    let res = await call('POST', `/api/admin/files/trash/${goneTrash!.id}/restore`, admin);
+    expect(res.status).toBe(409);
+    expect((await apiErr(res)).code).toBe('file_back_record');
+
+    // Удалилось вместе с записью — не возвращается.
+    const [auto] = await f.t.admin.db
+      .insert(fileTrash)
+      .values({
+        orgId: f.a.orgId,
+        why: 'auto',
+        storageKey: `org/${f.a.orgId}/files/${randomUUID()}`,
+        name: 'Файл удалённой задачи.pdf',
+        sizeBytes: 3,
+        source: 'task',
+      })
+      .returning({ id: fileTrash.id });
+    res = await call('POST', `/api/admin/files/trash/${auto!.id}/restore`, admin);
+    expect(res.status).toBe(409);
+    expect((await apiErr(res)).code).toBe('file_back_auto');
+  });
+
+  it('«Файлы: стирание удалённых»: хранилище не стёрло — ещё попытка; после 24 неудач — оповещение администратору платформы', async () => {
+    const { trashId, key } = await trashed('Не стирается.pdf');
+    await f.t.admin.db
+      .update(fileTrash)
+      .set({
+        deletedAt: sql`now() - interval '25 hours'`,
+        eraseAt: sql`now() - interval '1 hour'`,
+        attempts: FILE_TRASH_STUCK_ATTEMPTS - 1,
+      })
+      .where(eq(fileTrash.id, trashId));
+    const warn = vi.spyOn(f.deps.logger, 'warn');
+    const broken = {
+      ...f.deps,
+      storage: {
+        ...storage,
+        delete: async () => {
+          throw new Error('хранилище недоступно');
+        },
+      },
+    };
+    let alerted: unknown[][];
+    try {
+      expect(await eraseDeletedFiles(broken)).toBe(0);
+    } finally {
+      // Вызовы — до `mockRestore`: он их сбрасывает.
+      alerted = [...warn.mock.calls];
+      warn.mockRestore();
+    }
+    const [row] = await f.t.admin.db.select().from(fileTrash).where(eq(fileTrash.id, trashId));
+    expect(row).toMatchObject({
+      attempts: FILE_TRASH_STUCK_ATTEMPTS,
+      lastError: 'storage',
+      erasedAt: null,
+    });
+    expect(await storage.exists(key)).toBe(true);
+    expect(alerted).toContainEqual([
+      expect.objectContaining({ alert: 'file-trash-erase' }),
+      expect.any(String),
+    ]);
+    // Хранилище снова работает — строка стирается.
+    expect(await eraseDeletedFiles(f.deps)).toBeGreaterThanOrEqual(1);
+    expect(await storage.exists(key)).toBe(false);
   });
 });

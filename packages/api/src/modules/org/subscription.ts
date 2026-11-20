@@ -38,6 +38,7 @@ import {
   subscriptionReceiptName,
   subscriptionReceiptProblem,
   subscriptionReceiptSniff,
+  subscriptionReceiptStoredName,
   subscriptionReceiptUploadType,
   type IsoDate,
   type SubscriptionCalc,
@@ -546,6 +547,12 @@ async function finishPayment(
   let placed = false;
   try {
     const type = await checkedReceipt(deps, uploadKey, checkKey, body.file);
+    const stored = subscriptionReceiptStoredName(name, type);
+    // Оплата с этим номером уже записана (повторное «закончить» по той же ссылке загрузки) — её чек
+    // не трогается: заменить файл можно только «Заменить файл чека» с версией и историей.
+    if (await withOrgContext(deps.db, ctx, (tx) => subscriptionReceiptOf(tx, body.id))) {
+      fail(409, 'sub_pending');
+    }
     if (!(await deps.storage.copy(checkKey, key))) fail(409, 'sub_receipt_missing');
     placed = true;
     const done = await withOrgContext(deps.db, ctx, async (tx) => {
@@ -563,7 +570,7 @@ async function finishPayment(
           amount: plan.calc.total,
           lines: plan.calc.lines,
           receiptKey: key,
-          receiptName: name,
+          receiptName: stored,
           receiptType: type,
           receiptBytes: body.file.size,
         });
@@ -584,7 +591,7 @@ async function finishPayment(
           { field: 'extraGb', to: plan.extraGb },
           { field: 'startMode', to: plan.startMode },
           { field: 'amount', to: plan.calc.total },
-          { field: 'receipt', to: name },
+          { field: 'receipt', to: stored },
         ],
       });
       // Стык с потоком Т: «Новый чек на проверку» администраторам платформы — notifySubCheckNew(tx,
@@ -710,6 +717,7 @@ async function finishReplace(
   let placed = false;
   try {
     const type = await checkedReceipt(deps, uploadKey, checkKey, body.file);
+    const stored = subscriptionReceiptStoredName(name, type);
     // Заявка ещё ждёт и версия та же — до того, как трогать файл.
     await withOrgContext(deps.db, ctx, (tx) => replaceable(tx, id, body.version));
     backedUp = await deps.storage.copy(key, backupKey);
@@ -717,7 +725,11 @@ async function finishReplace(
     placed = true;
     const version = await withOrgContext(deps.db, ctx, async (tx) => {
       const pay = await replaceable(tx, id, body.version);
-      const next = await setSubscriptionReceipt(tx, id, { name, type, bytes: body.file.size });
+      const next = await setSubscriptionReceipt(tx, id, {
+        name: stored,
+        type,
+        bytes: body.file.size,
+      });
       if (next === null) fail(409, 'sub_pay_decided');
       await writeHistory(tx, {
         entity: 'subscription',
@@ -725,7 +737,7 @@ async function finishReplace(
         action: 'sub_receipt_replace',
         changes: [
           { field: 'payment', to: id },
-          { field: 'receipt', from: pay.receiptName, to: name },
+          { field: 'receipt', from: pay.receiptName, to: stored },
         ],
       });
       return next!;

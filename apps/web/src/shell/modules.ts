@@ -58,7 +58,8 @@ export const subOwner = (a: ShellAccess): boolean =>
  * «Доступ закрыт». Данные всё равно проверяет API.
  */
 export function subLock(me: MeResponse): 'owner' | 'staff' | null {
-  if (me.user.isPlatformAdmin || !me.employee || me.subscription?.closed !== true) return null;
+  const closed = me.subscription?.closed ?? me.subClosed ?? false;
+  if (me.user.isPlatformAdmin || !me.employee || !closed) return null;
   return me.employee.isOwner ? 'owner' : 'staff';
 }
 
