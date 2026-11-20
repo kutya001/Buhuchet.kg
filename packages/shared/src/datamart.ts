@@ -1,9 +1,4 @@
-import {
-  DM_MODULES,
-  DM_TOKEN_NAME_MAX,
-  DM_TOKEN_STATES,
-  DM_TOKEN_STOPS,
-} from '@buhuchet/domain';
+import { DM_MODULES, DM_TOKEN_NAME_MAX, DM_TOKEN_STATES, DM_TOKEN_STOPS } from '@buhuchet/domain';
 import { z } from 'zod';
 import { Uuid } from './common';
 import { listPageSchema } from './list';
