@@ -42,8 +42,11 @@ describe.skipIf(!databaseAvailable())('Админка: «Подписки»', ()
     ok(await call('GET', `/api/admin/subscriptions/${orgId}`, admin), (x) =>
       AdminSubscriptionCard.parse(x),
     );
-  /** Чек на проверке от владельца организации Б: продление на 3 месяца, 20 мест. */
-  const pending = async () => {
+  /**
+   * Чек на проверке от владельца организации Б: продление на 3 месяца, 20 мест; прикреплён накануне
+   * по часам теста (18.10.2026) — «Срок проверки» (3 дня) ещё не прошёл.
+   */
+  const pending = async (createdAt = new Date('2026-10-17T10:00:00+06:00')) => {
     const id = randomUUID();
     await f.t.admin.db.insert(schema.subscriptionPayments).values({
       id,
@@ -58,6 +61,7 @@ describe.skipIf(!databaseAvailable())('Админка: «Подписки»', ()
       receiptType: 'application/pdf',
       receiptBytes: 184_320,
       createdBy: f.b.ownerUserId,
+      createdAt,
     });
     return id;
   };
@@ -161,6 +165,22 @@ describe.skipIf(!databaseAvailable())('Админка: «Подписки»', ()
     );
     expect(summary).toMatchObject({ pending: 1, late: 0 });
     expect(summary.byStatus.pending).toBe(1);
+
+    // Чек, прикреплённый 14.10, — больше 3 дней: «Ждёт проверки больше 3 дней» в строке и на плашке
+    // (поля оплаты не меняются — прежний чек убираем, ставим другой).
+    await f.t.admin.db
+      .delete(schema.subscriptionPayments)
+      .where(eq(schema.subscriptionPayments.id, id));
+    await pending(new Date('2026-10-14T10:00:00+06:00'));
+    const late = await ok(await call('GET', '/api/admin/subscriptions?size=all', admin), (x) =>
+      AdminSubscriptionList.parse(x),
+    );
+    expect(late.items.find((r) => r.name === 'Организация Б')).toMatchObject({ late: true });
+    expect(
+      await ok(await call('GET', '/api/admin/subscriptions/summary', admin), (x) =>
+        AdminSubscriptionsSummary.parse(x),
+      ),
+    ).toMatchObject({ pending: 1, late: 1 });
   });
 
   it('«Подтвердить оплату»: по версии, продление 1–36 месяцев, второй раз — «уже проверили»', async () => {

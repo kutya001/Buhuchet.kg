@@ -59,6 +59,13 @@ export function useSubNewOrg() {
     return { ...r.value, free: state.free };
   };
 
+  /** Отказ сервера по полю блока (`sub_*`, `details.field`) — под поле, как свои проверки. */
+  const fail = (field: string | null, message: string): boolean => {
+    if (!state.on || !field || !(field in values)) return false;
+    setErrors({ [field]: message });
+    return true;
+  };
+
   const node = (
     <SubNewOrgBlock
       state={state}
@@ -68,7 +75,7 @@ export function useSubNewOrg() {
       onState={setState}
     />
   );
-  return { read, node, dirty: state.on };
+  return { read, fail, node, dirty: state.on };
 }
 
 function SubNewOrgBlock({

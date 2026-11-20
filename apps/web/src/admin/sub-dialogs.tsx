@@ -53,7 +53,7 @@ type Card = AdminSubscriptionCard;
 type Failure = Extract<ApiResult<unknown>, { ok: false }>['error'];
 
 /** Поле ошибки ответа (`details.field`). */
-const failedField = (error: Failure): string | null => {
+export const failedField = (error: Failure): string | null => {
   const d = error.details;
   return d && typeof d === 'object' && 'field' in d && typeof d.field === 'string' ? d.field : null;
 };

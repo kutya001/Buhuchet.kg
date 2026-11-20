@@ -173,6 +173,16 @@ describe.skipIf(!databaseAvailable())('доступ закрыт по подпи
       expect(open.status, path).not.toBe(403);
     }
     expect((await apiRequest(app, 'GET', '/api/org/subscriptions', cookie)).status).toBe(403);
+    // Смена пароля (временного — тоже) и ссылка привязки Telegram открыты: без них владелец новой
+    // организации не войдёт и не получит напоминаний об оплате (docs/deviations.md п. О-89).
+    const password = await apiRequest(app, 'POST', '/api/auth/password', cookie, {
+      currentPassword: 'Неверный-пароль-1',
+      newPassword: 'Новый-пароль-закрытой-1',
+    });
+    expect(password.status).not.toBe(403);
+    expect((await errorOf(password)).code).not.toMatch(/^sub_closed/);
+    const link = await apiRequest(app, 'POST', '/api/telegram/link', cookie);
+    expect(link.status, await link.clone().text()).toBe(200);
     // Сеанс владельца не закрывается.
     expect((await apiRequest(app, 'GET', '/api/auth/me', cookie)).status).toBe(200);
   });

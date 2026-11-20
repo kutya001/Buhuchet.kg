@@ -25,12 +25,25 @@ const NOT_SAVES = [
   '/api/bell/',
 ];
 
+/**
+ * Сервер закрыл сеанс сотрудника: доступ организации закрыт по подписке (403 `sub_closed`, доработки
+ * 20.11.2026, блок 4, пункт 4) — сразу на страницу входа, где после пароля будет «Доступ закрыт…», а не
+ * при следующем переходе. Ответ входа с тем же кодом показывает сама форма входа.
+ */
+async function leaveIfClosed(res: Response, path: string): Promise<void> {
+  if (path.startsWith('/api/auth/')) return;
+  const body = ApiError.safeParse(await res.json().catch(() => null));
+  if (body.success && body.data.error.code === 'sub_closed') window.location.assign('/login');
+}
+
 const savingFetch: typeof fetch = async (input, init) => {
   const res = await fetch(input, init);
+  if (typeof window === 'undefined') return res;
   const method = (init?.method ?? 'GET').toUpperCase();
-  if (res.ok && method !== 'GET' && method !== 'HEAD' && typeof window !== 'undefined') {
-    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-    const path = new URL(url, window.location.origin).pathname;
+  const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+  const path = new URL(url, window.location.origin).pathname;
+  if (res.status === 403) void leaveIfClosed(res.clone(), path);
+  if (res.ok && method !== 'GET' && method !== 'HEAD') {
     if (!NOT_SAVES.some((p) => path.startsWith(p))) window.dispatchEvent(new Event(SAVED_EVENT));
   }
   return res;

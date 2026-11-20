@@ -168,6 +168,11 @@ describe.skipIf(!databaseAvailable())('Админка: подписки орга
       pendingId: latePay,
       pendingAmount: 570_000,
     });
+    // Без подписки — «из 2 ГБ» (прототип `subMem`: пакет 0), у демо — без предела; итог по «Пакету».
+    const limitOf = (name: string) => page.rows.find((r) => r.name === name)!.bytesLimit;
+    expect(limitOf('ОсОО «Бета»')).toBe(2_000 * 1024 * 1024);
+    expect(limitOf('Демо')).toBeNull();
+    expect(page.totals).toMatchObject({ pack: 30 });
     const kinds = await asAdmin((tx) => listSubscriptionValues(tx, 'kind', TODAY, t));
     expect(kinds.items.map((v) => v.value).sort()).toEqual(['', 'm1']);
     const file = await asAdmin((tx) =>
@@ -332,6 +337,17 @@ describe.skipIf(!databaseAvailable())('Админка: подписки орга
         insertFreePayment(tx, b.orgId, { ...card.sub!, paidUntil: '2030-01-01' }, 'Сам себе'),
       ),
     ).rejects.toEqual(denied);
+    // Два первых сохранения разом (второй администратор или «Подтвердить оплату»): подписку уже
+    // поставили — второе отвечает «запись изменена», а не ошибкой первичного ключа.
+    await expect(
+      adminIn(b.orgId, (tx) =>
+        saveSubscription(tx, b.orgId, null, { ...card.sub!, paidUntil: '2030-01-01' }),
+      ),
+    ).rejects.toThrow(RecordChangedError);
+    expect((await adminIn(b.orgId, (tx) => adminSubscriptionCard(tx, b.orgId))).sub).toMatchObject({
+      paidUntil: '2026-12-20',
+      version: 1,
+    });
   });
 
   it('«Виды подписок» и «Цены и реквизиты»: правит только администратор, с версией и историей', async () => {

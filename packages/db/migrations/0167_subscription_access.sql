@@ -1,6 +1,8 @@
 -- Закрытие доступа по подписке (доработки 20.11.2026, блок 4, пункты 4–7; этап 1, П1 общего плана;
 -- docs/decisions.md п. О-63): подписка новой организации в транзакции её создания и повтор запуска
 -- тарификации в день, когда закрытие начинает работать; срок вида подписки до 36 месяцев (этап 1, П3).
+-- После `pnpm db:generate` (новый номер при сборке) вернуть руками: lock_timeout первой командой, функцию
+-- app.subscription_new_org с правами и повтор запуска тарификации — Drizzle их не порождает.
 SET LOCAL lock_timeout = '10s';--> statement-breakpoint
 -- «Виды подписок» Админки (блок 6, пункт 5; прототип subKindDlg): срок вида — от 1 до 36 месяцев.
 ALTER TABLE "subscription_plans" DROP CONSTRAINT "subscription_plans_values_check";--> statement-breakpoint
@@ -73,7 +75,7 @@ GRANT EXECUTE ON FUNCTION app.subscription_new_org(text, integer, integer, date,
 -- срок. В журнал выпуска — только число.
 DO $$
 BEGIN
-  RAISE NOTICE 'subscriptions_launch (0167): %',
+  RAISE NOTICE 'subscriptions_launch: %',
     app.subscriptions_launch((now() AT TIME ZONE 'Asia/Bishkek')::date);
 END
 $$;
