@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { platformAdmin, search } from './admin';
-import { DEMO_PASSWORD, signIn } from './helpers';
+import { cardTab, DEMO_PASSWORD, newOrgOwner, signIn } from './helpers';
 
 // Админка → «Файлы», вкладка «Файлы» карточки организации и «Ждут удаления» (доработки 20.11.2026,
 // пакет 2, блоки 3–5; прототип v154 admin/admin-files.js, modules/file-trash.js; этап 1, П4–П6,
@@ -44,6 +44,29 @@ async function demoOrg(api: APIRequestContext) {
     organization: { id: string; name: string };
   };
   return me.organization;
+}
+
+/** Чек об оплате подписки владельцем своей организации через API, как окно оплаты: начать → PUT → закончить. */
+async function apiReceipt(api: APIRequestContext, origin: string, name: string) {
+  const body = Buffer.from('%PDF-1.4\n% e2e\n%%EOF\n', 'utf8');
+  const pay = { kind: 'renew', planId: 'm3', seats: 10, extraGb: 0, startMode: 'now' };
+  const file = { name, size: body.length };
+  const start = await api.post('/api/org/subscription/payments/start', {
+    headers: { origin },
+    data: { pay, file },
+  });
+  expect(start.status(), await start.text()).toBe(201);
+  const ticket = (await start.json()) as {
+    id: string;
+    upload: { url: string; headers: Record<string, string> };
+  };
+  const put = await api.put(ticket.upload.url, { headers: ticket.upload.headers, data: body });
+  expect(put.status(), await put.text()).toBe(200);
+  const done = await api.post('/api/org/subscription/payments/complete', {
+    headers: { origin },
+    data: { id: ticket.id, pay, file },
+  });
+  expect(done.status(), await done.text()).toBe(201);
 }
 
 /** Файлов с меткой в «Файловом менеджере» сотрудника (поиск по названию). */
@@ -129,6 +152,51 @@ test.describe('Доработки 20.11, пакет 2. Админка → «Фа
     await page.keyboard.press('Escape');
     await expect(again).toHaveCount(0);
     await expect(own).toBeVisible();
+  });
+
+  test('(блоки 3 и 4) чек подписки: «Открыть подписку» — вкладка «Подписка» карточки организации; «Подписка» на полосе памяти вкладки «Файлы» — туда же', async ({
+    page,
+    browser,
+    baseURL,
+    isMobile,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    const tag = uniqueTag();
+    const name = `чек-${tag}.pdf`;
+    // Своя организация: чек на проверке закрывает новую оплату, демо-организацию не трогаем.
+    const owner = await browser.newContext({ baseURL });
+    let org: { id: string; name: string };
+    try {
+      await newOrgOwner(owner.request, origin);
+      org = await demoOrg(owner.request);
+      await apiReceipt(owner.request, origin, name);
+    } finally {
+      await owner.close();
+    }
+    await platformAdmin(page.request, origin);
+    const texts = await dictionary(page.request);
+
+    await page.goto('/app/afiles/all');
+    await allFilesWithTag(page, isMobile, tag);
+    const row = page.locator('[data-afiles-all] [data-grid] [data-id^="receipt:"]');
+    await expect(row).toContainText(org.name);
+    await row.getByText(name, { exact: true }).click();
+    const win = page.getByRole('dialog', { name });
+    await expect(win.locator('[data-fv="pdf"]')).toBeVisible();
+    await win.locator('[data-afiles-sub]').click();
+    await expect(win).toHaveCount(0);
+
+    const card = page.locator(`[data-org-card="${org.id}"]`);
+    const cardWin = page.getByRole('dialog').filter({ has: card });
+    await expect(cardWin.getByRole('tab', { selected: true })).toContainText(
+      texts['orgs.card.tab.sub']!,
+    );
+    // Полоса памяти вкладки «Файлы» ведёт на «Подписку» той же карточки.
+    await cardTab(page, cardWin, isMobile, texts['orgs.card.tab.files']!);
+    await card.locator('[data-org-files-mem] [data-org-files-sub]').click();
+    await expect(cardWin.getByRole('tab', { selected: true })).toContainText(
+      texts['orgs.card.tab.sub']!,
+    );
   });
 
   test('(блок 5, пункты 3–4) удалённый сотрудником файл сразу пропадает у фирмы и ждёт стирания в «Ждут удаления»; «Вернуть» — файл снова у фирмы', async ({

@@ -2,7 +2,16 @@
 
 import { formatCount } from '@buhuchet/domain';
 import type { AdminStorageFile } from '@buhuchet/shared';
-import { Box, DataGrid, EmptyState, Hint, MiniTable, Note } from '@buhuchet/ui';
+import {
+  Box,
+  DataGrid,
+  EmptyState,
+  Hint,
+  Icon,
+  linkButtonClass,
+  MiniTable,
+  Note,
+} from '@buhuchet/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 import { useCardList } from '../admin/org-card-lists';
@@ -25,7 +34,16 @@ import { categoryRows, mbText, memoryBar, pctClass, viewerIdOf } from './afiles-
  * «Объём по категориям» и все файлы организации с удалёнными до стирания — только просмотр и
  * скачивание: файлы меняет сама организация.
  */
-export function OrgFilesTab({ t, orgId }: { t: Translate; orgId: string }) {
+export function OrgFilesTab({
+  t,
+  orgId,
+  onSub,
+}: {
+  t: Translate;
+  orgId: string;
+  /** Вкладка «Подписка» карточки: ссылка полосы памяти и «Открыть подписку» у чека (прототип `afMemBar`). */
+  onSub?: () => void;
+}) {
   const usage = useQuery(orgFilesQuery(orgId));
   const labels = useGridLabels('afiles.count');
   const columns = useMemo(() => storageColumns(t, true), [t]);
@@ -43,7 +61,7 @@ export function OrgFilesTab({ t, orgId }: { t: Translate; orgId: string }) {
     fetchPage,
     sendExport,
   });
-  const files = useStorageFileActions({ inCard: true });
+  const files = useStorageFileActions({ inCard: true, ...(onSub ? { onSub: () => onSub() } : {}) });
   const rows = grid.data?.items ?? [];
   const u = usage.data;
   const bar = u ? memoryBar(t, u) : null;
@@ -57,6 +75,17 @@ export function OrgFilesTab({ t, orgId }: { t: Translate; orgId: string }) {
               <h3 className="m-0 text-[13.5px] font-[650] text-muted">{t('afiles.mem.title')}</h3>
               <span className="font-semibold text-ink">{bar.used}</span>
               {bar.pct ? <span className={pctClass(u.pct) || 'text-muted'}>{bar.pct}</span> : null}
+              {onSub && bar.width !== null ? (
+                <button
+                  type="button"
+                  data-org-files-sub=""
+                  className={`${linkButtonClass()} ml-auto inline-flex items-center gap-1`}
+                  onClick={onSub}
+                >
+                  {t('afiles.mem.sub')}
+                  <Icon name="right" size="sm" />
+                </button>
+              ) : null}
             </div>
             {bar.width !== null ? (
               <div

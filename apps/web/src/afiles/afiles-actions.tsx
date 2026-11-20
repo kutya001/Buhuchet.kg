@@ -111,16 +111,20 @@ export function useBackDialog() {
 /**
  * Действия с файлом «Всех файлов» и вкладки «Файлы» карточки организации (прототип `afGrid`, `afOpen`,
  * `afDl`): «Открыть» — окно просмотра со сведениями, «Скачать» (непринятый файл от контрагента — после
- * предупреждения), «Открыть организацию» (не в её карточке), «Вернуть» удалённого. Администратор файлы
- * организаций только смотрит и скачивает (решение заказчика 20.11.2026).
+ * предупреждения), «Открыть организацию» (не в её карточке), «Открыть подписку» у чека подписки,
+ * «Вернуть» удалённого. Администратор файлы организаций только смотрит и скачивает (решение заказчика
+ * 20.11.2026).
  */
 export function useStorageFileActions({
   inCard = false,
   onOrg,
+  onSub,
 }: {
   /** В карточке организации: «Открыть организацию» нет, ссылка на организацию закрывает окно. */
   inCard?: boolean;
   onOrg?: (orgId: string) => void;
+  /** «Открыть подписку» у чека подписки (прототип `subOrgWin`): вкладка «Подписка» карточки организации. */
+  onSub?: (orgId: string) => void;
 }) {
   const t = useT();
   const back = useBackDialog();
@@ -145,6 +149,8 @@ export function useStorageFileActions({
   }, []);
   const closeViewer = useCallback(() => setViewer(closeSlot), []);
   const toOrg = !inCard && onOrg ? onOrg : null;
+  const subOf = (r: AdminStorageFile): string | null =>
+    r.cat === 'rcpt' && r.orgId && onSub ? r.orgId : null;
 
   const actions = (r: AdminStorageFile, rows: readonly AdminStorageFile[]): ActionEntry[] => [
     { id: 'open', label: t('afiles.act.open'), icon: 'eye', run: () => open(r, rows) },
@@ -156,6 +162,16 @@ export function useStorageFileActions({
             label: t('afiles.act.org'),
             icon: 'building' as const,
             run: () => toOrg(r.orgId!),
+          },
+        ]
+      : []),
+    ...(subOf(r)
+      ? [
+          {
+            id: 'sub',
+            label: t('afiles.act.sub'),
+            icon: 'coins' as const,
+            run: () => onSub!(subOf(r)!),
           },
         ]
       : []),
@@ -227,6 +243,20 @@ export function useStorageFileActions({
                 >
                   <Icon name="building" size="sm" />
                   {t('afiles.act.org')}
+                </button>
+              ) : null}
+              {subOf(f.row) ? (
+                <button
+                  type="button"
+                  data-afiles-sub=""
+                  className={buttonClass('default')}
+                  onClick={() => {
+                    closeViewer();
+                    onSub!(subOf(f.row)!);
+                  }}
+                >
+                  <Icon name="coins" size="sm" />
+                  {t('afiles.act.sub')}
                 </button>
               ) : null}
               {f.row.restorable ? (

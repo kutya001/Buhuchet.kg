@@ -56,7 +56,10 @@ export function AdminFilesAll() {
   );
   const exporter = useListExport(sendExport);
   const { openOrg, cards } = useAdminCards();
-  const files = useStorageFileActions({ onOrg: (id) => openOrg(id, null, 'files') });
+  const files = useStorageFileActions({
+    onOrg: (id) => openOrg(id, null, 'files'),
+    onSub: (id) => openOrg(id, null, 'sub'),
+  });
   const rows = list.data?.items ?? [];
   return (
     <div data-afiles-all="">

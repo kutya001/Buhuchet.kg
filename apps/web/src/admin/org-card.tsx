@@ -348,7 +348,7 @@ export function OrgCard({
               <MoneyTab t={t} money={card.money} month={card.summary.month as YearMonth} />
             ) : null}
             {tab === 'set' ? <SettingsTab t={t} settings={card.settings} /> : null}
-            {tab === 'files' ? <OrgFilesTab t={t} orgId={id} /> : null}
+            {tab === 'files' ? <OrgFilesTab t={t} orgId={id} onSub={() => setTab('sub')} /> : null}
             {tab === 'sub' ? <SubOrgTab orgId={id} act={subs.act} /> : null}
             {subs.nodes}
             {tab === 'hist' ? (

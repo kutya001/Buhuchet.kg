@@ -8,6 +8,8 @@ import {
   SUBSCRIPTION_STATUSES,
 } from '@buhuchet/domain';
 import { z } from 'zod';
+// Строка расчёта суммы — одна схема с окном оплаты Админки (как `SubscriptionCalcLine` домена).
+import { SubscriptionCalcLineSchema } from './admin-subscriptions';
 import { IsoDate, RecordVersion, Uuid } from './common';
 import { FileUploadTicket } from './files';
 
@@ -20,16 +22,6 @@ import { FileUploadTicket } from './files';
 
 const Moment = z.iso.datetime();
 const Tyiyn = z.number().int();
-
-/** Строка расчёта суммы (как `SubscriptionCalcLine` домена): подпись собирает экран по словарю. */
-export const SubscriptionCalcLineSchema = z.object({
-  k: z.enum(['seats', 'gb', 'grow', 'mem', 'extra', 'first']),
-  n: z.number().int().optional(),
-  price: Tyiyn.optional(),
-  months: z.number().int().optional(),
-  pct: z.number().int().optional(),
-  sum: Tyiyn,
-});
 
 /** Оплата «Истории оплат» (прототип `DB.subPays`). */
 export const SubscriptionPayment = z.object({
@@ -180,7 +172,10 @@ export const SubscriptionPayDone = z.object({
 export type SubscriptionPayDone = z.infer<typeof SubscriptionPayDone>;
 
 /** «Заменить файл чека»: начать. */
-export const SubscriptionReceiptStart = z.strictObject({ file: ReceiptFile, version: RecordVersion });
+export const SubscriptionReceiptStart = z.strictObject({
+  file: ReceiptFile,
+  version: RecordVersion,
+});
 
 /** «Заменить файл чека»: закончить — номер загрузки из ответа «начать». */
 export const SubscriptionReceiptComplete = z.strictObject({
