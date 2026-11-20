@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { DEMO_PASSWORD, signIn } from './helpers';
+import { DEMO_PASSWORD, signIn, stillElement } from './helpers';
 
 // Шкала статусов и «История статусов» (задача #17) через настоящий сайт: модулей с записями ещё нет,
 // поэтому компоненты проверяются на странице образцов /samples с демо-записями (только в браузере).
@@ -145,6 +145,9 @@ test.describe('Этап 1: шкала статусов и «История ст�
     const unconfirmButton = card.getByRole('button', { name: 'Снять подтверждение' });
     await expect(unconfirmButton).toHaveAttribute('aria-disabled', 'true');
     await expect(unconfirmButton).toHaveAttribute('title', 'Нужно право «Откат статусов»');
+    // Нажатие с force не ждёт, пока окно на телефоне доедет: кнопка ещё за краем экрана
+    // (docs/typical-mistakes.md № 34) — сначала дождаться, что она стоит на месте.
+    await stillElement(unconfirmButton);
     await steps.nth(1).click({ force: true });
     await unconfirmButton.click({ force: true });
     await expect(page.getByRole('dialog', { name: /^(Откатить|Снять)/ })).toHaveCount(0);
