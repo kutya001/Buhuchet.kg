@@ -55,6 +55,7 @@ import { notFound } from './card';
 import {
   checkContractor,
   checkResponsible,
+  requireSeats,
   contractorOut,
   duplicateFail,
   error,
@@ -165,7 +166,7 @@ export const createContractorRoute = createRoute({
     },
     409: {
       description:
-        'Такой ИНН уже есть в организации (и в архиве); вид отчёта не подключён или отключён',
+        'Такой ИНН уже есть в организации (и в архиве); вид отчёта не подключён или отключён; в пакете нет свободных мест (`no_seats`)',
       content: error,
     },
   },
@@ -282,6 +283,9 @@ export function createContractorHandler(
               { today, t },
             )
           : null;
+        // Пакет заполнен — новый контрагент не добавляется (доработки 20.11.2026, блок 3, пункт 1): после
+        // проверки полей и ИНН, как прототип addCpDlg (повтор ИНН архивного — «Вернуть из архива»).
+        await requireSeats(tx, today, 1, subject, t);
         const id = await createContractor(
           tx,
           ctx.orgId,

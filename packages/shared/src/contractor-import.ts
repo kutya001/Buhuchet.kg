@@ -5,6 +5,7 @@ import {
   CP_IMPORT_MAX_ROWS,
 } from '@buhuchet/domain';
 import { z } from 'zod';
+import { ContractorSeats } from './contractor-seats';
 
 /*
  * Загрузка контрагентов вставкой из Excel (задача 2.16; ТЗ «Загрузка текущих контрагентов при переходе
@@ -33,6 +34,8 @@ export type ContractorImportRow = z.infer<typeof ContractorImportRow>;
 export const ContractorImportCheck = z.object({
   rows: z.array(ContractorImportRow),
   ready: z.number().int().nonnegative(),
+  /** Места в пакете сейчас: в предпросмотре — строка «Свободных мест в пакете» (прототип v152). */
+  seats: ContractorSeats,
 });
 export type ContractorImportCheck = z.infer<typeof ContractorImportCheck>;
 

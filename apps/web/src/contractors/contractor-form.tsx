@@ -95,6 +95,7 @@ import { GkedFields } from './gked-pick';
 import { RateRows, singleTaxDefaults, type SingleTaxContext } from './rate-rows';
 import { RegistrationFields } from './registration-fields';
 import { NotNeededNote, ReportPickDialog, useReportPickCalc } from './report-pick';
+import { useSeatGuard } from './seat-dialog';
 import { useServiceActions } from './service-actions';
 import { SocfundFields } from './socfund-fields';
 
@@ -243,6 +244,7 @@ function NewContractorForm({
   const t = useT();
   const toast = useToast();
   const errorText = useErrorText();
+  const seat = useSeatGuard();
   const id = useId();
   const phone = useMediaQuery(PHONE_QUERY);
   const client = useQueryClient();
@@ -620,6 +622,8 @@ function NewContractorForm({
         ? { id: details.id, inn: d.inn }
         : null,
     );
+    // Место заняли, пока заполняли форму: окно «В пакете нет свободных мест», форма остаётся.
+    if (seat.fromError(res.error)) return;
     // Сервер сам спросил о праве на режим (сверку не удалось получить заранее): спросить один раз,
     // повторный отказ — обычная ошибка под полем.
     if (res.error.code === 'gked_confirm_required' && again)
@@ -1247,6 +1251,9 @@ function NewContractorForm({
           onConfirm={ask.run}
         />
       ) : null}
+      {seat.node}
+      {/* «Вернуть из архива» у ИНН архивного: окно «В пакете нет свободных мест» — из действий обслуживания. */}
+      {service.dialogs}
     </>
   );
 }

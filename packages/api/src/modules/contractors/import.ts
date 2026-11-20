@@ -63,7 +63,15 @@ import { buildXlsxBook, XLSX_TYPE } from '../../lists/xlsx';
 import { orgContextOf, requirePermission } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
 import { assignmentTexts } from '../reports/common';
-import { error, feeVisible, subjectOf, todayOf, translateOf } from './common';
+import {
+  currentSeats,
+  error,
+  feeVisible,
+  requireSeats,
+  subjectOf,
+  todayOf,
+  translateOf,
+} from './common';
 import { createNewReports } from './new-reports';
 import { socfundContext, socfundPatch, socfundSubjectOf, withSocfundStatus } from './socfund-view';
 
@@ -413,13 +421,22 @@ export function importCheckHandler(deps: ApiDeps): RouteHandler<typeof importChe
     const subject = subjectOf(c);
     const today = todayOf(deps);
     const t = await translateOf(deps);
-    const rows = await withImportSlot(deps, c, () =>
-      withOrgContext(deps.db, ctx, (tx) =>
-        planImport(tx, { orgId: ctx.orgId, subject, body, today, t }),
+    const [rows, seats] = await withImportSlot(deps, c, () =>
+      withOrgContext(
+        deps.db,
+        ctx,
+        async (tx) =>
+          [
+            await planImport(tx, { orgId: ctx.orgId, subject, body, today, t }),
+            await currentSeats(tx, today),
+          ] as const,
       ),
     );
     const out = rowsOut(rows);
-    return c.json({ rows: out, ready: importReady(out) }, 200);
+    return c.json(
+      { rows: out, ready: importReady(out), seats: { seats, owner: subject.isOwner } },
+      200,
+    );
   };
 }
 
@@ -448,7 +465,8 @@ export const importApplyRoute = createRoute({
     401: noAuth,
     403: noRight,
     409: {
-      description: 'ИНН из списка одновременно добавили в организацию — нужно проверить снова',
+      description:
+        'ИНН из списка одновременно добавили в организацию — нужно проверить снова; новых контрагентов больше, чем свободных мест в пакете (`no_seats`)',
       content: error,
     },
     ...importRateResponses,
@@ -467,6 +485,10 @@ export function importApplyHandler(deps: ApiDeps): RouteHandler<typeof importApp
       try {
         return await withOrgContext(deps.db, ctx, async (tx) => {
           const rows = await planImport(tx, { orgId: ctx.orgId, subject, body, today, t });
+          // Новых больше, чем свободных мест, — загрузка недоступна целиком (доработки 20.11.2026,
+          // блок 3, пункт 1; прототип v152: «ОК» → seatOk(готовых)).
+          const need = rows.filter((p) => !p.check.errors.length).length;
+          await requireSeats(tx, today, need, subject, t);
           const created = await createRows(tx, ctx.orgId, rows, { today, t, texts });
           const skipped = rows.length - created;
           // Прототип: запись истории «Загрузка контрагентов: создано N, пропущено M» (ent 'import').
@@ -480,7 +502,8 @@ export function importApplyHandler(deps: ApiDeps): RouteHandler<typeof importApp
             ],
           });
           const list = rowsOut(rows);
-          return { rows: list, ready: importReady(list), created, skipped };
+          const seats = { seats: await currentSeats(tx, today), owner: subject.isOwner };
+          return { rows: list, ready: importReady(list), seats, created, skipped };
         });
       } catch (err) {
         if (uniqueViolation(err) === 'contractors_org_inn_key') {

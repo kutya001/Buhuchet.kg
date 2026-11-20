@@ -60,6 +60,7 @@ import {
   error,
   feeVisible,
   ownEmployeeOf,
+  requireSeats,
   scopeSqlOf,
   subjectOf,
   todayOf,
@@ -574,6 +575,11 @@ export const unarchiveContractorRoute = createRoute({
         'Контрагент возвращён: обслуживание с текущего месяца, отчёты по действующим назначениям; ответ — карточка',
       content: { 'application/json': { schema: ContractorUnarchived } },
     },
+    409: {
+      description:
+        'Запись изменена другим пользователем; контрагент не в архиве; в пакете нет свободных мест (`no_seats`)',
+      content: error,
+    },
   },
 });
 
@@ -594,6 +600,9 @@ export function unarchiveContractorHandler(
     const today = todayOf(deps);
     const t = await translateOf(deps);
     const out = await withOrgContext(deps.db, ctx, async (tx) => {
+      // Возвращённый из архива снова занимает место в пакете (доработки 20.11.2026, блок 3, пункт 1;
+      // прототип unarchiveCp → seatOk).
+      await requireSeats(tx, today, 1, subject, t);
       try {
         const effect = await changeService(
           tx,

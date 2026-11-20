@@ -12,7 +12,9 @@ import {
   ContractorImportCheck,
   ContractorImportResult,
   ContractorImportTemplate,
+  NoSeatsDetails,
   type ContractorImportRow,
+  type ContractorSeats,
 } from '@buhuchet/shared';
 import {
   buttonClass,
@@ -21,6 +23,7 @@ import {
   inputClass,
   MONO_CLASS,
   Modal,
+  Note,
   Pill,
   TOUCH_AREA,
   useToast,
@@ -33,6 +36,7 @@ import { useErrorText, useT } from '../l10n/provider';
 import { exportFailureText, saveFile } from '../lists/export';
 import { useShell } from '../shell/context';
 import { useContractorsRefresh } from './contractor-data';
+import { SeatGrowButton, useSeatGuard } from './seat-dialog';
 
 /*
  * Загрузка контрагентов вставкой из Excel (задача 2.16; ТЗ «Загрузка текущих контрагентов при переходе на
@@ -101,12 +105,15 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
   const [table, setTable] = useState<ImportTable | null>(null);
   const [busy, setBusy] = useState(false);
   const [template, setTemplate] = useState<DialogSlot<ContractorImportTemplate> | null>(null);
+  // Места в пакете из последней проверки (доработки 20.11.2026, блок 3, пункт 1; прототип v152 `#im-seat`).
+  const [seats, setSeats] = useState<ContractorSeats | null>(null);
+  const seat = useSeatGuard();
 
   // Готово к загрузке — только когда проверены все строки (прототип: `rows.every(r => r.errs)`).
-  const ready =
-    table && table.rows.every((r) => r.check)
-      ? table.rows.filter((r) => !r.check!.errors.length).length
-      : 0;
+  const checked = !!table && table.rows.every((r) => r.check);
+  const ready = checked ? table.rows.filter((r) => !r.check!.errors.length).length : 0;
+  const free = checked ? seats?.seats?.free : undefined;
+  const seatOver = free !== undefined && ready > free;
 
   const parse = () => {
     const parsed = parseImportText(text);
@@ -161,6 +168,7 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
       return;
     }
     const data = ContractorImportCheck.parse(res.data);
+    setSeats(data.seats);
     setTable((tb) =>
       tb === sent
         ? { ...tb, rows: tb.rows.map((r, i) => ({ cells: r.cells, check: data.rows[i] ?? null })) }
@@ -169,16 +177,23 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
   };
 
   const create = async () => {
-    if (!table || busy || !ready) return;
+    if (!table || busy || !ready || seatOver) return;
     const sent = table;
     setBusy(true);
     const res = await callApi(() => api.api.contractors.import.$post({ json: request(sent) }));
     setBusy(false);
     if (!res.ok) {
+      // Мест не хватило, пока окно было открыто: окно «В пакете нет свободных мест» и свежая строка мест.
+      if (seat.fromError(res.error)) {
+        const d = NoSeatsDetails.parse(res.error.details);
+        setSeats({ seats: { used: d.used, limit: d.limit, free: d.free }, owner: d.owner });
+        return;
+      }
       toast(errorText(res.error), { bad: true });
       return;
     }
     const data = ContractorImportResult.parse(res.data);
+    setSeats(data.seats);
     if (data.created) refresh();
     // Созданные строки уходят из таблицы, строки с ошибками остаются со своими ошибками.
     const left = sent.rows
@@ -304,7 +319,7 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
           <button
             type="button"
             className={buttonClass('cta')}
-            disabled={busy || !ready}
+            disabled={busy || !ready || seatOver}
             onClick={() => void create()}
             data-cp-import-ok=""
           >
@@ -378,7 +393,25 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
           </div>
         </fieldset>
         <div className="text-[12px] leading-[1.4] text-muted">{t('cp.import.table_hint')}</div>
+        {free !== undefined ? (
+          <div data-cp-import-seat={seatOver ? 'over' : 'ok'}>
+            <Note tone={seatOver ? 'bad' : 'info'} center>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="min-w-0 flex-1">
+                  {t('cp.seat.import', { free: formatCount(free), n: formatCount(ready) })}
+                  {seatOver
+                    ? ` ${t(seats?.owner ? 'cp.seat.import_over_owner' : 'cp.seat.import_over')}`
+                    : null}
+                </span>
+                {seatOver && seats?.owner ? (
+                  <SeatGrowButton className={`${buttonClass('default', 'sm')} ${TOUCH_AREA}`} />
+                ) : null}
+              </div>
+            </Note>
+          </div>
+        ) : null}
       </div>
+      {seat.node}
     </Modal>
   );
 }

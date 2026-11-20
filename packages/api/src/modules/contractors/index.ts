@@ -19,6 +19,7 @@ import {
   gkedSearchRoute,
 } from './card';
 import { contractorHistoryHandler, contractorHistoryRoute } from './history';
+import { contractorSeatsHandler, contractorSeatsRoute } from './seats';
 import {
   importApplyHandler,
   importApplyRoute,
@@ -106,6 +107,7 @@ export function contractorsModule(deps: ApiDeps) {
       .openapi(contractorValuesRoute, contractorValuesHandler(deps))
       .openapi(contractorTabCountsRoute, contractorTabCountsHandler(deps))
       .openapi(contractorSummaryRoute, contractorSummaryHandler(deps))
+      .openapi(contractorSeatsRoute, contractorSeatsHandler(deps))
       .openapi(exportContractorsRoute, exportContractorsHandler(deps))
       .openapi(transferPreviewRoute, transferPreviewHandler(deps))
       .openapi(transferContractorsRoute, transferContractorsHandler(deps))
