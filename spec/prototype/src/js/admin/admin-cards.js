@@ -151,8 +151,19 @@ function ocData(o){
   cps.forEach((c,i)=>{if(R()<.55){const f={id:`${c.id}-d`,name:`Договор_обслуживания_${i+1}.pdf`,kind:'Контрагент',cp:c.id,by:c.resp,date:o.created,src:c.name};f.size=fsize(f.name);files.push(f)}});
   ['Договор_типовой.docx','Прайс_услуг.xlsx','Регламент_работы.pdf'].forEach((nm,i)=>{const f={id:`${o.id}-m${i+1}`,name:nm,kind:'Загружен вручную',cp:null,by:o.owner,date:o.created,src:'Загружен вручную'};f.size=fsize(nm);files.push(f)});
   us.forEach(u=>{const k=(u.work&&u.work.tasks)||0;const mine=cps.filter(c=>c.resp===u.login&&!c.archived);for(let j=0;j<k;j++){const c=mine.length?mine[j%mine.length]:null;tasks.push({id:`${o.id}-t-${u.login}-${j}`,title:OC_TASKS[(j+u.login.length)%OC_TASKS.length],cp:c?c.id:null,date:addDays(TODAY,1+j*3),status:'К выполнению',exec:u.login})}});
+  // Остальные файлы до числа и объёма из demoDB.json (sum.files): сканы и выписки контрагентов за последние 12 месяцев (пакет 2, блок 3 — модуль «Файлы» Админки)
+  {const tf=(o.sum&&o.sum.files)||{},need=Math.max(0,(tf.n||0)-files.length),live=cps.filter(c=>!c.archived),from=o.created>addMonths(mo,-11)+'-01'?o.created:addMonths(mo,-11)+'-01';
+    let left=Math.max(0,Math.round((tf.mb||0)*1048576)-files.reduce((a,f)=>a+(f.size||0),0));const span=Math.max(1,diffDays(TODAY,from));
+    const OC_PADN=[['Банковская_выписка','pdf'],['Первичные_документы','pdf'],['Скан_накладной','jpg'],['Акт_сверки','xlsx'],['Счёт_фактура','pdf'],['Табель','xlsx'],['Авансовый_отчёт','pdf'],['ЭСФ_реестр','xml']];
+    for(let i=0;i<need;i++){const c=live.length?live[i%live.length]:null,d=addDays(from,Math.floor(R()*span)),[b,ext]=OC_PADN[Math.floor(R()*OC_PADN.length)];
+      const size=i===need-1?Math.max(30000,left):Math.max(30000,Math.round(left/(need-i)*(0.4+R()*1.2)));left-=size;
+      files.push({id:`${o.id}-x${i+1}`,name:`${b}_${MONTHS[+d.slice(5,7)-1]}_${d.slice(0,4)}_${i+1}.${ext}`,kind:R()<.5?'Загружен вручную':'Контрагент',cp:c?c.id:null,by:c?c.resp:o.owner,date:d,src:c?c.name:'Загружен вручную',size})}}
+  // Файлы от контрагентов, ещё не принятые фирмой: со страницы по ссылке и из Telegram
+  const sent=[];cps.filter(c=>!c.archived).slice(0,3).forEach((c,i)=>{if(R()<.6){const nm=['Выписка_банка_октябрь.pdf','Платёжка_соцфонд.jpg','Договор_поставки_скан.pdf'][i];sent.push({id:`${o.id}-s${i+1}`,name:nm,cp:c.id,size:fsize(c.id+nm),src:R()<.5?'tg':'page',at:`${addDays(TODAY,-1-i*4)} ${10+i}:15`,st:'new'})}});
+  // Удалённые и возвращённые администратором файлы (file-trash.js): снова среди файлов организации
+  STORE.trash.filter(x=>x.org===o.id&&x.back&&x.why==='del').forEach(x=>files.push({id:`${o.id}-b-${x.id}`,name:x.name,kind:x.src==='Отчёт'?'Отчёт':'Загружен вручную',cp:x.cp,by:x.upBy||o.owner,date:String(x.upAt||x.at).slice(0,10),src:x.src||'Загружен вручную',size:x.size}));
   const fio=Object.fromEntries(orgUsers(o).map(u=>[u.login,u.short||u.fio]));
-  return OCD[o.id]={self:false,cps,cpm,reps,files,tasks,who:id=>fio[id]||whoName(id)||'',assigned:new Set(reps.map(r=>r.cp)).size}}
+  return OCD[o.id]={self:false,cps,cpm,reps,files,sent,tasks,who:id=>fio[id]||whoName(id)||'',assigned:new Set(reps.map(r=>r.cp)).size}}
 const ocMb=fs=>Math.round(fs.reduce((a,f)=>a+(f.size||0),0)/1048576*10)/10;
 // Сводка — по данным вкладок (у демо — живые, у остальных — набор ocData): «Отчёты» — все несданные на сегодня, «Просрочено» — все просроченные на сегодня (пакет 2, блок 1, пункт 4)
 function orgSum(o){const d=ocData(o),mo=ym(TODAY),x=o.sum||{},us=orgUsers(o);const live=d.cps.filter(c=>!c.archived),open=d.reps.filter(r=>OC_OPEN.has(r.status));
@@ -165,15 +176,15 @@ function orgCard(id,tab){const o=ORGS.find(x=>x.id===id);if(!o){toast('Тако�
   log('porg',id,'Открыта карточка организации');
   MODALS.filter(x=>x.o.porg).forEach(x=>x.close());
   openModal({size:'wide',porg:id,state:{tab:tab||'main'},render:m=>{const st=m.state;const sm=orgSum(o);const us=orgUsers(o);
-    const tabs=[['main','Основное','landmark'],['sum','Сводка','gauge'],['staff','Сотрудники','users',us.length],['cps','Контрагенты','building'],['rep','Отчёты','file',sm.rep.over||'',sm.rep.over?1:0],['money','Деньги','coins'],['set','Настройки','sliders'],['files','Файлы','folder'],['hist','История','history']];
-    const b=st.tab==='main'?ocMain(o):st.tab==='sum'?ocSum(o,sm):st.tab==='staff'?'<div id="oc-staff"></div>':st.tab==='cps'?ocCps(o):st.tab==='rep'?ocRep(o,st):st.tab==='money'?ocMoney(o):st.tab==='set'?ocSet(o):st.tab==='files'?ocFiles(o,sm):ocHist(o);
+    const tabs=[['main','Основное','landmark'],['sum','Сводка','gauge'],['staff','Сотрудники','users',us.length],['cps','Контрагенты','building'],['rep','Отчёты','file',sm.rep.over||'',sm.rep.over?1:0],['money','Деньги','coins'],['set','Настройки','sliders'],['files','Файлы','folder'],['sub','Подписка','wallet',typeof subWait==='function'&&subWait(o.id)?1:'',1],['hist','История','history']];
+    const b=st.tab==='main'?ocMain(o):st.tab==='sum'?ocSum(o,sm):st.tab==='staff'?'<div id="oc-staff"></div>':st.tab==='cps'?ocCps(o):st.tab==='rep'?ocRep(o,st):st.tab==='money'?ocMoney(o):st.tab==='set'?ocSet(o):st.tab==='files'?ocFilesTab(o):st.tab==='sub'?subOrgBody(o.id):ocHist(o);
     const acts=orgActions(o,()=>m.draw());const own=OTHER_USERS.find(u=>u.login===o.owner)||(o.self?allUsers().find(u=>u.login===o.owner):null);
     // Владелец по заявке ещё не задал пароль — «Отправить новую ссылку для пароля» (tg-lead.js)
     const spa=own&&!o.self?ownerSetupAct(o,own):null;
     const sl=orgSlug(o);
     return {title:esc(o.name),sub:`ИНН <span class="mono">${esc(o.inn)}</span>${sl?` · <span class="mono">buhuchet.kg/${esc(sl)}</span>`:''} · подключена ${fmtD(o.created)}`,
       head:[...acts,own?{label:'Сбросить пароль владельцу',icon:'key',run:()=>accResetPass(own),after:1}:null,spa].filter(Boolean).map((a,i)=>`<button class="btn sm hd-btn ${a.danger?'danger':''}" data-ocact="${i}" ${a.disabled?'disabled':''} title="${esc(a.disabled&&a.reason?a.reason:a.label)}">${ic(a.icon,'sm')}<span class="bl">${esc(a.label)}</span></button>`).join(''),
-      body:`<div class="ac-st">${o.active?`<span class="pill green">${ic('check')}Активна</span>`:`<span class="pill red">${ic('lock')}${o.note?esc(o.note):'Заблокирована'}</span>`}${o.self?`<span class="pill purple">${ic('star')}Демо</span>`:''}</div>${cardTabs(tabs,st.tab,'oct')}<div class="ac-b">${b}</div>`,
+      body:`<div class="ac-st">${o.active?`<span class="pill green">${ic('check')}Активна</span>`:`<span class="pill red">${ic('lock')}${o.note?esc(o.note):'Заблокирована'}</span>`}${o.self?`<span class="pill purple">${ic('star')}Демо</span>`:''}${typeof subStatus==='function'?`<button type="button" class="linkbtn" data-ocgo="sub" title="Подписка организации">${pill(subStatus(o.id),SUB_PILL)}${subOf(o.id)&&subOf(o.id).paidTo?` <span class="hint" style="display:inline;margin:0">оплачено до ${fmtD(subOf(o.id).paidTo)}</span>`:''}</button>`:''}</div>${cardTabs(tabs,st.tab,'oct')}<div class="ac-b">${b}</div>`,
       foot:`<span class="hint" style="margin:0">Только просмотр: администратор не меняет контрагентов, отчёты и настройки организации</span><div class="grow"></div><button class="btn cta" data-close>Готово</button>`,
       mount(el){bindCardTabs(el,'oct',k=>{st.tab=k;m.draw();const x=el.querySelector('.mb');if(x)x.scrollTop=0});
         const all=[...acts,own?{run:()=>accResetPass(own)}:null,spa].filter(Boolean);$$('[data-ocact]',el).forEach(x=>x.onclick=()=>{const a=all[+x.dataset.ocact];if(a&&a.run)a.run()});
@@ -240,8 +251,6 @@ function ocSet(o){const self=o.self,d=ocData(o),tem=ocTem().organization||{};
     <div class="box"><h3>Подключённые виды отчётов · ${types.length}</h3><div class="row" style="gap:6px">${types.map(t=>`<span class="tag">${esc(t.short||t.name)}</span>`).join('')||acDash}</div></div>
     <div class="box"><h3>Роли и права · ${roles.length}</h3><div class="tbl-wrap"><table class="mini m-cards"><thead><tr><th>Роль</th><th class="num">Прав</th><th>Сотрудников</th></tr></thead><tbody>${roles.map(r=>`<tr><td>${esc(r.name)}</td><td class="num">${r.n}</td><td>${r.emp}</td></tr>`).join('')}</tbody></table></div></div>
     <div class="box"><h3>Telegram-напоминания</h3><div class="kv">${acKv('Напоминания о сроках',pol.remind.map(x=>`за ${x} ${plural(x,'день','дня','дней')}`).join(', ')+' и в день срока')}${acKv('Сводка недели',`${pol.wd}, ${esc(pol.at)}`)}${acKv('Час напоминаний',esc(pol.at))}${acKv('Повтор о просрочке',pol.rep?'да':'нет')}</div></div>`}
-function ocFiles(o,s){const lf=o.leadFiles||[];
-  return `<div class="box"><h3>Объём по категориям · ${fmtM(s.files.mb)} МБ</h3><div id="oc-fk"></div></div><div class="box"><h3>Последние загрузки</h3><div id="oc-fl"></div></div>${lf.length?`<div class="box"><h3>${LEAD_SRC}</h3><div class="list">${lf.map(f=>`<div class="li" style="cursor:default">${ic('file')}<div class="grow"><div class="t1">${esc(f.name)}</div><div class="t2">${esc(ldDocT(f.kind))} · ${fmtSize(f.size)} · ${fmtDT(f.at)}</div></div></div>`).join('')}</div><span class="hint">В «Файловом менеджере» организации — с источником «${LEAD_SRC}».</span></div>`:''}`}
 function ocHist(o){const hs=HIST.filter(h=>h.ent==='porg'&&h.id===o.id||(o.self&&(h.ent==='org'||h.ent==='role'))).slice();if(o._ca)hs.push({at:o._ca,who:o._cb,what:'Организация создана вместе с владельцем'});hs.sort((a,b)=>a.at<b.at?1:-1);
   return `<div class="box">${acTl(hs.slice(0,200))}</div>`}
 function ocGrids(el,o,st){const us=orgUsers(o);
@@ -257,9 +266,8 @@ function ocGrids(el,o,st){const us=orgUsers(o);
     const q=$('#oc-rq',el);if(q)q.oninput=()=>{st.rq=q.value;g.s.page=0;g.refresh()}}
   const tx={};d.reps.filter(r=>r.sum>0&&(r.payDue||r.due)).forEach(r=>{const m=(r.payDue||r.due).slice(0,7);const x=tx[m]=tx[m]||{m,sum:0,paid:0};x.sum+=r.sum;x.paid+=Math.min(r.paid||0,r.sum)});
   acGrid(el,'#oc-tax',{id:'oc-tax',rid:x=>x.m,cols:[{key:'m',label:'Месяц уплаты',type:'text',w:170,val:x=>x.m,text:x=>fmtMon(x.m)},{key:'sum',label:'К уплате, сом',type:'money',w:160,num:true,val:x=>x.sum},{key:'paid',label:'Оплачено, сом',type:'money',w:160,num:true,val:x=>x.paid},{key:'left',label:'Не оплачено, сом',type:'money',w:170,num:true,val:x=>Math.max(0,x.sum-x.paid)}],rows:()=>Object.values(tx).filter(x=>x.m<=addMonths(mo,1)&&x.m>=addMonths(mo,-11)),title:'m',sort:{key:'m',dir:-1},noun:['месяц','месяца','месяцев']});
-  const fs=d.files,fk={};fs.forEach(f=>{const x=fk[f.kind]=fk[f.kind]||{kind:f.kind,n:0,size:0};x.n++;x.size+=f.size||0});
-  acGrid(el,'#oc-fk',{id:'oc-fk',rid:x=>x.kind,cols:[{key:'kind',label:'Категория',type:'enum',w:240,val:x=>(typeof FKIND_L!=='undefined'&&FKIND_L[x.kind])||x.kind},{key:'n',label:'Файлов',type:'int',w:110,num:true,val:x=>x.n},{key:'mb',label:'Объём, МБ',type:'num',w:130,num:true,val:x=>Math.round(x.size/1048576*10)/10}],rows:()=>Object.values(fk),title:'kind',sort:{key:'mb',dir:-1},noun:['категория','категории','категорий']});
-  acGrid(el,'#oc-fl',{id:'oc-fl',rid:f=>f.id,cols:[{key:'name',label:'Файл',type:'text',w:300,val:f=>f.name},{key:'kind',label:'Категория',type:'enum',w:180,val:f=>f.kind},{key:'cp',label:'Контрагент',type:'text',w:220,val:f=>(d.cpm[f.cp]||{}).name||''},{key:'by',label:'Загрузил',type:'enum',w:160,val:f=>d.who(f.by)},{key:'date',label:'Дата',type:'date',w:120,val:f=>String(f.date||'').slice(0,10)},{key:'size',label:'Размер',type:'int',w:110,num:true,val:f=>f.size,text:f=>fmtSize(f.size||0)}],rows:()=>fs.slice().sort((a,b)=>String(a.date)<String(b.date)?1:-1).slice(0,30),title:'name',sort:{key:'date',dir:-1},noun:['файл','файла','файлов']})}
+  // «Файлы» (пакет 2, блок 4): полный список файлов организации и окно файла — admin-files.js
+  if(st.tab==='files')ocFilesGrids(el,o);if(st.tab==='sub'&&typeof subScreenBind==='function')subScreenBind(el,o.id,{admin:true})}
 
 /* ── ссылки #accounts/<логин> и #orgs/<адрес организации> ── */
 const ACARD={pend:null};

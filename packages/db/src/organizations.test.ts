@@ -78,7 +78,7 @@ describe.skipIf(!databaseAvailable())('создание организации �
       (typeof org.roles)[0],
     ];
 
-    // Владелец имеет все 40 прав — по признаку роли, без перечня прав.
+    // Владелец имеет все 42 права — по признаку роли, без перечня прав.
     expect(permsOf(owner.id).size).toBe(0);
     expect(
       effectivePermissions({
@@ -87,7 +87,7 @@ describe.skipIf(!databaseAvailable())('создание организации �
         permissions: permsOf(owner.id),
         scopes: {},
       }),
-    ).toHaveLength(40);
+    ).toHaveLength(42);
 
     const [template] = await t.admin.db
       .select()
@@ -97,6 +97,8 @@ describe.skipIf(!databaseAvailable())('создание организации �
     expect(PERMISSION_IDS.filter((p) => !permsOf(chief.id).has(p))).toEqual([
       'cpArchive',
       'archiveRest',
+      'dmView',
+      'dmTokens',
       'staff',
       'org',
       'rollback',

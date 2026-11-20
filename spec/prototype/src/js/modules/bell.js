@@ -66,7 +66,7 @@ function bellNews(uid){const rd=newsRead(uid),from=bellFrom();
 function bellLeads(){const from=bellFrom();LEADS.filter(l=>l.status==='Новая'&&(l.at||'').slice(0,10)>=from).forEach(l=>bellPut('admin',{kind:'other',ev:'lead',open:{k:'lead',id:l.id},
   text:`Новая заявка с сайта: ${l.firm||l.name||''}`,key:'lead:'+l.id,at:l.at},true))}
 function bellClean(){const lim=addDays(TODAY,-BELL_DAYS);for(let i=BELL.length-1;i>=0;i--)if(String(BELL[i].at).slice(0,10)<lim)BELL.splice(i,1)}
-function bellSync(){bellClean();if(isAdmin())bellLeads();else bellStaffDay(me());bellNews(S.me)}
+function bellSync(){bellClean();if(isAdmin())bellLeads();else bellStaffDay(me());if(typeof subDaily==='function')subDaily();bellNews(S.me)}
 
 // Видна ли строка тому, кто сейчас вошёл: право, контрагент не скрыт и в его области, запись видна
 function bellSees(x){const o=x.open||{},adm=isAdmin();if(adm!==(x.uid==='admin'))return false;
@@ -79,6 +79,9 @@ function bellSees(x){const o=x.open||{},adm=isAdmin();if(adm!==(x.uid==='admin')
   if(o.k==='cp_sent')return feat('cppage');
   if(o.k==='cp_fee')return feat('fee')&&can('fee');
   if(o.k==='employee')return can('staffView');
+  // Подписка (доработки 20.11.2026, блок 4, пункт 3; блок 6, пункт 3): напоминания и итоги проверки — владельцам, чеки — администраторам
+  if(o.k==='sub')return !adm&&me()&&me().role==='owner';
+  if(o.k==='sub_check')return adm;
   return true}
 
 // Для панели (поток И). uid — кто вошёл: права проверяются у него

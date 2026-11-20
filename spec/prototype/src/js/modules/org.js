@@ -41,6 +41,7 @@ function pgPolHtml(ro){return `<div class="pg-pol"><span class="hint">Разде
 // Занятые слова — адреса самой программы: ссылки контрагентов не должны пересекаться с ними (v58)
 const slugErr=v=>!/^[a-z0-9-]{3,30}$/.test(v)?'3–30 символов: строчные латинские буквы, цифры и дефис':SLUG_BUSY.includes(v)?SLUG_BUSY_T:ORGS.some(o=>!o.self&&o.slug===v)?'Такой адрес уже занят другой организацией':'';
 function renderOrg(body,tab){
+  if(tab==='sub')return renderOrgSub(body);
   const ro=!can('org');
   if(tab==='main'){
     if(ro){body.innerHTML=`<div class="note">${ic('lock')}<span>Редактировать может только владелец организации. Вы видите профиль только для просмотра.</span></div>${orgMainView()}`;return}
@@ -83,13 +84,15 @@ function renderOrg(body,tab){
     const rdLog=w=>log('org','policy',`Дни напоминаний: за ${w||'—'} → ${ORG.remind.join(', ')||'—'} дн.`);
     $$('[data-rd]',body).forEach(b=>b.onclick=()=>{const w=ORG.remind.join(', ');ORG.remind.splice(+b.dataset.rd,1);rdLog(w);renderPage();ckHit('remind')});const ra=$('#rd-add',body);if(ra)ra.onkeydown=e=>{if(e.key==='Enter'){const t=ra.value.trim(),n=+t;if(!t)return setErr(body,'rd-add','');if(!setErr(body,'rd-add',!/^\d+$/.test(t)||n<1||n>60?'От 1 до 60 дней':''))return;if(ORG.remind.includes(n))return toast(`За ${n} ${plural(n,'день','дня','дней')} уже есть в наборе`,'alert',true);const w=ORG.remind.join(', ');ORG.remind.push(n);ORG.remind.sort((a,b)=>b-a);rdLog(w);renderPage();ckHit('remind');toast('Набор дней сохранён')}};
     return}
-  const fs=allFiles();const used=fs.reduce((a,f)=>a+(f.size||0),0);
-  body.innerHTML=`<div class="box" id="org-storage"><h3>Хранилище файлов</h3><div class="row"><span class="grow">Занято <b>${fmtSize(used)}</b> · файлов: ${fs.length}</span><span class="hint">Ограничение на один файл — 20 МБ</span></div></div><div class="box"><h3>Общие</h3><div class="form">${fld('Часовой пояс',sel('st-tz',['Asia/Bishkek (UTC+6)','Asia/Almaty (UTC+5)','Asia/Tashkent (UTC+5)','Asia/Dushanbe (UTC+5)','Europe/Moscow (UTC+3)'],ORG.tz,ro?'disabled':''),{id:'st-tz',hint:'«Сегодня» и «эта неделя» считаются по нему'})}${fld('Роль по умолчанию для новых сотрудников',sel('st-role',ROLES.filter(r=>r.id!=='owner').map(r=>[r.id,r.name]),ORG.defaultRole,ro?'disabled':''),{id:'st-role'})}</div></div>
+  // Занятая память — одно число с экраном «Подписка» и Админкой (пакет 2 от 20.11.2026, блок 5, пункт 2); лимит — у подписки
+  const fs=allFiles(),mm=subMem(ORG.id),lim=!!subOf(ORG.id)&&isFinite(mm.limit);
+  body.innerHTML=`<div class="box" id="org-storage"><h3>Хранилище файлов</h3><div class="row"><span class="grow">Занято <b>${lim?`${subGb(mm.used)} из ${subGb(mm.limit)} ГБ`:fmtSize(mm.used*1048576)}</b> · файлов: ${fs.length}${lim&&subMine()?` · <a class="linkbtn" href="#org.sub">Подписка</a>`:''}</span><span class="hint">Ограничение на один файл — 20 МБ</span></div></div><div class="box"><h3>Общие</h3><div class="form">${fld('Часовой пояс',sel('st-tz',['Asia/Bishkek (UTC+6)','Asia/Almaty (UTC+5)','Asia/Tashkent (UTC+5)','Asia/Dushanbe (UTC+5)','Europe/Moscow (UTC+3)'],ORG.tz,ro?'disabled':''),{id:'st-tz',hint:'«Сегодня» и «эта неделя» считаются по нему'})}${fld('Роль по умолчанию для новых сотрудников',sel('st-role',ROLES.filter(r=>r.id!=='owner').map(r=>[r.id,r.name]),ORG.defaultRole,ro?'disabled':''),{id:'st-role'})}</div></div>
   ${ro?'':`<div class="row"><div class="grow"></div><button class="btn cta" id="st-save">Сохранить настройки</button></div>`}
-  ${tgnHtml()}`;
+  ${tgnHtml()}${dmApiBox()}`;
   // Часовой пояс сохраняется вместе с остальными настройками (расхождение продукта п. 18, 27.10.2026)
   // Пакет 14.11.2026, блок 3: всё о Telegram — в блоке «Telegram-уведомления», сохраняется сразу (tg-notify.js)
   tgnMount(body);
+  dmApiMount(body);
   const sv=$('#st-save',body);if(sv)sv.onclick=()=>{const tz=val(body,'st-tz');if(tz&&tz!==ORG.tz){log('org','settings',`Часовой пояс: ${ORG.tz} → ${tz}`);ORG.tz=tz}ORG.defaultRole=val(body,'st-role');log('org','settings','Изменены настройки');toast('Настройки сохранены')};
 }
 

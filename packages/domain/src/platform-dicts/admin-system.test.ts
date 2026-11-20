@@ -101,7 +101,7 @@ describe('Админка → «Шаблоны ролей»: права и обл
   });
 
   it('«N из M прав» — без прав только владельца', () => {
-    expect(TEMPLATE_PERMISSION_COUNT).toBe(39);
+    expect(TEMPLATE_PERMISSION_COUNT).toBe(41);
   });
 });
 

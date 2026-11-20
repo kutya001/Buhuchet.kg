@@ -333,3 +333,29 @@ body.pub-on .cover{z-index:88}body.pub-on .pop{z-index:89}
 .tgn-day{display:inline-flex;gap:6px;align-items:center;font-size:13px;cursor:pointer;min-height:28px}
 .tgn-day input{margin:0}
 @media (max-width:767px){.tgn-kv,.tgn-set{margin-left:0}}
+/* ── Подписка владельца и окно оплаты (доработки 20.11.2026, блок 5; этап 0, П8) ── */
+.sub-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+.sub-cards .box{margin:0}
+.sub-h{display:flex;gap:6px;align-items:center;font-size:12.5px;color:var(--muted);font-weight:600}
+.sub-v{font-size:18px;font-weight:700;margin:6px 0 4px;font-variant-numeric:tabular-nums}
+.sub-c .hint{display:block;margin-top:4px;line-height:1.45}
+.bar.sub-bar{margin:6px 0 2px}.bar.sub-bar.yellow i{background:var(--yellow)}.bar.sub-bar.red i{background:var(--red)}
+.sub-btns{gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}
+.sub-ban{align-items:center;margin-bottom:12px}.sub-ban .btn{flex:none}
+.sub-kinds{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.sub-kind{display:flex;flex-direction:column;gap:4px;align-items:flex-start;text-align:left;padding:12px;border:1px solid var(--border);border-radius:var(--r-m);background:var(--pane);color:var(--text);cursor:pointer;font:inherit;transition:border-color var(--t-fast),box-shadow var(--t-fast)}
+.sub-kind:hover{border-color:var(--border-strong)}
+.sub-kind.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);background:var(--sel)}
+.sub-kind .sk-n{font-weight:700;font-size:14px}.sub-kind .sk-p{font-size:12.5px}.sub-kind .sk-p b{font-size:15px;font-variant-numeric:tabular-nums}
+.sub-kind .sk-d{font-size:12px;color:var(--muted)}
+.sub-kind ul{margin:4px 0 0;padding-left:16px;font-size:12px;color:var(--muted);line-height:1.4}
+.sub-calc{display:flex;flex-direction:column;border:1px solid var(--border);border-radius:var(--r-m);overflow:hidden}
+.sub-calc>div{display:flex;justify-content:space-between;gap:12px;padding:8px 12px;font-size:13px}
+.sub-calc>div+div{border-top:1px solid var(--border)}
+.sub-calc .tot{font-weight:700;background:var(--pane-alt);font-size:14px}
+.sub-reqs{display:flex;flex-direction:column}
+.sub-req{display:grid;grid-template-columns:170px 1fr auto;gap:10px;align-items:center;padding:6px 0;font-size:13px}
+.sub-req+.sub-req{border-top:1px solid var(--border)}
+.sub-req .k{color:var(--muted)}.sub-req .v{overflow-wrap:anywhere}
+.sub-file .li{border:1px solid var(--border);border-radius:var(--r-m);padding:8px 10px;display:flex;gap:10px;align-items:center}
+@media (max-width:767px){.sub-btns>.hint{flex:1 1 100%}.sub-req{grid-template-columns:1fr auto}.sub-req .k{grid-column:1/-1;margin-bottom:-6px}.sub-btns .btn{flex:1 1 auto;justify-content:center}.sub-ban{flex-wrap:wrap}}

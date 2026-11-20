@@ -67,7 +67,7 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
     expect(result.platformDicts.reportTypes.inserted).toBe((refDB.reportTypes as unknown[]).length);
     expect(result.gked.inserted).toBe(gked.items.length);
     expect(result.demo).toEqual({ orgId: DEMO_ORG_ID, created: true, employees: 7 });
-    expect(result.permissions.inserted).toBe(40);
+    expect(result.permissions.inserted).toBe(42);
     expect(result.roleTemplates.inserted).toBe(2);
     expect(result.uiTexts.inserted).toBeGreaterThan(0);
 
@@ -76,6 +76,12 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
     // он лежит здесь, пока его не перенесут в продукт (docs/deviations.md п. Т-14).
     const keys = (await t.admin.db.select().from(platformReference)).map((r) => r.key);
     for (const key of TABLE_SECTIONS) expect(keys).not.toContain(key);
+    // Подписки и «Витрина данных» (прототип v151, v155): реквизиты платформы и SQL шаблонов в общий
+    // справочник, который читает любая организация, не попадают (docs/deviations.md п. О-86).
+    for (const key of ['subKinds', 'subPrices', 'dmTemplates']) {
+      expect(Object.keys(refDB), key).toContain(key);
+      expect(keys, key).not.toContain(key);
+    }
     const [dictionaries] = await t.admin.db
       .select()
       .from(platformReference)
@@ -106,7 +112,7 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
     for (const report of Object.values(result.platformDicts))
       expect(report).toMatchObject({ inserted: 0, updated: 0 });
     expect(result.gked).toMatchObject({ inserted: 0, updated: 0 });
-    expect(result.permissions).toEqual({ inserted: 0, updated: 0, unchanged: 40 });
+    expect(result.permissions).toEqual({ inserted: 0, updated: 0, unchanged: 42 });
     expect(result.roleTemplates).toEqual({ inserted: 0, updated: 0, unchanged: 2 });
     expect(result.uiTexts).toMatchObject({ inserted: 0, updated: 0 });
     expect(result.demo).toMatchObject({ created: false, employees: 0 });

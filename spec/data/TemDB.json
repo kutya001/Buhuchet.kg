@@ -358,7 +358,17 @@
    "state": "new"
   },
   "repConfirm": true,
-  "payFirst": true
+  "payFirst": true,
+  "sub": {
+   "kind": "m1",
+   "pack": 10,
+   "extraGb": 0,
+   "paidTo": "2026-12-20",
+   "addDisc": 0,
+   "firstPaid": false,
+   "free": true
+  },
+  "apiOn": false
  },
  "roles": [
   {
@@ -395,6 +405,8 @@
     "filesView",
     "filesUpload",
     "filesDelete",
+    "dmView",
+    "dmTokens",
     "staffView",
     "staffStats",
     "staff",
@@ -1164,5 +1176,40 @@
  "sessions": [],
  "bonusOps": [],
  "sentFiles": [],
- "bell": []
+ "bell": [],
+ "subPays": [
+  {
+   "id": "sp1",
+   "org": "o1",
+   "at": "2026-11-20 09:00",
+   "by": "admin",
+   "what": "free",
+   "kind": "m1",
+   "months": 0,
+   "pack": 10,
+   "extraGb": 0,
+   "from": "now",
+   "sum": 0,
+   "lines": [],
+   "file": null,
+   "status": "ok",
+   "open": true,
+   "reason": "Бесплатный период при создании организации",
+   "chkBy": "admin",
+   "chkAt": "2026-11-20 09:00",
+   "paidTo": "2026-12-20"
+  }
+ ],
+ "storage": {
+  "trash": [],
+  "check": {
+   "at": null,
+   "missing": [],
+   "extra": [],
+   "stuck": [],
+   "failed": []
+  }
+ },
+ "dmTokens": [],
+ "dmLog": []
 }

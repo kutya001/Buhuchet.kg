@@ -76,6 +76,13 @@ export const TABLE_SECTIONS = [
   'news',
   // Видео платформы — таблица videos (прототип v79); видео прототипа не заливаются (docs/deviations.md п. О-53).
   'videos',
+  // Подписки и «Витрина данных» (доработки 20.11.2026, прототип v151 и v155) — свои таблицы этапа 0
+  // (subscription_plans, subscription_settings, dm_templates): виды, цены и реквизиты платформы и SQL
+  // шаблонов организациям в общем справочнике не показываются.
+  // ОТКЛОНЕНИЕ: docs/deviations.md#О-86
+  'subKinds',
+  'subPrices',
+  'dmTemplates',
 ] as const;
 
 /** Справочники раздела `dictionaries`, которые лежат в своих таблицах. */

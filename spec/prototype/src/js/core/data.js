@@ -5,10 +5,10 @@
    в артефакте и при открытии с диска — из копии, которую сборка встраивает в страницу (блоки db-*). */
 const DB_VER=1,DB_KEY=BU_P+'temdb';
 const DB_FILES={demo:'demoDB.json',empty:'TemDB.json',ref:'refDB.json',gked:'gkedDB.json'};
-const DB_ORG_KEYS=['organization','roles','employees','contractors','reports','moneyOps','history','tasks','feePayments','services','projects','files','indicators','indicatorValues','indicatorMonths','indicatorHistory','indicatorImports','kbProgress','newsRead','platformOrgs','platformUsers','dictRequests','telegramLog','leads','videoViews','videoGuest','sessions','bonusOps','sentFiles','bell'];
-const DB_REF_KEYS=['dictionaries','taxes','enRates','propertyRates','bizSize','notes','reportTypes','singleTaxRates','taxRates','defaultRates','phoneCodes','holidays','workingSaturdays','statuses','statusNames','roleTemplates','messageTemplates','localization','kbGroups','kbSteps','kbLevels','kbArticles','news','dictHistory','dictLoads','calendarAudit','permissions','kbUi','kbShows','onboarding','videos'];
-const DB_OBJ=new Set(['notes','organization','kbProgress','newsRead','dictionaries','taxRates','defaultRates','holidays','statuses','statusNames','messageTemplates','kbLevels','calendarAudit','kbUi','onboarding','videoGuest']);
-const DB_T={bell:'Колокольчик уведомлений',organization:'Организация',roles:'Роли',employees:'Сотрудники',contractors:'Контрагенты',reports:'Отчёты',moneyOps:'Поступления и оплаты',history:'История',tasks:'Задачи',feePayments:'Оплаты за обслуживание',services:'Разовые услуги',projects:'Проекты',files:'Файлы',indicators:'Показатели',indicatorValues:'Значения показателей',indicatorMonths:'Статусы месяцев показателей',indicatorHistory:'История показателей',indicatorImports:'Загрузки показателей из Excel',kbProgress:'Прогресс в Базе знаний',newsRead:'Прочитанные новости',platformOrgs:'Организации платформы',sessions:'Сеансы входа',platformUsers:'Учётные записи',dictRequests:'Запросы на справочники',telegramLog:'Журнал Telegram',leads:'Заявки с сайта',videoViews:'Просмотры видео',videoGuest:'Просмотры видео гостями лендинга',sessions:'Сеансы входа',bonusOps:'Списания бонусов сотрудников',sentFiles:'Файлы от контрагентов'};
+const DB_ORG_KEYS=['organization','roles','employees','contractors','reports','moneyOps','history','tasks','feePayments','services','projects','files','indicators','indicatorValues','indicatorMonths','indicatorHistory','indicatorImports','kbProgress','newsRead','platformOrgs','platformUsers','dictRequests','telegramLog','leads','videoViews','videoGuest','sessions','bonusOps','sentFiles','bell','subPays','storage','dmTokens','dmLog'];
+const DB_REF_KEYS=['dictionaries','taxes','enRates','propertyRates','bizSize','notes','reportTypes','singleTaxRates','taxRates','defaultRates','phoneCodes','holidays','workingSaturdays','statuses','statusNames','roleTemplates','messageTemplates','localization','kbGroups','kbSteps','kbLevels','kbArticles','news','dictHistory','dictLoads','calendarAudit','permissions','kbUi','kbShows','onboarding','videos','subKinds','subPrices','dmTemplates'];
+const DB_OBJ=new Set(['storage','notes','organization','kbProgress','newsRead','dictionaries','taxRates','defaultRates','holidays','statuses','statusNames','messageTemplates','kbLevels','calendarAudit','kbUi','onboarding','videoGuest','subPrices']);
+const DB_T={storage:'Хранилище файлов: ждут удаления и сверка',bell:'Колокольчик уведомлений',organization:'Организация',roles:'Роли',employees:'Сотрудники',contractors:'Контрагенты',reports:'Отчёты',moneyOps:'Поступления и оплаты',history:'История',tasks:'Задачи',feePayments:'Оплаты за обслуживание',services:'Разовые услуги',projects:'Проекты',files:'Файлы',indicators:'Показатели',indicatorValues:'Значения показателей',indicatorMonths:'Статусы месяцев показателей',indicatorHistory:'История показателей',indicatorImports:'Загрузки показателей из Excel',kbProgress:'Прогресс в Базе знаний',newsRead:'Прочитанные новости',platformOrgs:'Организации платформы',sessions:'Сеансы входа',platformUsers:'Учётные записи',dictRequests:'Запросы на справочники',telegramLog:'Журнал Telegram',leads:'Заявки с сайта',videoViews:'Просмотры видео',videoGuest:'Просмотры видео гостями лендинга',sessions:'Сеансы входа',bonusOps:'Списания бонусов сотрудников',sentFiles:'Файлы от контрагентов',subPays:'Оплаты подписки',dmTokens:'API-токены витрины данных',dmLog:'Журнал запросов витрины данных'};
 function dbRead(name,id){
   // Демо-версия для сайта к серверу не обращается: данные только из встроенной копии
   if(/^https?:/.test(location.protocol)&&BU_P==='bu.')try{const x=new XMLHttpRequest();x.open('GET','data/'+name+'?v='+Date.now(),false);x.send();
@@ -43,9 +43,33 @@ function dbFill(db){const miss=[],e=DBSRC.empty.db,r=DBSRC.ref.db;db.meta=db.met
       const c=x.st==='ok'&&(db.contractors||[]).find(y=>y.id===x.cp);if(c&&!(c.files||[]).includes(x.fname)){(c.files=c.files||[]).push(x.fname);c.fromCp=[...(c.fromCp||[]),x.fname]}})}}
   // Колокольчик уведомлений (пакет 16.11.2026, блок 3): у данных, сохранённых раньше, раздел появляется пустым
   if(db.meta.file==='TemDB.json'&&db.bell==null)db.bell=[];
+  // Подписки организаций (доработки 20.11.2026): у данных, сохранённых раньше, — подписки и оплаты из demoDB.json (в демо-режиме) или бесплатный период
+  // своей организации (пустой шаблон); даты подписок и оплат демо-данных сдвигаются от дня выгрузки (20.11.2026) к сегодняшнему, чтобы демо не истекало
+  // v152: оплаты, не попавшие в сохранение v151, возвращаются из того же источника; сдвигается только то, что подставлено сейчас
+  if(db.meta.file==='TemDB.json'&&(!db.meta.subs1||db.subPays==null)){const all=!db.meta.subs1;db.meta.subs1=1;const dm=db.meta.mode!=='empty',src=dm?DBSRC.demo.db:DBSRC.empty.db,put=[];
+    const fillP=db.subPays==null;if(fillP)db.subPays=structuredClone(src.subPays||[]);
+    if(db.organization&&!db.organization.sub&&src.organization&&src.organization.sub){db.organization.sub=structuredClone(src.organization.sub);put.push(db.organization)}
+    if(dm&&Array.isArray(db.platformOrgs))db.platformOrgs.forEach(o=>{const f=(src.platformOrgs||[]).find(x=>x.id===o.id);if(f&&f.sub&&!o.sub){o.sub=structuredClone(f.sub);put.push(o)}});
+    const k=Math.round((Date.parse(TODAY)-Date.parse('2026-11-20'))/864e5),sh=v=>v?new Date(Date.parse(v.slice(0,10))+k*864e5).toISOString().slice(0,10)+v.slice(10):v;
+    if(k){(all?[db.organization,...(db.platformOrgs||[])]:put).forEach(o=>{const s=o&&o.sub;if(!s)return;s.paidTo=sh(s.paidTo);if(s.next)s.next.from=sh(s.next.from)});
+      if(all||fillP)db.subPays.forEach(x=>['at','chkAt','paidTo'].forEach(f=>{if(x[f])x[f]=sh(x[f])}))}}
+  // Отложенное удаление файлов и сверка хранилища (пакет 2 от 20.11.2026, блоки 3 и 5): у данных, сохранённых раньше, в демо-режиме — демо-записи из demoDB.json
+  if(db.meta.file==='TemDB.json'&&db.storage==null)db.storage=structuredClone((db.meta.mode!=='empty'&&DBSRC.demo.db.storage)||{});
+  // Витрина данных (доработки 20.11.2026, этап 0, П10): у данных, сохранённых раньше, — API-токены и журнал запросов из demoDB.json (в демо-режиме) или пусто;
+  // даты демо-токенов сдвигаются от дня выгрузки (20.11.2026) к сегодняшнему, как у подписок; «Внешний доступ по API» — как в файле данных
+  if(db.meta.file==='TemDB.json'&&db.dmTokens==null){const dm=db.meta.mode!=='empty',src=dm?DBSRC.demo.db:DBSRC.empty.db,k=Math.round((Date.parse(TODAY)-Date.parse('2026-11-20'))/864e5),sh=v=>v&&k?new Date(Date.parse(v.slice(0,10))+k*864e5).toISOString().slice(0,10)+v.slice(10):v;
+    db.dmTokens=structuredClone(src.dmTokens||[]);db.dmLog=structuredClone(src.dmLog||[]);db.dmTokens.forEach(t=>{t.at=sh(t.at);t.till=sh(t.till);if(t.revoked)t.revoked.at=sh(t.revoked.at);if(t.last)t.last.at=sh(t.last.at)});db.dmLog.forEach(x=>{x.at=sh(x.at)});
+    if(db.organization&&db.organization.apiOn==null)db.organization.apiOn=!!(src.organization&&src.organization.apiOn);
+    if(dm&&Array.isArray(db.platformOrgs))db.platformOrgs.forEach(o=>{const f=(src.platformOrgs||[]).find(x=>x.id===o.id);if(f&&f.apiOn&&o.apiOn==null)o.apiOn=true})}
   DB_ORG_KEYS.forEach(k=>{if(db[k]==null){miss.push(DB_T[k]||k);db[k]=structuredClone(e[k]!=null?e[k]:DB_OBJ.has(k)?{}:[])}});
   const hadRef=!!db.ref;db.ref=db.ref||{};if(hadRef&&db.ref.videos==null&&!db.meta.v79)db.ref.videos=structuredClone(r.videos||[]);
+  if(hadRef)['subKinds','subPrices'].forEach(k=>{if(db.ref[k]==null)db.ref[k]=structuredClone(r[k]||(k==='subPrices'?{}:[]))});
+  if(hadRef&&db.ref.dmTemplates==null)db.ref.dmTemplates=structuredClone(r.dmTemplates||[]);
   DB_REF_KEYS.forEach(k=>{if(db.ref[k]==null){if(hadRef)miss.push('справочник '+k);db.ref[k]=structuredClone(r[k]!=null?r[k]:DB_OBJ.has(k)?{}:[])}});
+  // Витрина данных: права «Смотреть витрину данных» и «Управлять API-токенами» — после прав «Файлового менеджера», у владельца — обе; состояния шаблонов — из refDB.json
+  if(!db.meta.dm1){db.meta.dm1=1;const ps=db.ref.permissions;if(Array.isArray(ps)&&!ps.some(x=>x.id==='dmView')){let i=-1;ps.forEach((x,j)=>{if(x.group==='files')i=j});ps.splice(i<0?ps.length:i+1,0,...(r.permissions||[]).filter(x=>x.group==='dm').map(x=>structuredClone(x)))}
+    const ow=(db.roles||[]).find(x=>x.id==='owner');if(ow&&Array.isArray(ow.perms))['dmView','dmTokens'].forEach(p=>{if(!ow.perms.includes(p))ow.perms.push(p)});
+    if(db.ref.statuses&&!db.ref.statuses.dmTemplate&&r.statuses&&r.statuses.dmTemplate)db.ref.statuses.dmTemplate=structuredClone(r.statuses.dmTemplate)}
   // Справочник ГКЭД — отдельный файл gkedDB.json; правки администратора платформы хранятся в TemDB (ref.gked)
   if(db.ref.gked==null)db.ref.gked=structuredClone(DBSRC.gked.db.items||[]);
   DB_GK_REF.forEach(([k,get,key])=>{let a,b;try{a=get(db.ref);b=get(r)}catch(e){return}if(!a||!b)return;const m=Object.fromEntries(b.map(x=>[key(x),x]));a.forEach(x=>{if(!('gked' in x)&&m[key(x)]&&m[key(x)].gked)x.gked=structuredClone(m[key(x)].gked)})});
@@ -436,6 +460,9 @@ const t=(e.indicators||[]).find(x=>x.name==='ФОТ');
   // v111 (исправление): поле «Еженедельная сводка, понедельник» (st-dg) заменили «Час напоминаний» и «День сводки» — и в статье «Модуль «Моя организация»»
   if(!db.meta.tgN2){db.meta.tgN2=1;const u=db.ref.kbUi;if(u){if(u.fields)delete u.fields['st-dg'];const a=(u.artForms||[]).find(x=>x.mod==='org'&&Array.isArray(x.fields)&&x.fields.includes('st-dg'));if(a)a.fields.splice(a.fields.indexOf('st-dg'),1,...['tgn-at','tgn-wd'].filter(k=>!a.fields.includes(k)))}}
   // Telegram заявителя (v113, доработки 14.11.2026, блок 1): ответы бота заявителю, «Организация создана» и ссылка, чтобы задать пароль
+  // Подписки (v151, доработки 20.11.2026, блок 4, пункт 3; блок 6, пункт 3; поток Т): сообщения владельцам об оплате и памяти, администраторам — о чеках
+  if(!db.meta.tgS1){db.meta.tgS1=1;const a=db.ref.messageTemplates,n=db.ref.templateNotes,rm=r.messageTemplates||{},rn=r.templateNotes||{},ks=['tgSubSoon','tgSubOver','tgSubPaid','tgSubRejected','tgSubMem80','tgSubMemFull','tgSubCheckNew','tgSubCheckWait'];
+    if(a)ks.forEach(k=>{if(a[k]==null&&rm[k]!=null)a[k]=rm[k]});if(n)ks.forEach(k=>{if(n[k]==null&&rn[k]!=null)n[k]=rn[k]})}
   if(!db.meta.tgL1){db.meta.tgL1=1;const a=db.ref.messageTemplates,n=db.ref.templateNotes,rm=r.messageTemplates||{},rn=r.templateNotes||{},ks=['tgLeadGot','tgLeadLinkBad','tgLeadNo','tgLeadDone','tgSetPassNew','tgBtnSetPass'];
     if(a)ks.forEach(k=>{if(a[k]==null&&rm[k]!=null)a[k]=rm[k]});if(n)ks.forEach(k=>{if(n[k]==null&&rn[k]!=null)n[k]=rn[k]})}
   // v120 (поток К, доработки 15.11.2026): подсказки и обучение на странице контрагента — тексты в справочнике текстов элементов экрана kbUi.cpHelp

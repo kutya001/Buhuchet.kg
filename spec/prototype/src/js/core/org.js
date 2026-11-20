@@ -6,14 +6,14 @@ const PERM_REF=DB.ref.permissions;
 const PERMS=[];
 // Группы прав — в порядке меню модулей, последней «Общие права»; feature — функция учётной политики, без которой модуль выключен
 // view — право «Просматривать …»: без него модуль не виден, остальные права группы не действуют; scope — у группы есть область «Свои контрагенты / Все контрагенты»
-const PERM_GROUPS=[['cps','Контрагенты',null,'cpView',1],['reports','Отчеты для сдачи',null,'repView',1],['fin','Финансовые операции по контрагентам','finops','finView',1],['projects','Проекты контрагентов','projects','projView',1],['kpi','Показатели контрагентов','indicators','kpiView',1],['tasks','Задачи','tasks'],['files','Файловый менеджер','files','filesView',1],['staff','Сотрудники',null,'staffView'],['dicts','Справочники'],['kb','База знаний'],['org','Моя организация'],['common','Общие права']].map(([id,name,feature,view,scope])=>({id,name,feature,view,scope:!!scope,perms:[]}));
+const PERM_GROUPS=[['cps','Контрагенты',null,'cpView',1],['reports','Отчеты для сдачи',null,'repView',1],['fin','Финансовые операции по контрагентам','finops','finView',1],['projects','Проекты контрагентов','projects','projView',1],['kpi','Показатели контрагентов','indicators','kpiView',1],['tasks','Задачи','tasks'],['files','Файловый менеджер','files','filesView',1],['dm','Витрина данных',null,'dmView'],['staff','Сотрудники',null,'staffView'],['dicts','Справочники'],['kb','База знаний'],['org','Моя организация'],['common','Общие права']].map(([id,name,feature,view,scope])=>({id,name,feature,view,scope:!!scope,perms:[]}));
 const PERM_VIEW=Object.fromEntries(PERM_GROUPS.filter(g=>g.view).map(g=>[g.id,g.view]));
 const SCOPE_GROUPS=PERM_GROUPS.filter(g=>g.scope).map(g=>g.id);
 const permGroup=p=>{const x=PERM_REF.find(y=>y.id===p);return x?x.group:''};
 permsBuild();
 function permsBuild(){PERMS.splice(0,PERMS.length,...PERM_REF.map(p=>[p.id,p.name,p.desc,p.group]));PERM_GROUPS.forEach(g=>g.perms=PERMS.filter(p=>p[3]===g.id))}
 // Кто может менять галочку права в роли: владелец — всё, кроме прав, которые есть только у владельца; остальные (с правом «Сотрудники и роли») — не свою роль и не права, которые выдаёт только владелец
-const OWNER_ONLY=['org'],OWNER_GRANTS=['rollback','archiveRest','staff'];
+const OWNER_ONLY=['org'],OWNER_GRANTS=['rollback','archiveRest','staff','dmTokens'];
 function roleLock(r,p,sel){if(r.locked)return 'Права владельца не меняются';const v=PERM_VIEW[permGroup(p)];if(sel&&v&&v!==p&&!sel.has(v))return 'Сначала дайте просмотр';if(OWNER_ONLY.includes(p))return 'Это право есть только у владельца организации';if(me().role==='owner')return '';if(myRole()&&myRole().id===r.id)return 'Права своей роли меняет владелец';if(OWNER_GRANTS.includes(p))return 'Это право выдаёт только владелец';if(!(myRole()||{perms:[]}).perms.includes(p))return 'Этого права нет у вашей роли';return ''}
 // Сотрудник с правом «Сотрудники и роли», не владелец (ТЗ «Сотрудники → Роли», решение заказчика 27.10.2026): свою роль, роли с правами «выдаёт только владелец» и роли шире своей
 // не меняет, не назначает и не снимает; себе и сотрудникам с такими ролями не меняет роль, не сбрасывает пароль, не блокирует и не разблокирует; недоступные кнопки скрыты

@@ -33,10 +33,25 @@ const checkViolation = (name: string) =>
 /** Раздел справочника «Статусы» refDB.json: название → [цвет, значок]. */
 type StatusesRef = Record<StatusScaleKey, Record<string, [string, string]>>;
 
+/**
+ * Шкалы прототипа, которых в продукте ещё нет: «Состояния шаблонов витрины данных» (v155) появятся
+ * вместе с «Витриной данных» — её перенос убирает шкалу отсюда.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#О-86
+const STATUS_SCALES_NOT_YET: readonly string[] = ['dmTemplate'];
+
 describe('справочник «Статусы»', () => {
   it('коды шкал продукта — те же статусы, названия, цвета и значки, что в refDB.json', async () => {
     const ref = (await readSpecJson<{ statuses: StatusesRef }>('data/refDB.json')).statuses;
-    expect(Object.keys(ref).sort()).toEqual([...STATUS_SCALES].sort());
+    for (const scale of STATUS_SCALES_NOT_YET) {
+      expect(Object.keys(ref), scale).toContain(scale);
+      expect(STATUS_SCALES as readonly string[], scale).not.toContain(scale);
+    }
+    expect(
+      Object.keys(ref)
+        .filter((k) => !STATUS_SCALES_NOT_YET.includes(k))
+        .sort(),
+    ).toEqual([...STATUS_SCALES].sort());
     for (const scale of STATUS_SCALES) {
       const ours = Object.fromEntries(
         scaleStatuses(scale).map((s) => {

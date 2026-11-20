@@ -1,7 +1,7 @@
 'use strict';
 // Единый компонент списка (grid): столбцы, сортировка, группировка, фильтры, карточки
 /* ═════════════ UnifiedDataGrid ═════════════ */
-// Для таблиц ввода: столбец c.td(r) — дополнительные атрибуты ячейки; cfg.after(host, view) — после каждой отрисовки (так «Показатели» включают ввод как в Excel)
+// Для таблиц ввода: столбец c.td(r) — дополнительные атрибуты ячейки; c.total — итог по столбцу (true — сумма деньгами, функция(rows) — свой текст итога); cfg.after(host, view) — после каждой отрисовки (так «Показатели» включают ввод как в Excel)
 // «Все записи» — до 5 000 строк за раз, дальше страницы по 5 000 (решение заказчика 26.10.2026)
 const GRID_ALL_MAX=5000;
 // В фильтре-галочках — не больше 500 значений; «В Excel» — не больше 50 000 строк (решение заказчика 26.10.2026)
@@ -144,7 +144,7 @@ function grid(host,cfg){
     const walk=arr=>arr.map(gr=>grpTr(gr)+(s.closed.has(gr.path)?'':gr.sub?walk(gr.sub):gr.rows.map(rowTr).join(''))).join('');
     h+=gt?walk(gt):pr.map(rowTr).join('');
     h+='</tbody>';
-    if(vc.some(c=>c.total)){h+=`<tfoot><tr>${selCol?'<td></td>':''}${vc.map((c,i)=>c.total?`<td class="num">${fmtM(rows.reduce((a,r)=>a+(+c.val(r)||0),0))}</td>`:i===0?`<td>Итого по фильтру · ${rows.length}</td>`:'<td></td>').join('')}${cfg.actions?'<td></td>':''}</tr></tfoot>`}
+    if(vc.some(c=>c.total)){h+=`<tfoot><tr>${selCol?'<td></td>':''}${vc.map((c,i)=>c.total?`<td class="num">${typeof c.total==='function'?c.total(rows):fmtM(rows.reduce((a,r)=>a+(+c.val(r)||0),0))}</td>`:i===0?`<td>Итого по фильтру · ${rows.length}</td>`:'<td></td>').join('')}${cfg.actions?'<td></td>':''}</tr></tfoot>`}
     return h+'</table></div>';
   }
   // Столбцы с cline на телефоне — одной строкой плитки: «К уплате 5 000 · Получено 5 000 · Оплачено 3 000»; cl — короткая подпись, cv — значение для плитки
@@ -160,7 +160,7 @@ function grid(host,cfg){
     const walk=arr=>arr.map(gr=>{const open=!s.closed.has(gr.path);return `<div class="gc-grp lv${gr.lv}"><button class="g-tg" data-g="${esc(gr.path)}" aria-expanded="${open}">${ic(open?'down':'right','sm')}<b>${esc(gr.label)}</b><span class="g-c">${gr.rows.length}</span></button>${nums.length?`<span class="gc-agg">${nums.map(c=>{const how=aggOf(s,c);return `<span>${esc(c.label)}${how==='sum'?'':' ('+AGG_L[how].toLowerCase()+')'}: <b>${aggTxt(c,how,aggVal(c,how,gr.rows))}</b></span>`}).join('')}</span>`:''}</div>${open?(gr.sub?`<div class="gc-sub">${walk(gr.sub)}</div>`:`<div class="gcards">${gr.rows.map(card).join('')}</div>`):''}`}).join('');
     let h=gt?`<div class="gc-groups">${walk(gt)}</div>`:`<div class="gcards">${pr.map(card).join('')}</div>`;
     const tcs=vc.filter(c=>c.total);
-    if(tcs.length)h+=`<div class="gtotal"><span>Итого по фильтру · ${rows.length}</span>${tcs.map(c=>`<span>${esc(c.label)}: <b>${fmtM(rows.reduce((a,r)=>a+(+c.val(r)||0),0))}</b></span>`).join('')}</div>`;
+    if(tcs.length)h+=`<div class="gtotal"><span>Итого по фильтру · ${rows.length}</span>${tcs.map(c=>`<span>${esc(c.label)}: <b>${typeof c.total==='function'?c.total(rows):fmtM(rows.reduce((a,r)=>a+(+c.val(r)||0),0))}</b></span>`).join('')}</div>`;
     return h;
   }
   /* Доска (канбан). cfg.kanban={def, by:[ключи столбцов списка], order:{ключ:[значения по порядку]}, show:{ключ:[значения, которые видны и пустыми]}, drop(запись, ключ, значение, подпись)}.

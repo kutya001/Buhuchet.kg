@@ -10,14 +10,17 @@ const BIZ=[
  {id:'kpi',title:'Показатели контрагентов',short:'Показатели',icon:'gauge',desc:'Выручка, численность и свои показатели клиентов по месяцам.',feature:'indicators',tabs:kpiTabs,add:kpiAdd,perm:'kpiView',render:renderKpi},
  {id:'tasks',title:'Задачи',short:'Задачи',icon:'task',desc:'Поручения сотрудникам и контроль их выполнения.',feature:'tasks',tabs:taskTabs,add:taskAdd,render:renderTasks},
  {id:'files',title:'Файловый менеджер',short:'Файлы',icon:'folder',desc:'Все файлы организации; у каждого видно, откуда он.',feature:'files',add:filesAdd,perm:'filesView',tabs:filesTabs,render:renderFiles},
+ {id:'dm',title:'Витрина данных',short:'Витрина',icon:'table',desc:'Отчёты по готовым шаблонам в таблице как в Excel и выдача тех же данных внешним программам по API-токену.',perm:'dmView',tabs:dmTabs,add:dmAdd,render:renderDm},
  {id:'staff',title:'Сотрудники',short:'Сотрудники',icon:'users',desc:'Сотрудники организации, их роли и права, закреплённые контрагенты и виртуальные счета.',perm:'staffView',tabs:staffTabs,add:staffAdd,render:renderStaff},
  {id:'dicts',title:'Справочники',short:'Справочники',icon:'book',desc:'Какие отчёты вы ведёте и общие списки платформы.',tabs:()=>[{id:'types',label:'Виды отчётов',icon:'file'},{id:'platform',label:'Справочники платформы',icon:'lock'}],add:()=>[can('dicts')?{label:'Подключить из каталога',icon:'plus',btn:true,run:txDlg}:null,{label:'Попросить добавить',icon:'send',run:requestDlg},{label:'Мои запросы',icon:'list',run:myReqDlg}],render:renderDicts},
- {id:'org',title:'Моя организация',short:'Организация',icon:'landmark',desc:'Основные сведения и реквизиты организации, учётная политика и настройки. Редактирует владелец.',tabs:()=>[{id:'main',label:'Основное',icon:'landmark'},{id:'policy',label:'Учётная политика',icon:'sliders'},{id:'settings',label:'Настройки',icon:'gauge'}],render:renderOrg},
+ {id:'org',title:'Моя организация',short:'Организация',icon:'landmark',desc:'Основные сведения и реквизиты организации, учётная политика и настройки. Редактирует владелец.',tabs:orgTabs,render:renderOrg},
  {id:'kb',title:'База знаний',short:'База знаний',icon:'grad',desc:'Уроки, статьи и видео о работе в программе.',tabs:kbTabs,render:renderKB},
 ];
 const ADM=[
  {id:'accounts',title:'Учётные записи',short:'Учётки',icon:'user',desc:'Все пользователи платформы: сброс пароля, блокировка и разблокировка.',render:renderAccounts},
- {id:'orgs',title:'Организации',short:'Организации',icon:'building',desc:'Организации-клиенты платформы: создание вместе с владельцем, блокировка; заявки с лендинга buhuchet.kg.',tabs:()=>[{id:'list',label:'Организации',icon:'building'},{id:'act',label:'Активность',icon:'chart'},{id:'leads',label:'Заявки',icon:'send',count:leadNew()}],add:()=>[{label:'Организация',icon:'building',run:addOrgDlg}],render:renderOrgs},
+ {id:'orgs',title:'Организации',short:'Организации',icon:'building',desc:'Организации-клиенты платформы: создание вместе с владельцем, блокировка; заявки с лендинга buhuchet.kg.',tabs:()=>[{id:'list',label:'Организации',icon:'building'},{id:'act',label:'Активность',icon:'chart'},{id:'leads',label:'Заявки',icon:'send',count:leadNew()},{id:'subs',label:'Подписки',icon:'wallet',count:subWaitN()}],add:()=>[{label:'Организация',icon:'building',run:addOrgDlg}],render:renderOrgs},
+ {id:'afiles',title:'Файлы',short:'Файлы',icon:'folder',desc:'Хранилище платформы: сколько занято, чьи файлы и откуда, просмотр любого файла; удалённые файлы ждут стирания сутки, раз в сутки база сверяется с хранилищем.',tabs:afTabs,render:renderAFiles},
+ {id:'dm',title:'Витрина данных',short:'Витрина',icon:'table',desc:'Шаблоны отчётов на SQL для организаций и платформы, их вывод, API-токены и журнал запросов.',tabs:dmTabs,add:dmAdd,render:renderDm},
  {id:'pdicts',title:'Справочники платформы',short:'Справочники',icon:'book',desc:'Общие списки для всех организаций. Использованное значение нельзя удалить, только отключить. Каждое изменение пишется в историю.',tabs:pdTabs,add:pdAdd,render:renderPDicts},
  {id:'l10n',title:'Локализация',short:'Языки',icon:'globe',desc:'Словарь текстов интерфейса. Сейчас включён только русский язык; добавление других заложено в логику.',render:renderL10n},
  {id:'kb',title:'База знаний',short:'База знаний',icon:'grad',desc:'Уроки, статьи и видео о работе в программе.',tabs:kbTabs,render:renderKB},
@@ -26,7 +29,7 @@ const ADM=[
  {id:'runs',title:'Запуски',short:'Запуски',icon:'clock',desc:'Задачи по расписанию и журнал их запусков: что запускалось, когда, с каким итогом и ошибкой. Только просмотр: запустить задачу или изменить расписание отсюда нельзя.',tabs:()=>[{id:'jobs',label:'Задачи',icon:'list'},{id:'runs',label:'Запуски',icon:'history'}],render:renderRuns},
  {id:'tg',title:'Телеграм',short:'Телеграм',icon:'tg',desc:'Бот платформы: переписка в обе стороны с текстом сообщений, ошибки и повтор отправки, рассылка объявлений и новостей оформленным сообщением.',tabs:()=>[{id:'log',label:'Журнал',icon:'list'},{id:'bot',label:'Бот платформы',icon:'tg'},{id:'cast',label:'Рассылка',icon:'send'}],add:()=>[{label:'Объявление',icon:'send',run:()=>go('tg','cast')}],render:renderTg},
 ];
-const mods=()=>isAdmin()?ADM:BIZ.filter(m=>(!m.feature||feat(m.feature))&&(!m.perm||can(m.perm))&&(m.id!=='fin'||taxVis()||moneyVis()));
+const mods=()=>isAdmin()?ADM:subLockMods()||BIZ.filter(m=>(!m.feature||feat(m.feature))&&(!m.perm||can(m.perm))&&(m.id!=='fin'||taxVis()||moneyVis()));
 const curMod=()=>{const l=mods();return l.find(m=>m.id===S.mod)||l[0]};
 function modTabs(m){return m.tabs?m.tabs().filter(Boolean):[]}
 
