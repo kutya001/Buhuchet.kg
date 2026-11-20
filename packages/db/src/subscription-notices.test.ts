@@ -102,12 +102,15 @@ describe.skipIf(!databaseAvailable())('подписки и хранилище: �
       inn: '01811201810470',
       slug: 'notice-a',
       owner: owner('notice-owner-a'),
+      // «Нет подписки»: подписки тест ставит сам (иначе `createOrganization` даёт бесплатный период).
+      subscription: null,
     });
     b = await createOrganization(db.app.db, {
       name: 'Организация Б',
       inn: '02811201810471',
       slug: 'notice-b',
       owner: owner('notice-owner-b'),
+      subscription: null,
     });
     const [admin] = await db.admin.db
       .insert(users)
