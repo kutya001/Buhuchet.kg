@@ -60,8 +60,13 @@ const bellPageQuery = (tab: BellPanelTab) =>
 
 type Pages = InfiniteData<BellPage, string | null>;
 
-/** Отметить строки прочитанными во всех загруженных страницах панели. */
-function markReadInCache(client: QueryClient, ids: readonly string[] | 'all') {
+/**
+ * Отметить строки прочитанными во всех загруженных страницах панели. Чтение страниц, которое уже идёт
+ * (вкладка снова «Все» — её страница перечитывается), отменяется: его ответ лёг бы поверх отметки, и
+ * строка снова стала бы непрочитанной до следующего чтения.
+ */
+async function markReadInCache(client: QueryClient, ids: readonly string[] | 'all') {
+  await client.cancelQueries({ queryKey: PAGES_KEY });
   client.setQueriesData<Pages>({ queryKey: PAGES_KEY }, (data) =>
     data
       ? {
@@ -131,12 +136,16 @@ export function ShellBell() {
       bad: true,
     });
 
+  // После ответа сервера — перечитать страницы: прочитанное теперь знает и сервер.
+  const reread = () => void client.invalidateQueries({ queryKey: PAGES_KEY });
+
   const readAll = () => {
-    markReadInCache(client, 'all');
+    void markReadInCache(client, 'all');
     void api.api.bell['read-all']
       .$post()
       .then((res) => json(res, (v) => BellDone.parse(v)))
       .then(() => {
+        reread();
         refreshNews(client);
         toast(t('bell.read_all_done'), { icon: 'check' });
       }, fail);
@@ -144,11 +153,12 @@ export function ShellBell() {
 
   const go = (item: BellItem) => {
     setOpen(false);
-    markReadInCache(client, [item.id]);
+    void markReadInCache(client, [item.id]);
     void api.api.bell[':id'].read
       .$post({ param: { id: item.id } })
       .then((res) => json(res, (v) => BellDone.parse(v)))
       .then(() => {
+        reread();
         if (item.open?.kind === 'news') refreshNews(client);
       })
       .catch(() => {});
