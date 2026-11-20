@@ -252,17 +252,6 @@ export async function saveStorageCheck(
 }
 
 /**
- * Знает ли база объект хранилища с этим ключом (`app.storage_key_known`): «Удалить» лишнего файла
- * ещё раз проверяет им, что записи нет. Только администратору платформы и задаче без вошедшего.
- */
-export async function storageKeyKnown(db: Db | Tx, key: string): Promise<boolean> {
-  const [row] = await db.execute<{ known: boolean }>(
-    sql`select app.storage_key_known(${key}) as known`,
-  );
-  return row?.known === true;
-}
-
-/**
  * Запуски сверки с `since`, нашедшие новые расхождения (первое появление), — колокольчик администратора
  * платформы (RLS: читает только он). Сначала новые; не больше 30.
  */

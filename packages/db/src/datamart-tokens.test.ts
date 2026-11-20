@@ -169,6 +169,35 @@ describe.skipIf(!databaseAvailable())('витрина данных: API-токе
     expect((await fact()).extApi).toBe(true);
   });
 
+  it('шаблон сменил вид на «Для администратора» — у токена организации доступа нет', async () => {
+    const [t] = await asAdmin((tx) =>
+      tx
+        .insert(dmTemplates)
+        .values({
+          code: 'tok-moved',
+          name: 'Шаблон tok-moved',
+          module: 'reports',
+          state: 'published',
+        })
+        .returning({ id: dmTemplates.id }),
+    );
+    await asAdmin((tx) =>
+      tx.insert(dmTemplateSql).values({ templateId: t!.id, query: 'select 1 as n' }),
+    );
+    const made = await inA((tx) => insertDmToken(tx, issue(t!.id, 'Сменил вид')));
+    const fact = async () =>
+      (await inA((tx) => dmTokenFacts(tx, { since: since(), today: TODAY, id: made.id })))
+        .items[0]!;
+    expect((await fact()).templateAccess).toBe(true);
+    await asAdmin((tx) =>
+      tx
+        .update(dmTemplates)
+        .set({ audience: 'admin', module: null })
+        .where(eq(dmTemplates.id, t!.id)),
+    );
+    expect((await fact()).templateAccess).toBe(false);
+  });
+
   it('отзыв: сейчас и от своего имени, один раз; администратор отзывает токен организации — организация видит только отметку', async () => {
     const own = await inA((tx) => insertDmToken(tx, issue(tpl.all, 'Отозвать сам')));
     expect(await inA((tx) => revokeDmToken(tx, own.id))).toBe(true);

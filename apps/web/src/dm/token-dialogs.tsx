@@ -82,12 +82,15 @@ function templateGroups(t: Translate, side: DmSide, list: readonly DmTokenTempla
 function NewTokenDialog({
   side,
   form,
+  initialTemplateId,
   open,
   onClose,
   onIssued,
 }: {
   side: DmSide;
   form: DmTokenForm;
+  /** Шаблон, выбранный сразу (из каталога шаблонов, прототип `dmNewTok(tplId)`); нет в списке — первый. */
+  initialTemplateId?: string;
   open: boolean;
   onClose: () => void;
   onIssued: (issued: DmTokenIssued) => void;
@@ -96,7 +99,11 @@ function NewTokenDialog({
   const id = useId();
   const toast = useToast();
   const errorText = useErrorText();
-  const [templateId, setTemplateId] = useState(form.templates[0]?.id ?? '');
+  const [templateId, setTemplateId] = useState(
+    form.templates.some((x) => x.id === initialTemplateId)
+      ? initialTemplateId!
+      : (form.templates[0]?.id ?? ''),
+  );
   const [name, setName] = useState('');
   const [term, setTerm] = useState(form.defaultTerm);
   const [busy, setBusy] = useState(false);
@@ -455,12 +462,18 @@ function TokenCardDialog({
  * `dmReissue`): меню строки, «+ Токен», окно токена и подтверждения. `node` ставится в разметку экрана.
  * Что можно, решает сервер (`canReissue`, `canRevoke`, `refusal` окна) — кнопки только по нему.
  */
+/** Через столько после «Готово» показанный токен забывается (окно к этому времени закрылось). */
+const SHOWN_FORGET_MS = 1000;
+
 export function useTokenActions(side: DmSide) {
   const t = useT();
   const toast = useToast();
   const errorText = useErrorText();
   const client = useQueryClient();
-  const [form, setForm] = useState<DialogSlot<DmTokenForm> | null>(null);
+  const [form, setForm] = useState<DialogSlot<{
+    form: DmTokenForm;
+    templateId: string | undefined;
+  }> | null>(null);
   const [shown, setShown] = useState<DialogSlot<DmTokenIssued> | null>(null);
   const [card, setCard] = useState<DialogSlot<string> | null>(null);
   const [askRevoke, setAskRevoke] = useState<DmTokenRow | null>(null);
@@ -474,23 +487,27 @@ export function useTokenActions(side: DmSide) {
 
   const open = useCallback((id: string) => setCard(openSlot(id)), []);
 
-  const issue = useCallback(async () => {
-    let data: DmTokenForm;
-    try {
-      data = await client.fetchQuery({ ...tokenFormQuery(side), staleTime: 0 });
-    } catch (err) {
-      return toast(err instanceof ApiFailure ? errorText(err.error) : t('err.unknown'), {
-        bad: true,
-      });
-    }
-    if (data.refusal) {
-      return toast(errorText({ code: data.refusal, message: '', details: { max: data.max } }), {
-        icon: data.refusal === 'dm_token_limit' ? 'alert' : 'lock',
-        bad: true,
-      });
-    }
-    setForm(openSlot(data));
-  }, [client, side, toast, errorText, t]);
+  /** «+ Токен» (`templateId` — выбрать шаблон сразу, как «Выпустить токен» в каталоге шаблонов). */
+  const issue = useCallback(
+    async (templateId?: string) => {
+      let data: DmTokenForm;
+      try {
+        data = await client.fetchQuery({ ...tokenFormQuery(side), staleTime: 0 });
+      } catch (err) {
+        return toast(err instanceof ApiFailure ? errorText(err.error) : t('err.unknown'), {
+          bad: true,
+        });
+      }
+      if (data.refusal) {
+        return toast(errorText({ code: data.refusal, message: '', details: { max: data.max } }), {
+          icon: data.refusal === 'dm_token_limit' ? 'alert' : 'lock',
+          bad: true,
+        });
+      }
+      setForm(openSlot({ form: data, templateId }));
+    },
+    [client, side, toast, errorText, t],
+  );
 
   const issued = useCallback(
     (x: DmTokenIssued) => {
@@ -562,7 +579,8 @@ export function useTokenActions(side: DmSide) {
         <NewTokenDialog
           key={`dm-new-${form.n}`}
           side={side}
-          form={form.data}
+          form={form.data.form}
+          initialTemplateId={form.data.templateId}
           open={form.open}
           onClose={() => setForm(closeSlot)}
           onIssued={issued}
@@ -573,7 +591,15 @@ export function useTokenActions(side: DmSide) {
           key={`dm-shown-${shown.n}`}
           issued={shown.data}
           open={shown.open}
-          onClose={() => setShown(closeSlot)}
+          onClose={() => {
+            setShown(closeSlot);
+            // Токен целиком не держим в памяти страницы дольше, чем закрывается окно.
+            const n = shown.n;
+            setTimeout(
+              () => setShown((s) => (s && s.n === n && !s.open ? null : s)),
+              SHOWN_FORGET_MS,
+            );
+          }}
         />
       ) : null}
       {card ? (

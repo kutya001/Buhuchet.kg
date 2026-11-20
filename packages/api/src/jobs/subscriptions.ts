@@ -185,6 +185,15 @@ export function subsMemoryChecksJob(baseUrl: string): Job {
 /** Больше объектов сверка не читает: запуск записывается сбоем (память задачи). */
 export const STORAGE_CHECK_MAX_OBJECTS = 200_000;
 
+/** Текст ошибки запуска для Админки: вид ошибки и код ответа хранилища, без текста сообщения. */
+export function storageErrorText(err: unknown, tooMany: boolean): string {
+  if (tooMany) return `в хранилище больше ${STORAGE_CHECK_MAX_OBJECTS} объектов`;
+  const name = err instanceof Error ? err.name : 'Error';
+  const status = (err as { $metadata?: { httpStatusCode?: unknown } } | null)?.$metadata
+    ?.httpStatusCode;
+  return (typeof status === 'number' ? `${name} ${status}` : name).slice(0, 100);
+}
+
 /**
  * «Файлы: сверка хранилища» — каждый день в 03:30 по Бишкеку: список объектов хранилища под `org/`
  * читается страницами вне транзакции, итог пишет `app.storage_check_save` (сама сверка ничего не
@@ -200,6 +209,7 @@ export function storageReconcileJob(baseUrl: string): Job {
     async run(ctx) {
       const started = ctx.clock.now();
       const objects: StorageCheckObject[] = [];
+      let tooMany = false;
       try {
         let after: string | null = null;
         do {
@@ -208,14 +218,15 @@ export function storageReconcileJob(baseUrl: string): Job {
             objects.push({ key: o.key, size: o.size, modifiedAt: o.modifiedAt });
           }
           if (objects.length > STORAGE_CHECK_MAX_OBJECTS) {
+            tooMany = true;
             throw new Error(`в хранилище больше ${STORAGE_CHECK_MAX_OBJECTS} объектов`);
           }
           after = page.next;
         } while (after);
       } catch (err) {
-        // В итог — только вид и начало текста ошибки: ключей и адресов хранилища там нет.
-        const e = err instanceof Error ? err : new Error(String(err));
-        await saveStorageCheck(ctx.db, [], started, `${e.name}: ${e.message}`.slice(0, 300));
+        // В итог — только вид ошибки и код ответа хранилища: текст сообщений SDK и сети может
+        // содержать адрес хранилища и имя корзины (`ENOTFOUND <host>`).
+        await saveStorageCheck(ctx.db, [], started, storageErrorText(err, tooMany));
         throw err;
       }
       const saved = await saveStorageCheck(ctx.db, objects, started);

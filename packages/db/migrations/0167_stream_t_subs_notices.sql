@@ -1,3 +1,10 @@
+-- Поток Т, общий план 20.11, этап 1, П12 (docs/decisions.md п. Т-17): порог памяти, о котором уже сообщили
+-- (`org_memory_notices`), и три новых вида очереди Telegram (`sub`, `sub_check`, `storage_check`). Проверка
+-- видов проходит всю `telegram_outbox` под ACCESS EXCLUSIVE: у пилота — до 100 тыс. строк, десятые доли
+-- секунды. Блокировки ждём не дольше 3 с, как в 0166 (docs/decisions.md п. О-54, О-57): если выпуск совпал с
+-- долгой транзакцией, миграция падает и задание выпуска перезапускают. После `pnpm db:generate` строку
+-- вернуть руками.
+SET LOCAL lock_timeout = '3s';--> statement-breakpoint
 CREATE TABLE "org_memory_notices" (
 	"org_id" uuid PRIMARY KEY NOT NULL,
 	"level" smallint DEFAULT 0 NOT NULL,

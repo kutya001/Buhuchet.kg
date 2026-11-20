@@ -27,7 +27,6 @@ import {
   saveStorageCheck,
   setMemoryNoticeLevel,
   storageCheckRunsWithNews,
-  storageKeyKnown,
   subscriptionNoticeSettings,
   type StorageCheckObject,
 } from './subscription-notices';
@@ -154,7 +153,7 @@ describe.skipIf(!databaseAvailable())('подписки и хранилище: �
     await db?.drop();
   });
 
-  it('порог памяти: своя строка, чужая организация не видна, повтор обновляет', async () => {
+  it('порог памяти: своя строка, чужая организация не видит и не меняет, повтор обновляет', async () => {
     expect(await inA((tx) => memoryNoticeLevel(tx))).toBe(0);
     await jobIn(a.orgId, (tx) => setMemoryNoticeLevel(tx, 80, NOW));
     await jobIn(a.orgId, (tx) => setMemoryNoticeLevel(tx, 100, NOW));
@@ -165,6 +164,24 @@ describe.skipIf(!databaseAvailable())('подписки и хранилище: �
     await expect(
       inB((tx) => tx.insert(orgMemoryNotices).values({ orgId: a.orgId, level: 80 })),
     ).rejects.toThrow();
+    // Б не меняет и не удаляет строку А; без контекста организации не видно ничего.
+    const changed = await inB((tx) =>
+      tx
+        .update(orgMemoryNotices)
+        .set({ level: 0 })
+        .where(eq(orgMemoryNotices.orgId, a.orgId))
+        .returning({ orgId: orgMemoryNotices.orgId }),
+    );
+    expect(changed).toEqual([]);
+    const removed = await inB((tx) =>
+      tx
+        .delete(orgMemoryNotices)
+        .where(eq(orgMemoryNotices.orgId, a.orgId))
+        .returning({ orgId: orgMemoryNotices.orgId }),
+    );
+    expect(removed).toEqual([]);
+    expect(await db.app.db.select().from(orgMemoryNotices)).toEqual([]);
+    expect(await jobIn(a.orgId, (tx) => memoryNoticeLevel(tx))).toBe(100);
     await expect(jobIn(a.orgId, (tx) => setMemoryNoticeLevel(tx, 50 as 80, NOW))).rejects.toThrow();
   });
 
@@ -277,19 +294,6 @@ describe.skipIf(!databaseAvailable())('подписки и хранилище: �
     await db.admin.db.update(users).set({ blocked: false }).where(eq(users.id, adminId));
   });
 
-  it('«знает ли база ключ»: файлы, отправленные, ждущие стирания; сотруднику — отказ', async () => {
-    const ready = await addFile(a.orgId, 'ready', ago(48));
-    const gone = await addFile(a.orgId, 'deleted', ago(48));
-    present.push(ready);
-    expect(await asAdmin((tx) => storageKeyKnown(tx, ready))).toBe(true);
-    expect(await asAdmin((tx) => storageKeyKnown(tx, gone))).toBe(false);
-    expect(await storageKeyKnown(db.app.db, `org/${a.orgId}/files/${randomUUID()}`)).toBe(false);
-    await expect(inA((tx) => storageKeyKnown(tx, ready))).rejects.toThrow();
-    await expect(
-      withUserContext(db.app.db, b.ownerUserId, (tx) => storageKeyKnown(tx, ready)),
-    ).rejects.toThrow();
-  });
-
   it('сверка хранилища: четыре списка, повтор продлевает, пропавшее закрывается', async () => {
     const readyOld = await addFile(a.orgId, 'ready', ago(48));
     const missing = await addFile(a.orgId, 'ready', ago(48));
@@ -313,6 +317,46 @@ describe.skipIf(!databaseAvailable())('подписки и хранилище: �
       storageKey: sentKey,
       createdAt: ago(3),
     });
+    // Принятые отправленные файлы: после «Принять» их объект удаляется (файл — уже в «Файлах» контрагента),
+    // поэтому без объекта — не «Нет в хранилище», а оставшийся объект — лишний.
+    const accepted = async () => {
+      const id = randomUUID();
+      const fileId = randomUUID();
+      await db.admin.db.insert(files).values({
+        id: fileId,
+        orgId: a.orgId,
+        contractorId: cpA,
+        sourceKind: 'manual',
+        name: 'Принятый.pdf',
+        contentType: 'application/pdf',
+        sizeBytes: 700,
+        storageKey: `org/${a.orgId}/files/${fileId}`,
+        state: 'ready',
+        createdBy: a.ownerUserId,
+        createdAt: ago(48),
+      });
+      present.push(`org/${a.orgId}/files/${fileId}`);
+      const key = `org/${a.orgId}/sent/${id}`;
+      await db.admin.db.insert(contractorSentFiles).values({
+        id,
+        orgId: a.orgId,
+        contractorId: cpA,
+        source: 'page',
+        name: 'Принятый.pdf',
+        contentType: 'application/pdf',
+        sizeBytes: 700,
+        storageKey: key,
+        state: 'ready',
+        status: 'accepted',
+        decidedAt: ago(40),
+        decidedBy: a.ownerUserId,
+        fileId,
+        createdAt: ago(48),
+      });
+      return key;
+    };
+    const acceptedGone = await accepted();
+    const acceptedLeft = await accepted();
     // Ждёт стирания: не лишний; срок прошёл и стереть не удалось — «Не стёрт».
     const trashKey = `org/${a.orgId}/files/${randomUUID()}`;
     await db.admin.db.insert(fileTrash).values({
@@ -335,6 +379,7 @@ describe.skipIf(!databaseAvailable())('подписки и хранилище: �
       obj(extraYoung, 2),
       obj(`${sentKey}.up`, 30),
       obj(trashKey, 72),
+      obj(acceptedLeft, 40),
       ...present.map((k) => obj(k, 40)),
       // Не под `org/` — сверка их не трогает (видео и документы заявок).
       obj(`leads/upload/${randomUUID()}`, 100),
@@ -352,10 +397,10 @@ describe.skipIf(!databaseAvailable())('подписки и хранилище: �
       state: 'done',
       objects: objects.length,
       missing: 1,
-      extra: 2,
+      extra: 3,
       stuck: 1,
       failed: 1,
-      fresh: { missing: 1, extra: 2, stuck: 1, failed: 1 },
+      fresh: { missing: 1, extra: 3, stuck: 1, failed: 1 },
     });
     const items = await db.admin.db
       .select()
@@ -367,7 +412,8 @@ describe.skipIf(!databaseAvailable())('подписки и хранилище: �
         .map((i) => i.key)
         .sort();
     expect(byKind('missing')).toEqual([missing]);
-    expect(byKind('extra')).toEqual([deletedKey, extraOld].sort());
+    expect(byKind('extra')).toEqual([deletedKey, extraOld, acceptedLeft].sort());
+    expect(items.map((i) => i.key)).not.toContain(acceptedGone);
     expect(byKind('stuck')).toEqual([stuck]);
     expect(byKind('failed')).toEqual([trashKey]);
     expect(items.find((i) => i.key === extraOld)).toMatchObject({
@@ -381,7 +427,7 @@ describe.skipIf(!databaseAvailable())('подписки и хранилище: �
       inA((tx) => tx.update(storageCheckRuns).set({ state: 'failed' })),
     ).rejects.toThrow();
     expect(await asAdmin((tx) => storageCheckRunsWithNews(tx, ago(24)))).toEqual([
-      { run: first.run, at: NOW, fresh: 5 },
+      { run: first.run, at: NOW, fresh: 6 },
     ]);
 
     // Второй запуск: лишний старый удалили, остальное на месте — новых нет, лишний закрыт.
@@ -392,7 +438,7 @@ describe.skipIf(!databaseAvailable())('подписки и хранилище: �
     );
     expect(second).toMatchObject({
       missing: 1,
-      extra: 1,
+      extra: 2,
       stuck: 1,
       failed: 1,
       fresh: { missing: 0, extra: 0, stuck: 0, failed: 0 },
@@ -408,7 +454,7 @@ describe.skipIf(!databaseAvailable())('подписки и хранилище: �
       .where(eq(storageCheckItems.key, missing));
     expect(kept).toMatchObject({ firstRunId: first.run, lastRunId: second.run, resolvedAt: null });
     expect(await asAdmin((tx) => storageCheckRunsWithNews(tx, ago(24)))).toEqual([
-      { run: first.run, at: NOW, fresh: 5 },
+      { run: first.run, at: NOW, fresh: 6 },
     ]);
 
     // Список не прочитался: запуск с ошибкой, открытые строки — как были.
@@ -423,6 +469,6 @@ describe.skipIf(!databaseAvailable())('подписки и хранилище: �
       .select({ n: sql<number>`count(*)::integer` })
       .from(storageCheckItems)
       .where(sql`${storageCheckItems.resolvedAt} is null`);
-    expect(open[0]!.n).toBe(4);
+    expect(open[0]!.n).toBe(5);
   });
 });

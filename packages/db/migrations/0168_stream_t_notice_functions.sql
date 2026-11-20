@@ -34,48 +34,17 @@ REVOKE ALL ON FUNCTION app.platform_notice(text, text, text, timestamptz) FROM P
 --> statement-breakpoint
 GRANT EXECUTE ON FUNCTION app.platform_notice(text, text, text, timestamptz) TO buhuchet_app;
 --> statement-breakpoint
--- Знает ли база объект хранилища с этим ключом (пакет 2, блок 3, пункт 6): файл (кроме удалённого),
--- отправленный контрагентом файл (и, пока он загружается, его `.up` и проверочная копия `.chk-…`),
--- логотип организации, чек подписки, файл, ждущий стирания, ключ на повторном удалении. Так сверка
--- хранилища отличает «лишний» файл, и так же «Удалить» лишнего файла (поток И) ещё раз проверяет, что
--- записи о нём по-прежнему нет. Только администратору платформы и задаче (без вошедшего): сотруднику
--- организации о чужих ключах функция не отвечает.
-CREATE FUNCTION app.storage_key_known(p_key text)
-  RETURNS boolean
-  LANGUAGE plpgsql STABLE SECURITY DEFINER
-  SET search_path = pg_catalog, pg_temp
-  AS $$
-  BEGIN
-    IF app.current_user_id() IS NOT NULL AND NOT app.is_platform_admin() THEN
-      RAISE EXCEPTION 'storage_key_known: только администратору платформы';
-    END IF;
-    IF p_key IS NULL THEN
-      RETURN false;
-    END IF;
-    RETURN EXISTS (SELECT 1 FROM public.files f WHERE f.storage_key = p_key AND f.state <> 'deleted')
-      OR EXISTS (SELECT 1 FROM public.contractor_sent_files s WHERE s.storage_key = p_key)
-      OR EXISTS (SELECT 1 FROM public.contractor_sent_files s
-        WHERE s.state = 'pending' AND starts_with(p_key, s.storage_key || '.'))
-      OR EXISTS (SELECT 1 FROM public.organizations o WHERE o.logo_key = p_key)
-      OR EXISTS (SELECT 1 FROM public.subscription_payments p WHERE p.receipt_key = p_key)
-      OR EXISTS (SELECT 1 FROM public.file_trash t
-        WHERE t.storage_key = p_key AND t.erased_at IS NULL AND t.restored_at IS NULL)
-      OR EXISTS (SELECT 1 FROM public.storage_delete_retries r WHERE r.key = p_key);
-  END
-  $$;
---> statement-breakpoint
-REVOKE ALL ON FUNCTION app.storage_key_known(text) FROM PUBLIC;
---> statement-breakpoint
-GRANT EXECUTE ON FUNCTION app.storage_key_known(text) TO buhuchet_app;
---> statement-breakpoint
 -- Итог сверки хранилища (пакет 2, блок 3, пункт 6; задача «Файлы: сверка хранилища»): задача читает
 -- список объектов хранилища под `org/` (вне транзакции, страницами) и отдаёт его сюда одним массивом
 -- `[{ "k": ключ, "s": байт, "t": когда положен }]`; `p_now` — момент начала чтения списка. Функция
 -- пишет запуск и четыре списка расхождений; сама ничего не удаляет.
---   missing — файл есть в базе (загружен, отправленный контрагентом загружен, логотип, чек подписки), а в
---     хранилище его нет; записи моложе часа не проверяются: объект мог лечь после чтения списка;
---   extra — объект старше суток, о котором база не знает (`app.storage_key_known`; ждущие стирания —
---     не расхождение);
+--   missing — файл есть в базе (загружен, отправленный контрагентом загружен и не принят, логотип, чек
+--     подписки), а в хранилище его нет; записи моложе часа (у логотипа — организация, изменённая меньше
+--     часа назад) не проверяются: объект мог лечь после чтения списка;
+--   extra — объект старше суток, о котором база не знает: файл (кроме удалённого), отправленный
+--     контрагентом файл (кроме принятого: его объект после «Принять» удаляется; пока загружается — и его
+--     `.up` и проверочная копия `.chk-…`), логотип, чек подписки, ключ на повторном удалении; ждущие
+--     стирания — не расхождение;
 --   stuck — загрузка файла или отправленного файла не закончена больше суток;
 --   failed — файл ждёт стирания, срок прошёл, а стереть не удалось (`file_trash.attempts`), и ключи на
 --     повторном удалении, которые уже не удалось удалить.
@@ -121,7 +90,7 @@ CREATE FUNCTION app.storage_check_save(p_objects jsonb, p_now timestamptz, p_err
     ),
     known AS MATERIALIZED (
       SELECT f.storage_key AS key FROM public.files f WHERE f.state <> 'deleted'
-      UNION ALL SELECT s.storage_key FROM public.contractor_sent_files s
+      UNION ALL SELECT s.storage_key FROM public.contractor_sent_files s WHERE s.status <> 'accepted'
       UNION ALL SELECT o.logo_key FROM public.organizations o WHERE o.logo_key IS NOT NULL
       UNION ALL SELECT p.receipt_key FROM public.subscription_payments p WHERE p.receipt_key IS NOT NULL
       UNION ALL SELECT t.storage_key FROM public.file_trash t
@@ -141,9 +110,9 @@ CREATE FUNCTION app.storage_check_save(p_objects jsonb, p_now timestamptz, p_err
         SELECT f.storage_key AS key, f.size_bytes AS size FROM public.files f
         WHERE f.state = 'ready' AND f.created_at < p_now - interval '1 hour'
         UNION ALL SELECT s.storage_key, s.size_bytes FROM public.contractor_sent_files s
-        WHERE s.state = 'ready' AND s.created_at < p_now - interval '1 hour'
+        WHERE s.state = 'ready' AND s.status <> 'accepted' AND s.created_at < p_now - interval '1 hour'
         UNION ALL SELECT o.logo_key, NULL::bigint FROM public.organizations o
-        WHERE o.logo_key IS NOT NULL
+        WHERE o.logo_key IS NOT NULL AND o.updated_at < p_now - interval '1 hour'
         UNION ALL SELECT p.receipt_key, p.receipt_bytes FROM public.subscription_payments p
         WHERE p.receipt_key IS NOT NULL AND p.created_at < p_now - interval '1 hour'
       ) x
@@ -275,8 +244,9 @@ CREATE FUNCTION app.dm_token_facts(p_since timestamptz, p_today date, p_id uuid 
       d.id,
       d.name,
       d.state,
-      d.access = 'all' OR (k.org_id IS NOT NULL AND EXISTS (
-        SELECT 1 FROM public.dm_template_orgs a WHERE a.template_id = d.id AND a.org_id = k.org_id)),
+      d.audience = CASE WHEN k.org_id IS NULL THEN 'admin' ELSE 'org' END
+        AND (d.access = 'all' OR (k.org_id IS NOT NULL AND EXISTS (
+          SELECT 1 FROM public.dm_template_orgs a WHERE a.template_id = d.id AND a.org_id = k.org_id))),
       k.name,
       k.prefix,
       k.created_by,

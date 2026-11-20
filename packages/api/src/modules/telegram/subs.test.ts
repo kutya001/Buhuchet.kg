@@ -5,6 +5,7 @@ import { databaseAvailable } from '@buhuchet/db/testing';
 import {
   bellText,
   formatSomWithUnit,
+  NOTIFY_KINDS,
   subscriptionCalc,
   subscriptionGbText,
   TELEGRAM_TEMPLATE_DEFAULTS,
@@ -29,7 +30,7 @@ import {
   TEST_PASSWORD,
 } from '../../testing';
 import { telegramSendJob } from './outbox';
-import { notifySubCheckNew, subNoticeContext } from './subs';
+import { notifySubCheckNew, notifySubOwners, subNoticeContext, type SubOwnerNotice } from './subs';
 
 /*
  * Сообщения о подписке, памяти и сверке хранилища (доработки 20.11.2026, блок 4, пункт 3; блок 2,
@@ -432,15 +433,25 @@ describe.skipIf(!databaseAvailable())(
         db: f.t.app.db,
         clock: fixedClock(NOW),
         telegram: tg,
-        storage: { ...storage, list: () => Promise.reject(new Error('S3 недоступно')) },
+        storage: {
+          ...storage,
+          list: () =>
+            Promise.reject(
+              Object.assign(new Error('getaddrinfo ENOTFOUND bucket.s3.example'), {
+                name: 'NoSuchBucket',
+                $metadata: { httpStatusCode: 404 },
+              }),
+            ),
+        },
       });
-      await expect(job.run(broken, new Date(NOW))).rejects.toThrow('S3 недоступно');
+      await expect(job.run(broken, new Date(NOW))).rejects.toThrow('ENOTFOUND');
       const [last] = await f.t.admin.db
         .select()
         .from(storageCheckRuns)
         .orderBy(desc(storageCheckRuns.id))
         .limit(1);
-      expect(last).toMatchObject({ state: 'failed', error: 'Error: S3 недоступно' });
+      // В итог — вид ошибки и код ответа, без текста: в нём бывает адрес хранилища.
+      expect(last).toMatchObject({ state: 'failed', error: 'NoSuchBucket 404' });
       expect(await outboxOf('storage_check')).toHaveLength(1);
       await dropFiles([ok.id, lost.id]);
     });
@@ -477,6 +488,106 @@ describe.skipIf(!databaseAvailable())(
         expect(own.filter((i) => i.event === 'sub_check' || i.event === 'storage_check')).toEqual(
           [],
         );
+      }
+    });
+
+    it('«Оплата подтверждена» и «Чек отклонён» — владельцам Telegram и колокольчик; повтор с тем же ключом ничего не добавляет', async () => {
+      const ctx = await subNoticeContext(deps, BASE);
+      const send = (notice: SubOwnerNotice, key: string) =>
+        withOrgContext(f.t.app.db, { orgId: f.a.orgId, kind: 'job' }, (tx) =>
+          notifySubOwners(tx, ctx, f.a.orgId, notice, key),
+        );
+      const paid = { event: 'paid', org: 'Организация А', paidUntil: '2026-12-25' } as const;
+      const rejected = {
+        event: 'rejected',
+        org: 'Организация А',
+        reason: 'Сумма в чеке не совпадает',
+      } as const;
+      expect(await send(paid, 'sub_paid:t1')).toMatchObject({
+        queued: [expect.any(String)],
+        added: 1,
+      });
+      expect(await send(paid, 'sub_paid:t1')).toEqual({ queued: [], added: 0 });
+      expect(await send(rejected, 'sub_rejected:t2')).toMatchObject({ added: 1 });
+      const paidText = tpl('tgSubPaid', { организация: 'Организация А', дата: '25.12.2026' });
+      const rejectedText = tpl('tgSubRejected', {
+        организация: 'Организация А',
+        причина: 'Сумма в чеке не совпадает',
+      });
+      const sent = (await outboxOf('sub')).filter((r) => r.dedupeKey?.startsWith('sub_'));
+      expect(sent).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            userId: f.a.ownerUserId,
+            chatId: 7101,
+            text: paidText,
+            dedupeKey: `sub_paid:t1:${f.a.ownerUserId}`,
+          }),
+          expect.objectContaining({
+            userId: f.a.ownerUserId,
+            text: rejectedText,
+            dedupeKey: `sub_rejected:t2:${f.a.ownerUserId}`,
+          }),
+        ]),
+      );
+      expect(sent.filter((r) => r.dedupeKey?.startsWith('sub_paid:t1'))).toHaveLength(1);
+      const bell = await bellOf(f.a.ownerUserId, 'sub');
+      expect(bell.filter((b) => b.eventKey === 'sub_paid:t1')).toMatchObject([
+        { kind: 'other', targetKind: 'sub', targetId: f.a.orgId, text: bellText(paidText) },
+      ]);
+      expect(bell.filter((b) => b.eventKey === 'sub_rejected:t2')).toHaveLength(1);
+      // Только владельцам: главному бухгалтеру — ничего.
+      expect(
+        (await bellOf(person('chief-a').userId, 'sub')).filter((b) =>
+          b.eventKey?.startsWith('sub_'),
+        ),
+      ).toEqual([]);
+
+      // Это сообщения о доступе к сайту: переключатели уведомлений профиля и «Напоминания в Telegram»
+      // организации их не выключают (как в прототипе).
+      const db = f.t.admin.db;
+      const [was] = await db
+        .select({ features: schema.orgSettings.features })
+        .from(schema.orgSettings)
+        .where(eq(schema.orgSettings.orgId, f.a.orgId));
+      await db
+        .insert(schema.telegramNotifySettings)
+        .values({
+          userId: f.a.ownerUserId,
+          orgId: f.a.orgId,
+          mode: 'manual',
+          off: [...NOTIFY_KINDS],
+        })
+        .onConflictDoUpdate({
+          target: schema.telegramNotifySettings.userId,
+          set: { mode: 'manual', off: [...NOTIFY_KINDS] },
+        });
+      await db
+        .update(schema.orgSettings)
+        .set({ features: { ...was!.features, telegram: false } })
+        .where(eq(schema.orgSettings.orgId, f.a.orgId));
+      try {
+        expect(await send(paid, 'sub_paid:t3')).toMatchObject({
+          queued: [expect.any(String)],
+          added: 1,
+        });
+        await telegramSendJob().run(deps, new Date(NOW));
+        const [t3] = await db
+          .select({ status: telegramOutbox.status, chatId: telegramOutbox.chatId })
+          .from(telegramOutbox)
+          .where(eq(telegramOutbox.dedupeKey, `sub_paid:t3:${f.a.ownerUserId}`));
+        expect(t3).toEqual({ status: 'sent', chatId: 7101 });
+        expect(tg.sent).toEqual(
+          expect.arrayContaining([expect.objectContaining({ chatId: 7101, text: paidText })]),
+        );
+      } finally {
+        await db
+          .delete(schema.telegramNotifySettings)
+          .where(eq(schema.telegramNotifySettings.userId, f.a.ownerUserId));
+        await db
+          .update(schema.orgSettings)
+          .set({ features: was!.features })
+          .where(eq(schema.orgSettings.orgId, f.a.orgId));
       }
     });
   },

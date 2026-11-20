@@ -14,6 +14,7 @@ import {
   orgUsage,
   replaceDmToken,
   revokeDmToken,
+  takeRateLimit,
   withOrgContext,
   withUserContext,
   writeHistory,
@@ -21,6 +22,7 @@ import {
   type DmTokenFact,
   type DmTokenListRow,
   type DmTokenTemplate,
+  type RateLimit,
   type Tx,
 } from '@buhuchet/db';
 import {
@@ -319,8 +321,10 @@ async function issueFacts(
   m: Moment,
   sight: OrgSight | null,
 ): Promise<IssueFacts> {
-  // «Действующих» — как в прототипе (`dmLive`): только «Действует»; названия — у них же.
-  const active = views.filter((v) => v.mine && v.state === 'active');
+  // «Действующих» — строже прототипа (`dmLive` считает только «Действует»): и «Остановлен», он оживает
+  // сам, когда шаблон починят или доступ вернут; названия — у них же.
+  // ОТКЛОНЕНИЕ: docs/deviations.md#Т-25
+  const active = views.filter((v) => v.mine && v.live);
   const liveNames = active.map((v) => v.fact.name);
   if (side === 'admin' || !sight) {
     const templates = await dmTokenTemplates(tx, 'admin');
@@ -378,6 +382,21 @@ async function issueFacts(
 
 const sightOf = (c: Context<AppEnv>, side: Side): OrgSight | null =>
   side === 'org' ? { subject: c.get('access')!.subject, orgId: c.get('session')!.orgId! } : null;
+
+/**
+ * Выпусков и перевыпусков одним человеком — не больше стольких за час (защита строже прототипа: токены
+ * не удаляются, поэтому «выпустить и отозвать» по кругу растило бы список и историю без конца).
+ */
+export const DM_TOKEN_ISSUE_RATE_LIMIT: RateLimit = {
+  kind: 'dm_token_issue',
+  max: 60,
+  windowSeconds: 3600,
+};
+
+async function takeIssueSlot(deps: ApiDeps, c: Context<AppEnv>, tr: Tr): Promise<void> {
+  const slot = await takeRateLimit(deps.db, DM_TOKEN_ISSUE_RATE_LIMIT, c.get('session')!.userId);
+  if (!slot.ok) apiFail(429, 'dm_token_rate', tr('err.dm_token_rate'));
+}
 
 const REFUSAL_STATUS = {
   dm_token_demo: 403,
@@ -480,6 +499,7 @@ function routes<B extends string>(side: Side, base: B) {
         400: { description: 'Неверное название, срок или шаблон', content: error },
         ...denied,
         409: { description: 'Действующих уже 20 или название уже действует', content: error },
+        429: { description: 'Слишком много новых токенов за час', content: error },
       },
     }),
     card: createRoute({
@@ -524,6 +544,7 @@ function routes<B extends string>(side: Side, base: B) {
           description: 'Отозван, истёк, уже перевыпущен или шаблон недоступен',
           content: error,
         },
+        429: { description: 'Слишком много новых токенов за час', content: error },
       },
     }),
   };
@@ -655,6 +676,7 @@ export function tokenHandlers(deps: ApiDeps, side: Side) {
     if (!(DM_TOKEN_TERMS as readonly number[]).includes(body.term)) {
       apiFail(400, 'dm_token_term', tr('err.dm_token_term'), { field: 'term' });
     }
+    await takeIssueSlot(deps, c, tr);
     const made = newToken();
     const item = await inSide(deps, c, side, async (tx) => {
       await lockDmTokens(tx, sight?.orgId ?? null);
@@ -708,19 +730,40 @@ export function tokenHandlers(deps: ApiDeps, side: Side) {
     const { id } = c.req.valid('param');
     const m = momentOf(deps);
     const tr = await texts();
-    const item = await inSide(deps, c, side, async (tx) => {
+    const { item, orgCopy } = await inSide(deps, c, side, async (tx) => {
       const v = await oneView(tx, side, m, tr, id);
       await lockDmTokens(tx, v.fact.orgId);
       if (!v.live || !(await revokeDmToken(tx, id))) {
         apiFail(409, 'dm_token_dead', tr('err.dm_token_dead'));
       }
-      await history(tx, side, id, 'dm_revoke', [
+      const changes: HistoryChange[] = [
         { field: 'name', to: v.fact.name },
         { field: 'prefix', to: v.fact.prefix },
+      ];
+      await history(tx, side, id, 'dm_revoke', [
+        ...changes,
         ...(side === 'admin' && v.fact.orgId ? [{ field: 'org', to: v.fact.orgName ?? '' }] : []),
       ]);
-      return cardOf(tx, await oneView(tx, side, m, tr, id));
+      return {
+        item: await cardOf(tx, await oneView(tx, side, m, tr, id)),
+        orgCopy: side === 'admin' && v.fact.orgId ? { orgId: v.fact.orgId, changes } : null,
+      };
     });
+    // Администратор отозвал токен организации — запись и в истории организации (для разбора: кто и
+    // когда остановил её выгрузки), от его имени в контексте этой организации, как открытие карточки.
+    if (orgCopy) {
+      await withOrgContext(
+        deps.db,
+        { orgId: orgCopy.orgId, userId: c.get('session')!.userId },
+        (tx) =>
+          writeHistory(tx, {
+            entity: 'dm_token',
+            entityId: id,
+            action: 'dm_revoke',
+            changes: orgCopy.changes,
+          }),
+      );
+    }
     return c.json(item, 200);
   };
 
@@ -729,6 +772,7 @@ export function tokenHandlers(deps: ApiDeps, side: Side) {
     const m = momentOf(deps);
     const tr = await texts();
     const sight = sightOf(c, side);
+    await takeIssueSlot(deps, c, tr);
     const made = newToken();
     const item = await inSide(deps, c, side, async (tx) => {
       const before = await oneView(tx, side, m, tr, id);
@@ -741,7 +785,12 @@ export function tokenHandlers(deps: ApiDeps, side: Side) {
       // Новый токен — только к шаблону, который вошедший может выбрать и сейчас (защита строже
       // прототипа: шаблон выключили или права сотрудника сузились — перевыпуска нет).
       // ОТКЛОНЕНИЕ: docs/deviations.md#Т-25
+      // Те же отказы, что у выпуска (демо, внешний доступ выключен, доступ закрыт по подписке), кроме
+      // предела: перевыпуск заменяет токен, прежний доживает сутки.
       const facts = await issueFacts(tx, side, views, m, sight);
+      if (facts.refusal && facts.refusal !== 'dm_token_limit') {
+        apiFail(REFUSAL_STATUS[facts.refusal], facts.refusal, tr(`err.${facts.refusal}`));
+      }
       const tpl = facts.templates.find((t) => t.id === v.fact.templateId);
       if (!tpl) apiFail(409, 'dm_token_template', tr('err.dm_token_template'));
       const term = dmTokenTermOf(v.fact.createdAt, v.fact.expiresAt);

@@ -1,11 +1,13 @@
 import { createHash } from 'node:crypto';
+import { hashPassword } from '@buhuchet/adapters/password';
 import { schema } from '@buhuchet/db';
 import { databaseAvailable } from '@buhuchet/db/testing';
 import { DM_TOKEN_RE, DM_TOKENS_LIVE_MAX, UI_TEXTS } from '@buhuchet/domain';
 import { DmTokenCard, DmTokenForm, DmTokenIssued, DmTokenList } from '@buhuchet/shared';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../testing';
+import { DM_TOKEN_ISSUE_RATE_LIMIT } from './tokens';
 
 /*
  * «Витрина данных» → «API Токены» (доработки 20.11.2026: Витрина данных, блок 5; поток Т, этап 1, П14;
@@ -287,8 +289,42 @@ describe.skipIf(!databaseAvailable())('Витрина данных: API-токе
     await db.update(dmTemplates).set({ state: 'published' }).where(eq(dmTemplates.id, tpl.cpsAll));
     await db.update(orgSettings).set({ extApi: false }).where(eq(orgSettings.orgId, f.a.orgId));
     expect((await cardOf('owner-a', made.item.id)).stop).toBe('api_off');
+    // Перевыпуск — с теми же отказами, что выпуск: внешний доступ выключен — 403.
+    const off = await call('owner-a', 'POST', `/api/dm/tokens/${made.item.id}/reissue`);
+    expect(off.status).toBe(403);
+    expect((await code(off)).code).toBe('dm_token_api_off');
     await db.update(orgSettings).set({ extApi: true }).where(eq(orgSettings.orgId, f.a.orgId));
     expect((await cardOf('owner-a', made.item.id)).state).toBe('active');
+  });
+
+  it('уволенный сотрудник: его токен работает, автор — «(уволен)»; владелец отзывает', async () => {
+    const made = await ok(
+      await issue('senior-a', tpl.cpsOwn, 'Токен уволенного'),
+      201,
+      DmTokenIssued,
+    );
+    const db = f.t.admin.db;
+    const senior = f.people['senior-a']!;
+    await db
+      .update(schema.employees)
+      .set({ active: false })
+      .where(eq(schema.employees.id, senior.employeeId));
+    try {
+      const row = (await listOf('owner-a')).find((k) => k.id === made.item.id)!;
+      expect(row.state).toBe('active');
+      expect(row.byName.endsWith(txt('dm.tok.who_left').replace('{name}', ''))).toBe(true);
+      const done = await ok(
+        await call('owner-a', 'POST', `/api/dm/tokens/${made.item.id}/revoke`),
+        200,
+        DmTokenCard,
+      );
+      expect(done.state).toBe('revoked');
+    } finally {
+      await db
+        .update(schema.employees)
+        .set({ active: true })
+        .where(eq(schema.employees.id, senior.employeeId));
+    }
   });
 
   it('Админка: свои токены к шаблонам администратора и токены всех организаций; токен организации — только отозвать', async () => {
@@ -337,6 +373,15 @@ describe.skipIf(!databaseAvailable())('Витрина данных: API-токе
       .from(schema.platformAuditLog)
       .where(eq(schema.platformAuditLog.entityId, ofB.item.id));
     expect(plat.map((h) => h.action)).toEqual(['dm_revoke']);
+    // И в истории организации — от имени администратора.
+    const inOrg = await f.t.admin.db
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.entityId, ofB.item.id), eq(auditLog.action, 'dm_revoke')));
+    expect(inOrg).toEqual([
+      expect.objectContaining({ orgId: f.a.orgId, actorUserId: expect.any(String) }),
+    ]);
+    expect(inOrg[0]!.actorUserId).not.toBe(f.a.ownerUserId);
     // Перевыпуск своего — можно.
     await ok(
       await call('platform-admin', 'POST', `/api/admin/dm/tokens/${own.item.id}/reissue`),
@@ -359,8 +404,9 @@ describe.skipIf(!databaseAvailable())('Витрина данных: API-токе
     expect((await call('senior-a', 'GET', '/api/dm/tokens/export?cols=name')).status).toBe(403);
   });
 
-  it('предел: действующих — не больше 20; отозвали один — можно снова', async () => {
-    const active = async () => (await listOf('owner-a')).filter((k) => k.state === 'active').length;
+  it('предел: действующих и остановленных — не больше 20; отозвали один — можно снова', async () => {
+    const active = async () =>
+      (await listOf('owner-a')).filter((k) => k.state === 'active' || k.state === 'stopped').length;
     let n = await active();
     while (n < DM_TOKENS_LIVE_MAX) {
       await ok(await issue('owner-a', tpl.rep, `Предел ${n}`), 201, DmTokenIssued);
@@ -371,15 +417,91 @@ describe.skipIf(!databaseAvailable())('Витрина данных: API-токе
     expect(await code(over)).toMatchObject({ code: 'dm_token_limit', details: { max: 20 } });
     const form = await ok(await call('owner-a', 'GET', '/api/dm/tokens/form'), 200, DmTokenForm);
     expect(form.refusal).toBe('dm_token_limit');
+    // Остановленные тоже в пределе: они оживут сами, когда шаблон включат.
+    const db = f.t.admin.db;
+    await db.update(dmTemplates).set({ state: 'off' }).where(eq(dmTemplates.id, tpl.rep));
+    const stopped = await issue('owner-a', tpl.cpsAll, 'Лишний');
+    expect(stopped.status).toBe(409);
+    expect((await code(stopped)).code).toBe('dm_token_limit');
+    await db.update(dmTemplates).set({ state: 'published' }).where(eq(dmTemplates.id, tpl.rep));
     const one = (await listOf('owner-a')).find((k) => k.state === 'active')!;
     await call('owner-a', 'POST', `/api/dm/tokens/${one.id}/revoke`);
     await ok(await issue('owner-a', tpl.rep, 'Лишний'), 201, DmTokenIssued);
-    // Два выпуска сразу не обходят предел: выпуски одной организации идут по одному.
-    const two = await Promise.all([
+    // Два выпуска сразу на последнее место не обходят предел: выпуски одной организации идут по одному.
+    const two = (await listOf('owner-a')).find((k) => k.state === 'active' && k.canRevoke)!;
+    await call('owner-a', 'POST', `/api/dm/tokens/${two.id}/revoke`);
+    expect(await active()).toBe(DM_TOKENS_LIVE_MAX - 1);
+    const race = await Promise.all([
       issue('owner-a', tpl.rep, 'Гонка 1'),
       issue('owner-a', tpl.rep, 'Гонка 2'),
     ]);
-    expect(two.every((r) => r.status === 409)).toBe(true);
+    expect(race.map((r) => r.status).sort()).toEqual([201, 409]);
     expect(await active()).toBe(DM_TOKENS_LIVE_MAX);
+  });
+
+  it('Админка: предел 20 действующих и названия — общие для всех администраторов', async () => {
+    const db = f.t.admin.db;
+    await db.insert(schema.users).values({
+      login: 'platform-admin-2',
+      passwordHash: await hashPassword(TEST_PASSWORD),
+      isPlatformAdmin: true,
+    });
+    cookies['platform-admin-2'] = await signIn(f.app, 'platform-admin-2', TEST_PASSWORD);
+    const base = '/api/admin/dm';
+    const live = async () =>
+      (await listOf('platform-admin', base)).filter(
+        (k) => k.mine && (k.state === 'active' || k.state === 'stopped'),
+      );
+    await ok(await issue('platform-admin', tpl.adm, 'Общий отчёт', 30, base), 201, DmTokenIssued);
+    const same = await issue('platform-admin-2', tpl.adm, 'Общий отчёт', 30, base);
+    expect(same.status).toBe(409);
+    expect((await code(same)).code).toBe('dm_token_name_taken');
+    let n = (await live()).length;
+    while (n < DM_TOKENS_LIVE_MAX) {
+      await ok(await issue('platform-admin', tpl.adm, `Админ ${n}`, 30, base), 201, DmTokenIssued);
+      n += 1;
+    }
+    const over = await issue('platform-admin-2', tpl.adm, 'Второй администратор', 30, base);
+    expect(over.status).toBe(409);
+    expect((await code(over)).code).toBe('dm_token_limit');
+    // Токены организаций в предел Админки не входят: у А их тоже 20, а Админка своё место получает.
+    const freed = (await live())[0]!;
+    await call('platform-admin-2', 'POST', `${base}/tokens/${freed.id}/revoke`);
+    await ok(
+      await issue('platform-admin-2', tpl.adm, 'Второй администратор', 30, base),
+      201,
+      DmTokenIssued,
+    );
+  });
+
+  it('частота: выпусков и перевыпусков одним человеком — не больше 60 за час, дальше 429', async () => {
+    const db = f.t.admin.db;
+    const userId = f.a.ownerUserId;
+    const mine = and(
+      eq(schema.rateLimits.kind, DM_TOKEN_ISSUE_RATE_LIMIT.kind),
+      eq(schema.rateLimits.subject, userId),
+    );
+    const [taken = { n: 0 }] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(schema.rateLimits)
+      .where(mine);
+    await db.insert(schema.rateLimits).values(
+      Array.from({ length: Math.max(DM_TOKEN_ISSUE_RATE_LIMIT.max - taken.n, 0) }, () => ({
+        kind: DM_TOKEN_ISSUE_RATE_LIMIT.kind,
+        subject: userId,
+      })),
+    );
+    try {
+      const over = await issue('owner-a', tpl.rep, 'Частота');
+      expect(over.status).toBe(429);
+      expect((await code(over)).code).toBe('dm_token_rate');
+      const live = (await listOf('owner-a')).find((k) => k.canReissue)!;
+      const again = await call('owner-a', 'POST', `/api/dm/tokens/${live.id}/reissue`);
+      expect(again.status).toBe(429);
+      // Предел — у каждого свой: другой человек выпускает как обычно (у Б предела действующих нет).
+      await ok(await issue('owner-b', tpl.rep, 'Частота Б'), 201, DmTokenIssued);
+    } finally {
+      await db.delete(schema.rateLimits).where(mine);
+    }
   });
 });

@@ -193,4 +193,8 @@ export const DATAMART_TEXTS = {
     ru: 'Токен организации можно только отозвать',
     section: E,
   },
+  'err.dm_token_rate': {
+    ru: 'Слишком много новых токенов за час. Попробуйте позже',
+    section: E,
+  },
 } as const satisfies Record<string, UiTextDefault>;
