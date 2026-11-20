@@ -99,6 +99,25 @@ function contract(name: string, make: () => Promise<Storage>, opts: { skip?: boo
       expect(await storage.exists(key)).toBe(false);
     });
 
+    it('список под приставкой: ключи, размер и время, другие папки не попадают', async () => {
+      const storage = await make();
+      const folder = `list-${randomUUID()}`;
+      const a = orgFileKey('test', folder, randomUUID());
+      const b = orgFileKey('test', folder, randomUUID());
+      const other = orgFileKey('test', `${folder}x`, randomUUID());
+      await storage.put(a, 'один', { contentType: 'text/plain' });
+      await storage.put(b, 'два', { contentType: 'text/plain' });
+      await storage.put(other, 'три', { contentType: 'text/plain' });
+      const page = await storage.list(`org/test/${folder}/`);
+      expect(page.next).toBeNull();
+      expect(page.items.map((o) => o.key).sort()).toEqual([a, b].sort());
+      const one = page.items.find((o) => o.key === a)!;
+      expect(one.size).toBe(new TextEncoder().encode('один').length);
+      expect(Date.now() - one.modifiedAt.getTime()).toBeLessThan(10 * 60_000);
+      for (const k of [a, b, other]) await storage.delete(k);
+      expect((await storage.list(`org/test/${folder}/`)).items).toEqual([]);
+    });
+
     it('выдаёт подписанную ссылку с ограниченным сроком', async () => {
       const storage = await make();
       const key = orgFileKey('test', 'contract', randomUUID());
@@ -219,6 +238,30 @@ describe('хранилище в памяти: многочастная загр�
     await storage.completeMultipart(key, id, parts);
     expect([...((await storage.get(key)) ?? [])]).toEqual([1, 2, 3, 4]);
     expect(await storage.stat(key)).toEqual({ size: 4, contentType: 'video/webm' });
+  });
+});
+
+describe('хранилище в памяти: список страницами', () => {
+  it('больше 1 000 ключей — страницами по порядку, `next` продолжает', async () => {
+    const storage = createMemoryStorage();
+    for (let i = 0; i < 1005; i++) {
+      await storage.put(`org/p/files/${String(i).padStart(5, '0')}`, 'x', {
+        contentType: 'text/plain',
+      });
+    }
+    storage.setModified('org/p/files/00000', new Date('2026-01-01T00:00:00Z'));
+    const first = await storage.list('org/p/');
+    expect(first.items).toHaveLength(1000);
+    expect(first.items[0]!.modifiedAt.toISOString()).toBe('2026-01-01T00:00:00.000Z');
+    const second = await storage.list('org/p/', first.next);
+    expect(second.items.map((o) => o.key)).toEqual([
+      'org/p/files/01000',
+      'org/p/files/01001',
+      'org/p/files/01002',
+      'org/p/files/01003',
+      'org/p/files/01004',
+    ]);
+    expect(second.next).toBeNull();
   });
 });
 

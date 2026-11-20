@@ -49,6 +49,8 @@ export const DM_ADMIN_ONLY_TABLES = [
   'news_admin_texts',
   // Прочитанные новости — свои строки пользователя.
   'news_reads',
+  // Какой порог памяти уже сообщён владельцам — служебная строка рассылки (поток Т, миграция 0169).
+  'org_memory_notices',
   'org_subscriptions',
   'platform_audit_log',
   'platform_lead_docs',

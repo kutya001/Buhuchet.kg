@@ -56,6 +56,9 @@ export const HISTORY_ENTITIES = [
   // Админка → «Файлы» (доработки 20.11.2026, пакет 2, блок 5): лишний файл хранилища удалён, удалённый
   // файл возвращён — история платформы (прототип `ent:'pfile'`).
   'storage_file',
+  // «Витрина данных» → «API Токены» (доработки 20.11.2026: Витрина данных, блок 5): выпуск, перевыпуск,
+  // отзыв токена организации; токены Админки — в истории платформы.
+  'dm_token',
 ] as const;
 export type HistoryEntity = (typeof HISTORY_ENTITIES)[number];
 
@@ -149,6 +152,9 @@ export const HISTORY_ACTIONS = [
   // администратором платформы.
   'sub_paid',
   'sub_rejected',
+  // «Витрина данных» → API-токен: перевыпущен (старый работает ещё сутки) и отозван.
+  'dm_reissue',
+  'dm_revoke',
 ] as const;
 export type HistoryAction = (typeof HISTORY_ACTIONS)[number];
 

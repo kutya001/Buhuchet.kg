@@ -65,6 +65,9 @@ describe('колокольчик: строки (доработки 16.11.2026, �
       'employee',
       'news',
       'lead',
+      'sub',
+      'sub_check',
+      'storage_check',
     ]);
   });
 });

@@ -15,6 +15,7 @@ import { CONTRACTOR_SERVICE_TEXTS } from './contractor-service-texts';
 import { CONTRACTOR_PAGE_TEXTS } from './contractor-page-texts';
 import { CONTRACTOR_PAGE_HELP_TEXTS } from './contractor-page-help-texts';
 import { CONTRACTORS_TEXTS } from './contractors-texts';
+import { DATAMART_TEXTS } from './datamart-texts';
 import { DICTS_TEXTS } from './dicts-texts';
 import { FEE_TEXTS } from './fees-texts';
 import { FINANCE_TEXTS } from './finance-texts';
@@ -146,6 +147,7 @@ export const UI_TEXTS = {
   ...PROJECTS_TEXTS,
   ...KPI_TEXTS,
   ...FILES_TEXTS,
+  ...DATAMART_TEXTS,
   ...KB_TEXTS,
   ...KB_VIDEO_TEXTS,
   ...NEWS_TEXTS,

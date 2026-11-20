@@ -77,6 +77,17 @@ describe('куда ведёт строка — как bellGo прототипа'
       kind: 'href',
       href: `/app/orgs/leads?lead=${ID}`,
     });
+    // Подписка и сверка хранилища (доработки 20.11.2026, поток Т, этап 1, П12).
+    expect(bellGoOf({ kind: 'sub', id: ID }, ctx)).toEqual({ kind: 'href', href: '/app/org/sub' });
+    expect(bellGoOf({ kind: 'sub_check', id: ID }, ctx)).toEqual({
+      kind: 'href',
+      href: `/app/orgs/subs?org=${ID}`,
+    });
+    expect(bellGoOf({ kind: 'sub_check', id: 'x' }, ctx)).toBeNull();
+    expect(bellGoOf({ kind: 'storage_check', id: '12' }, ctx)).toEqual({
+      kind: 'href',
+      href: '/app/afiles/check',
+    });
     expect(bellGoOf({ kind: 'news', id: 'v123' }, ctx)).toEqual({
       kind: 'href',
       href: '/app/kb/news?news=v123',

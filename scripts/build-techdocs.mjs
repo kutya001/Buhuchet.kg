@@ -22,6 +22,7 @@ import {
   readFileSync,
   rmSync,
   statSync,
+  writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -63,6 +64,19 @@ export function sourceVersion(env = process.env, root = ROOT) {
 }
 
 /**
+ * Названия разделов API для папок модулей, которых ещё нет в SECTIONS скрипта прототипа
+ * (spec/prototype/db/api_snapshot.py): раздел метода — папка `packages/api/src/modules/<папка>`, а скрипт
+ * приходит только с `pnpm spec:sync`. Название из скрипта прототипа главнее: отсюда берутся только
+ * недостающие.
+ */
+export const PRODUCT_SECTIONS = { datamart: 'Витрина данных' };
+
+/** Дописать в снимок недостающие названия разделов (`sections`) из PRODUCT_SECTIONS. */
+export function withProductSections(api) {
+  return { ...api, sections: { ...PRODUCT_SECTIONS, ...api.sections } };
+}
+
+/**
  * Собрать снимок API в `out`. Скрипт ждёт раскладку репозитория прототипа (db/ и data/ рядом), поэтому
  * работает во временной папке. Код выхода 2 — в коде есть таблица, которой нет в schema.json (схема в
  * spec/ отстаёт от миграций до следующего spec:sync): снимок при этом записан, берём его.
@@ -89,8 +103,8 @@ export function buildApiSnapshot(out, version = sourceVersion()) {
       if (err.status !== 2 || !existsSync(made)) throw err;
       note = 'в коде есть таблицы, которых нет в spec/prototype/db/schema.json';
     }
-    JSON.parse(readFileSync(made, 'utf8'));
-    copyFileSync(made, out);
+    const api = withProductSections(JSON.parse(readFileSync(made, 'utf8')));
+    writeFileSync(out, `${JSON.stringify(api)}\n`);
     return note;
   } finally {
     rmSync(work, { recursive: true, force: true });

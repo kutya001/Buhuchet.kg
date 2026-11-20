@@ -1,6 +1,6 @@
 {
-  "id": "98b6c22a-f200-467d-b6fa-cc15e68f0fe9",
-  "prevId": "8fdb11cb-e7db-48ac-989c-9bf97f41fa39",
+  "id": "720180e6-e5cd-4b2d-ae2e-b9a1acd4a4ed",
+  "prevId": "4a57198a-c386-44ea-aea3-ed4335248704",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -7840,7 +7840,7 @@
         },
         "subscription_plans_values_check": {
           "name": "subscription_plans_values_check",
-          "value": "\"subscription_plans\".\"months\" between 1 and 12 and \"subscription_plans\".\"discount_pct\" between 0 and 99 and cardinality(\"subscription_plans\".\"perks\") <= 10"
+          "value": "\"subscription_plans\".\"months\" between 1 and 36 and \"subscription_plans\".\"discount_pct\" between 0 and 99 and cardinality(\"subscription_plans\".\"perks\") <= 10"
         }
       },
       "isRLSEnabled": true

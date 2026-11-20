@@ -72,4 +72,8 @@ export const BELL_TEXTS = {
   },
   'bell.line.broadcast': { ru: 'Сообщение платформы: {text}', section: S },
   'bell.line.lead': { ru: 'Новая заявка с сайта: {name}', section: S },
+  'bell.line.storage_check': {
+    ru: 'Сверка хранилища нашла новые расхождения: {n}',
+    section: S,
+  },
 } as const satisfies Record<string, UiTextDefault>;

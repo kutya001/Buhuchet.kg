@@ -73,7 +73,14 @@ describe('/api/cron/tick без базы', () => {
     };
     const names = (list: readonly Job[]) => list.map((j) => j.name);
     // Напоминания и очередь отправки в Telegram (задача 2.25) — всегда: без бота они ничего не делают.
-    const telegramJobs = ['telegram.reminders', 'telegram.send'];
+    // Подписки, память и сверка хранилища (пакет 20.11.2026, поток Т, этап 1, П13) — тоже всегда.
+    const telegramJobs = [
+      'telegram.reminders',
+      'telegram.send',
+      'subs.reminders',
+      'subs.memory-checks',
+      'files.storage-reconcile',
+    ];
     expect(names(jobsFor({ APP_BASE_URL: 'https://test.buhuchet.kg' }))).toEqual([
       ...names(jobs),
       ...telegramJobs,

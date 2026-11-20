@@ -9,7 +9,7 @@ import type { BellItem } from '@buhuchet/shared';
 import type { BellRowView, IconName } from '@buhuchet/ui';
 import type { Translate } from '../l10n/translate';
 import { presetHref } from '../lists/preset';
-import { tabHref } from './modules';
+import { APP_PATH, tabHref } from './modules';
 
 /*
  * Колокольчик (доработки 16.11.2026, блок 3; прототип v123 `ui/bell-panel.js`): строка для показа и
@@ -137,6 +137,15 @@ export function bellGoOf(
       return { kind: 'href', href: `${tabHref('kb', 'news')}?news=${encodeURIComponent(id)}` };
     case 'lead':
       return record ? { kind: 'href', href: `${tabHref('orgs', 'leads')}?lead=${id}` } : null;
+    // Подписка (доработки 20.11.2026; прототип `subBellGo`): владельцу — экран «Подписка»,
+    // администратору — «Организации» → «Подписки» с окном организации; сверка хранилища — Админка →
+    // «Файлы» → «Проверка хранилища». Вкладки делает поток И.
+    case 'sub':
+      return { kind: 'href', href: `${APP_PATH}/org/sub` };
+    case 'sub_check':
+      return record ? { kind: 'href', href: `${APP_PATH}/orgs/subs?org=${id}` } : null;
+    case 'storage_check':
+      return { kind: 'href', href: `${APP_PATH}/afiles/check` };
     default:
       return null;
   }

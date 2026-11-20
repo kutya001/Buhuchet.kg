@@ -602,6 +602,7 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
         'accounts',
         'orgs',
         'afiles',
+        'dm',
         'pdicts',
         'l10n',
         'kb',
