@@ -126,6 +126,22 @@ describe('dmBind: запрос и значения для исполнителя
     });
   });
 
+  it('параметр с именем метода объекта (constructor, toString) берёт только свой вход', () => {
+    const own = [p('constructor', 'text', false), p('toString', 'text', true)];
+    const q = 'SELECT :constructor AS a, :toString AS b';
+    expect(dmBind(q, own, {}, '2026-11-20')).toEqual({
+      ok: false,
+      error: 'param',
+      param: 'toString',
+      why: 'required',
+    });
+    expect(dmBind(q, own, { toString: 'да' }, '2026-11-20')).toEqual({
+      ok: true,
+      text: 'SELECT ($1::text) AS a, ($2::text) AS b',
+      params: [null, 'да'],
+    });
+  });
+
   it('передан пустым: необязательный — пусто, обязательный — «Укажите значение» (прототип dmParRead)', () => {
     const opt = [
       p('month', 'month', true, 'month'),

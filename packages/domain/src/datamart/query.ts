@@ -279,7 +279,9 @@ export function dmBind(
   if ('problem' in parsed) return { ok: false, error: 'sql', ...parsed };
   const values = new Map<string, string | null>();
   for (const d of defs) {
-    const given = input[d.k];
+    // Только свои поля входа: параметр `constructor` или `toString` не берёт метод объекта.
+    const own = Object.hasOwn(input, d.k) ? input[d.k] : undefined;
+    const given = typeof own === 'string' || own === null ? own : undefined;
     const raw = given === undefined ? dmParamDefault(d.def, today) : given;
     if (raw == null || raw === '') {
       if (d.req) return { ok: false, error: 'param', param: d.k, why: 'required' };

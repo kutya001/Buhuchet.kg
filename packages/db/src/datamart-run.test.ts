@@ -228,10 +228,16 @@ describe.skipIf(!databaseAvailable())('витрина данных: роли б�
       ['таблица платформы', 'SELECT * FROM platform_leads', '42501'],
       ['подписки всех организаций', 'SELECT * FROM org_subscriptions', '42501'],
       ['черновики видео платформы', 'SELECT title FROM videos', '42501'],
+      ['колокольчик коллеги', 'SELECT text FROM bell_notifications', '42501'],
+      ['сообщения бота коллегам', 'SELECT text FROM telegram_outbox', '42501'],
       ['чтение файла сервера', "SELECT pg_read_file('/etc/passwd')", '42501'],
       ['пользователи базы', 'SELECT * FROM pg_authid', '42501'],
-      ['запись в CTE', 'WITH d AS (DELETE FROM contractors RETURNING id) SELECT * FROM d', '25006'],
-      ['запись с RETURNING', 'DELETE FROM contractors RETURNING id', '25006'],
+      ['запись в CTE', 'WITH d AS (DELETE FROM contractors RETURNING id) SELECT * FROM d', '0A000'],
+      ['запись с RETURNING', 'DELETE FROM contractors RETURNING id', '42601'],
+      // EXPLAIN ANALYZE показал бы, сколько строк чужих организаций отбросила политика.
+      ['план запроса', 'EXPLAIN (ANALYZE) SELECT 1 FROM organizations WHERE inn = $1', '42601'],
+      ['настройки сервера', 'SHOW ALL', '42601'],
+      ['подготовленный запрос', 'EXECUTE x', '42601'],
       [
         'обход предела строк скобками',
         'SELECT g FROM generate_series(1, 100000) g) a) b, (SELECT 1 AS one FROM (SELECT 1',
@@ -249,7 +255,12 @@ describe.skipIf(!databaseAvailable())('витрина данных: роли б�
       ['начать запуск заново', 'SELECT dm.begin_org()', '42501'],
       ['вызвать исполнителя изнутри', "SELECT dm.run_org('SELECT 1', '[]', 1)", '42501'],
       ['заблокировать запуск', 'SELECT * FROM dm.runs FOR UPDATE', '25006'],
-      ['два оператора подряд', 'SELECT 1 AS n; DELETE FROM contractors', '42P11'],
+      ['два оператора подряд', 'SELECT 1 AS n; DELETE FROM contractors', '42601'],
+      [
+        'второй оператор со скобками в обход подзапроса',
+        'SELECT 1 AS n) a; DELETE FROM contractors; SELECT * FROM (SELECT 1',
+        '42P11',
+      ],
     ] as const)('%s', async (_, text, code) => {
       await expect(inA(q(text))).rejects.toEqual(pgCode(code));
     });
@@ -263,6 +274,23 @@ describe.skipIf(!databaseAvailable())('витрина данных: роли б�
         timeoutMs: 600_000,
       });
       expect(long.rows).toEqual([['15s']]);
+    });
+
+    it('ответ больше 32 МБ — отказ: сайт не держит в памяти огромный ответ', async () => {
+      await expect(
+        inA(q("SELECT repeat('x', 1048576) AS s FROM generate_series(1, 40)")),
+      ).rejects.toEqual(pgCode('54000'));
+    });
+
+    it('транзакцию с запуском не зафиксировать, даже если вызывающий забыл откатить', async () => {
+      const e = await withOrgContext(db.app.db, { orgId: a.orgId, userId: a.ownerUserId }, (tx) =>
+        tx.execute(sql`select dm.begin_org()`),
+      ).catch((x: unknown) => x);
+      expect(dmErrorOf(e)?.code).toBe('25000');
+      const [r] = await db.admin.db.execute<{ n: number }>(
+        sql`select count(*)::int as n from dm.runs`,
+      );
+      expect(r!.n).toBe(0);
     });
 
     it('рекомендательная блокировка запроса снимается, строка запуска не остаётся', async () => {

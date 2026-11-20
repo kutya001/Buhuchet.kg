@@ -10,7 +10,8 @@
 --     организации до запуска; транзакция к этому моменту только для чтения, поэтому изнутри запроса ни
 --     строку, ни организацию не поменять (set_config('app.org_id') на роли Витрины не действует: их
 --     политики смотрят на dm.runs, а не на настройки);
---   - транзакция исполнителя всегда откатывается: строка dm.runs не остаётся.
+--   - транзакция исполнителя всегда откатывается, а зафиксировать её не даёт отложенный триггер dm.runs:
+--     строка запуска не остаётся.
 -- Блокировки: таблиц не перестраивает и данных не меняет, но CREATE POLICY берёт ACCESS EXCLUSIVE на
 -- каждую открытую таблицу (115 из 135 в public) и держит до конца транзакции пачки `db:migrate`: всё это
 -- время чтение и запись этих таблиц ждут. Сама работа — доли секунды (0,25 с на демо-базе); дольше —
@@ -28,6 +29,18 @@ BEGIN
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'buhuchet_dm_admin') THEN
     CREATE ROLE buhuchet_dm_admin NOLOGIN NOINHERIT;
+  END IF;
+  -- Роли общие для сервера: заведённая раньше руками (стенд, свой сервер) могла получить вход, обход RLS
+  -- или членство. Такую не правим молча — миграция останавливается, роль исправляет администратор базы.
+  IF EXISTS (SELECT 1 FROM pg_roles r WHERE r.rolname IN ('buhuchet_dm_org', 'buhuchet_dm_admin')
+      AND (r.rolcanlogin OR r.rolsuper OR r.rolbypassrls OR r.rolinherit OR r.rolreplication
+        OR r.rolcreaterole OR r.rolcreatedb))
+    OR EXISTS (SELECT 1 FROM pg_auth_members m JOIN pg_roles r ON r.oid = m.member
+      WHERE r.rolname IN ('buhuchet_dm_org', 'buhuchet_dm_admin'))
+    OR EXISTS (SELECT 1 FROM pg_auth_members m
+      JOIN pg_roles g ON g.oid = m.roleid JOIN pg_roles r ON r.oid = m.member
+      WHERE g.rolname IN ('buhuchet_dm_org', 'buhuchet_dm_admin') AND r.rolname = 'buhuchet_app') THEN
+    RAISE EXCEPTION 'dm: у роли Витрины лишние свойства или членство' USING ERRCODE = '42501';
   END IF;
 END
 $$;--> statement-breakpoint
@@ -48,6 +61,20 @@ CREATE TABLE dm.runs (
   PRIMARY KEY (pid, xid),
   CHECK (admin = (org_id IS NULL))
 );--> statement-breakpoint
+-- Транзакция с запуском не фиксируется никогда: строка с организацией и сотрудником не остаётся, даже
+-- если вызывающий код забудет откатить (проверка — при COMMIT).
+CREATE FUNCTION dm.runs_no_commit()
+  RETURNS trigger
+  LANGUAGE plpgsql
+  SET search_path = pg_catalog, pg_temp
+  AS $$
+  BEGIN
+    RAISE EXCEPTION 'dm: транзакция запуска Витрины не фиксируется' USING ERRCODE = '25000';
+  END
+  $$;--> statement-breakpoint
+REVOKE ALL ON FUNCTION dm.runs_no_commit() FROM PUBLIC;--> statement-breakpoint
+CREATE CONSTRAINT TRIGGER runs_no_commit AFTER INSERT ON dm.runs
+  DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION dm.runs_no_commit();--> statement-breakpoint
 GRANT USAGE ON SCHEMA dm TO buhuchet_app, buhuchet_dm_org, buhuchet_dm_admin;--> statement-breakpoint
 GRANT SELECT ON TABLE dm.runs TO buhuchet_dm_org, buhuchet_dm_admin;--> statement-breakpoint
 GRANT USAGE ON SCHEMA public TO buhuchet_dm_org, buhuchet_dm_admin;--> statement-breakpoint
@@ -57,7 +84,9 @@ GRANT USAGE ON SCHEMA public TO buhuchet_dm_org, buhuchet_dm_admin;--> statement
 --   closed — секреты (пароли, сеансы, ключи и коды Telegram и страниц, хеши токенов, счётчики попыток
 --     входа, частота) и служебное хранилища — закрыты обеим ролям;
 --   admin_only — данные платформы (организации целиком, заявки, подписки и чеки, журналы платформы,
---     черновики новостей и видео, шаблоны Витрины) — только роли Админки;
+--     черновики новостей и видео, шаблоны Витрины) и личные строки пользователя, которые приложение
+--     показывает только ему самому (колокольчик, настройки вида, прочитанное, сообщения бота и виджет),
+--     — только роли Админки;
 --   platform — справочники платформы без организации — обеим ролям целиком;
 --   остальные таблицы с org_id — роли организаций только свои строки, Админки — все; организация видит
 --     только свою строку organizations. Таблица без org_id, которой нет в списках, — только Админке.
@@ -70,11 +99,13 @@ DECLARE
     'password_setup_tokens', 'platform_lead_tg_tokens', 'rate_limits', 'sessions', 'storage_check_items',
     'storage_check_runs', 'storage_delete_retries', 'telegram_group_tokens', 'telegram_inbox',
     'telegram_link_guards', 'telegram_link_tokens', 'telegram_relink_codes'];
-  admin_only text[] := ARRAY['dict_loads', 'dm_requests', 'dm_template_orgs', 'dm_templates',
-    'file_trash', 'news', 'news_admin_texts', 'org_subscriptions', 'platform_audit_log',
-    'platform_lead_docs', 'platform_lead_events', 'platform_lead_uploads', 'platform_leads',
-    'scheduler_jobs', 'scheduler_runs', 'session_log', 'subscription_payments', 'subscription_plans',
-    'subscription_settings', 'video_guest_stats', 'video_uploads', 'videos'];
+  admin_only text[] := ARRAY['bell_notifications', 'dict_loads', 'dm_requests', 'dm_template_orgs',
+    'dm_templates', 'file_trash', 'kb_known', 'news', 'news_admin_texts', 'news_reads',
+    'org_subscriptions', 'platform_audit_log', 'platform_lead_docs', 'platform_lead_events',
+    'platform_lead_uploads', 'platform_leads', 'scheduler_jobs', 'scheduler_runs', 'session_log',
+    'subscription_payments', 'subscription_plans', 'subscription_settings', 'telegram_outbox',
+    'telegram_widgets', 'video_guest_stats', 'video_uploads', 'videos', 'view_settings',
+    'welcome_seen'];
   platform text[] := ARRAY['authorities', 'banks', 'due_change_reasons', 'gked_items',
     'message_templates', 'ownership_forms', 'permissions', 'phone_codes', 'platform_reference',
     'production_calendar', 'report_bases', 'report_type_bases', 'report_type_regimes', 'report_types',
@@ -168,9 +199,12 @@ CREATE FUNCTION dm.begin_admin()
   END
   $$;--> statement-breakpoint
 -- Выполнить запрос шаблона (блок 8, пункты 1, 4, 5): транзакция только для чтения и начата dm.begin_*;
--- запрос открывается курсором как есть — курсор принимает ровно один оператор, а запись, блокировку
--- строк и смену «только чтения» отклоняет транзакция; строки забираются по одной, не больше p_max + 1
--- (на одну больше — чтобы сказать «строк больше»), поэтому предел не обойти скобками в тексте запроса.
+-- запрос становится подзапросом `SELECT * FROM (запрос) dm_q` — так проходит только SELECT (EXPLAIN,
+-- SHOW, EXECUTE, DELETE … RETURNING и запись в WITH база отклоняет; EXPLAIN ANALYZE выдал бы число
+-- строк чужих организаций, отброшенных политикой), а курсор принимает ровно один оператор; блокировку
+-- строк и смену «только чтения» отклоняет транзакция. Строки забираются по одной, не больше p_max + 1
+-- (на одну больше — чтобы сказать «строк больше»), поэтому предел не обойти скобками в тексте запроса;
+-- ответ больше 32 МБ — отказ (54000): сайт не держит в памяти сотни мегабайт одного запроса.
 -- Параметры — $1…$20 текстом (приводит к типу сам запрос, `$1::date`). Ответ — {columns, rows}: имена
 -- столбцов в порядке запроса (и у пустого результата; одинаковые имена — ошибка) и строки массивами
 -- значений. Сроки — по Бишкеку (`current_date`, `::date`), блокировку таблицы ждём не дольше 3 с.
@@ -191,6 +225,7 @@ CREATE FUNCTION dm.run_org(p_sql text, p_params jsonb, p_max integer)
     cols text[];
     vals json[] := '{}';
     n integer := 0;
+    size bigint := 0;
   BEGIN
     IF current_setting('transaction_read_only') <> 'on' THEN
       RAISE EXCEPTION 'dm.run_org: транзакция не только для чтения' USING ERRCODE = '25006';
@@ -206,7 +241,7 @@ CREATE FUNCTION dm.run_org(p_sql text, p_params jsonb, p_max integer)
       RAISE EXCEPTION 'dm.run_org: параметры — массив до 20 значений' USING ERRCODE = '22023';
     END IF;
     BEGIN
-      OPEN cur FOR EXECUTE p_sql
+      OPEN cur FOR EXECUTE 'SELECT * FROM (' || p_sql || E'\n) dm_q'
         USING p_params->>0, p_params->>1, p_params->>2, p_params->>3, p_params->>4, p_params->>5,
           p_params->>6, p_params->>7, p_params->>8, p_params->>9, p_params->>10, p_params->>11,
           p_params->>12, p_params->>13, p_params->>14, p_params->>15, p_params->>16, p_params->>17,
@@ -225,6 +260,10 @@ CREATE FUNCTION dm.run_org(p_sql text, p_params jsonb, p_max integer)
         vals := vals || (SELECT coalesce(json_agg(e.value ORDER BY e.i), '[]'::json)
           FROM json_each(j) WITH ORDINALITY AS e(key, value, i));
         n := n + 1;
+        size := size + octet_length(j::text);
+        IF size > 33554432 THEN
+          RAISE EXCEPTION 'dm.run_org: ответ больше 32 МБ' USING ERRCODE = '54000';
+        END IF;
         EXIT WHEN n > p_max;
       END LOOP;
       CLOSE cur;
@@ -252,6 +291,7 @@ CREATE FUNCTION dm.run_admin(p_sql text, p_params jsonb, p_max integer)
     cols text[];
     vals json[] := '{}';
     n integer := 0;
+    size bigint := 0;
   BEGIN
     IF current_setting('transaction_read_only') <> 'on' THEN
       RAISE EXCEPTION 'dm.run_admin: транзакция не только для чтения' USING ERRCODE = '25006';
@@ -267,7 +307,7 @@ CREATE FUNCTION dm.run_admin(p_sql text, p_params jsonb, p_max integer)
       RAISE EXCEPTION 'dm.run_admin: параметры — массив до 20 значений' USING ERRCODE = '22023';
     END IF;
     BEGIN
-      OPEN cur FOR EXECUTE p_sql
+      OPEN cur FOR EXECUTE 'SELECT * FROM (' || p_sql || E'\n) dm_q'
         USING p_params->>0, p_params->>1, p_params->>2, p_params->>3, p_params->>4, p_params->>5,
           p_params->>6, p_params->>7, p_params->>8, p_params->>9, p_params->>10, p_params->>11,
           p_params->>12, p_params->>13, p_params->>14, p_params->>15, p_params->>16, p_params->>17,
@@ -286,6 +326,10 @@ CREATE FUNCTION dm.run_admin(p_sql text, p_params jsonb, p_max integer)
         vals := vals || (SELECT coalesce(json_agg(e.value ORDER BY e.i), '[]'::json)
           FROM json_each(j) WITH ORDINALITY AS e(key, value, i));
         n := n + 1;
+        size := size + octet_length(j::text);
+        IF size > 33554432 THEN
+          RAISE EXCEPTION 'dm.run_admin: ответ больше 32 МБ' USING ERRCODE = '54000';
+        END IF;
         EXIT WHEN n > p_max;
       END LOOP;
       CLOSE cur;
