@@ -130,6 +130,8 @@ import {
   storageCheckRoute,
   storageFileExportHandler,
   storageFileExportRoute,
+  storageFileDownloadHandler,
+  storageFileDownloadRoute,
   storageFileLinkHandler,
   storageFileLinkRoute,
   storageFilesHandler,
@@ -252,6 +254,7 @@ export function adminModule(deps: ApiDeps) {
       .openapi(storageCheckRoute, storageCheckHandler(deps))
       .openapi(extraDeleteRoute, extraDeleteHandler(deps))
       .openapi(storageFileLinkRoute, storageFileLinkHandler(deps))
+      .openapi(storageFileDownloadRoute, storageFileDownloadHandler(deps))
       .openapi(ownerSetupRoute, ownerSetupHandler(deps))
       .openapi(techDocsMetaRoute, techDocsMetaHandler(deps))
       .openapi(apiMethodValuesRoute, apiMethodValuesHandler(deps))

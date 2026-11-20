@@ -219,6 +219,11 @@ describe.skipIf(!databaseAvailable())('Админка → «Файлы»: API', 
     expect(noPreview.status).toBe(400);
     expect((await apiErr(noPreview)).code).toBe('file_no_preview');
     await ok(await call('GET', `/api/admin/files/file/${doc.id}/link?download=1`, admin));
+    // «Скачать» окна — ссылкой: переход на подписанную ссылку-вложение.
+    const dl = await call('GET', `/api/admin/files/file/${doc.id}/download`, admin);
+    expect(dl.status).toBe(302);
+    expect(decodeURIComponent(dl.headers.get('location') ?? '')).toContain('Письмо.docx');
+    expect((await call('GET', `/api/admin/files/file/${doc.id}/download`, owner)).status).toBe(403);
     expect((await call('GET', `/api/admin/files/file/${randomUUID()}/link`, admin)).status).toBe(
       404,
     );

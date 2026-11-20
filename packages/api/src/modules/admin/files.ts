@@ -42,6 +42,7 @@ import {
   SUBSCRIPTION_GB_MB,
   SUBSCRIPTION_MB_BYTES,
   type AccessSubject,
+  type AdminFileKind,
   type FileTrashProblem,
 } from '@buhuchet/domain';
 import {
@@ -329,34 +330,70 @@ export const storageFileLinkRoute = createRoute({
  * запрос только со своего сайта (`Sec-Fetch-Site`) и предел частоты на администратора. Без `download`
  * — только картинка и PDF с проверенным типом, остальное — вложением.
  */
+async function adminFileLink(
+  deps: ApiDeps,
+  c: Context<AppEnv>,
+  kind: AdminFileKind,
+  id: string,
+  download: boolean,
+): Promise<{ url: string; expiresAt: string }> {
+  c.header('Cache-Control', 'no-store');
+  const site = c.req.header('sec-fetch-site');
+  if (site !== undefined && site !== 'same-origin' && site !== 'none') {
+    apiFail(403, 'origin_mismatch', 'Запрос с другого сайта отклонён');
+  }
+  const userId = adminOf(c);
+  const slot = await takeRateLimit(deps.db, ADMIN_FILE_OPEN_RATE_LIMIT, userId);
+  if (!slot.ok)
+    apiFail(429, 'file_open_limit', 'Слишком много открытых файлов. Попробуйте через час');
+  const file = await withUserContext(deps.db, userId, (tx) => adminStorageFileKey(tx, kind, id));
+  if (!file) apiFail(404, 'not_found', 'Файл не найден');
+  const contentType = file!.contentType ?? 'application/octet-stream';
+  if (!download && !filePreviewKind(contentType)) {
+    apiFail(400, 'file_no_preview', 'Этот файл не открывается в окне: скачайте его');
+  }
+  const expiresAt = new Date(Date.now() + FILE_LINK_SECONDS * 1000);
+  const url = await deps.storage.signedDownloadUrl(file!.storageKey, {
+    expiresInSeconds: FILE_LINK_SECONDS,
+    fileName: file!.name,
+    ...(download ? {} : { inline: { contentType } }),
+  });
+  return { url, expiresAt: expiresAt.toISOString() };
+}
+
 export function storageFileLinkHandler(
   deps: ApiDeps,
 ): RouteHandler<typeof storageFileLinkRoute, AppEnv> {
   return async (c) => {
-    c.header('Cache-Control', 'no-store');
-    const site = c.req.header('sec-fetch-site');
-    if (site !== undefined && site !== 'same-origin' && site !== 'none') {
-      apiFail(403, 'origin_mismatch', 'Запрос с другого сайта отклонён');
-    }
     const { kind, id } = c.req.valid('param');
     const download = c.req.valid('query').download === '1';
-    const userId = adminOf(c);
-    const slot = await takeRateLimit(deps.db, ADMIN_FILE_OPEN_RATE_LIMIT, userId);
-    if (!slot.ok)
-      apiFail(429, 'file_open_limit', 'Слишком много открытых файлов. Попробуйте через час');
-    const file = await withUserContext(deps.db, userId, (tx) => adminStorageFileKey(tx, kind, id));
-    if (!file) apiFail(404, 'not_found', 'Файл не найден');
-    const contentType = file!.contentType ?? 'application/octet-stream';
-    if (!download && !filePreviewKind(contentType)) {
-      apiFail(400, 'file_no_preview', 'Этот файл не открывается в окне: скачайте его');
-    }
-    const expiresAt = new Date(Date.now() + FILE_LINK_SECONDS * 1000);
-    const url = await deps.storage.signedDownloadUrl(file!.storageKey, {
-      expiresInSeconds: FILE_LINK_SECONDS,
-      fileName: file!.name,
-      ...(download ? {} : { inline: { contentType } }),
-    });
-    return c.json({ url, expiresAt: expiresAt.toISOString() }, 200);
+    return c.json(await adminFileLink(deps, c, kind, id, download), 200);
+  };
+}
+
+export const storageFileDownloadRoute = createRoute({
+  method: 'get',
+  path: '/admin/files/{kind}/{id}/download',
+  tags: ['admin'],
+  summary: '«Скачать» любой файл: переход на подписанную ссылку-вложение (кнопка окна просмотра)',
+  middleware: [requirePlatformAdmin] as const,
+  request: { params: AdminStorageFileParam },
+  responses: {
+    302: { description: 'Переход на подписанную ссылку-вложение на 15 минут' },
+    400: { description: 'Номер файла неверного вида', content: error },
+    ...denied,
+    404: { description: 'Файла нет или он уже стёрт', content: error },
+    429: { description: 'Больше 300 открытий файлов за час', content: error },
+  },
+});
+
+/** «Скачать» в окне просмотра — ссылкой (как у «Отправленных файлов»): те же проверки, что у ссылки. */
+export function storageFileDownloadHandler(
+  deps: ApiDeps,
+): RouteHandler<typeof storageFileDownloadRoute, AppEnv> {
+  return async (c) => {
+    const { kind, id } = c.req.valid('param');
+    return c.redirect((await adminFileLink(deps, c, kind, id, true)).url, 302);
   };
 }
 

@@ -34,6 +34,8 @@ export type BusinessModuleId = (typeof MENU_MODULES)[number]['id'];
 export const ADMIN_MENU_MODULES = [
   'accounts',
   'orgs',
+  // «Файлы» Админки (доработки 20.11.2026, пакет 2, блок 3): хранилище, все файлы, сверка.
+  'afiles',
   'pdicts',
   'l10n',
   'kb',
