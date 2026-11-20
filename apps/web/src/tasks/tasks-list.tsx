@@ -140,7 +140,9 @@ export function TasksList({ tab }: { tab: TaskTab }) {
   const plates = canCreate || access.can('tasksConfirm');
   const range = rangeText(t, tab, s?.monthStart);
   const empty =
-    s?.empty && tab !== 'overdue' ? (
+    // Задач в организации нет совсем — первый вход на любой вкладке, и на «Просроченных» тоже
+    // (прототип ui/grid.js: `firstEmpty` при пустом списке, у «Задач» — `!allTasks().length`).
+    s?.empty ? (
       <EmptyState
         icon="task"
         title={t('task.empty.first')}

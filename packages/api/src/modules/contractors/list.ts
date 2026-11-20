@@ -1,6 +1,7 @@
 import { createRoute, type RouteHandler } from '@hono/zod-openapi';
 import {
   contractorSummary,
+  contractorsOrgEmpty,
   contractorTabCounts,
   exportContractors,
   kpiMissingRows,
@@ -347,9 +348,10 @@ export function contractorSummaryHandler(
 ): RouteHandler<typeof contractorSummaryRoute, AppEnv> {
   return async (c) => {
     const subject = subjectOf(c);
-    const summary = await withOrgContext(deps.db, orgContextOf(c), async (tx) =>
-      contractorSummary(tx, await listOptions(deps, c, tx, 'all', true)),
-    );
+    const summary = await withOrgContext(deps.db, orgContextOf(c), async (tx) => ({
+      ...(await contractorSummary(tx, await listOptions(deps, c, tx, 'all', true))),
+      orgEmpty: await contractorsOrgEmpty(tx),
+    }));
     return c.json({ ...summary, scopeAll: scopeOf(subject, 'cps') === 'all' }, 200);
   };
 }
