@@ -121,6 +121,15 @@ export const TELEGRAM_TEXTS = {
   'telegram.kind.sub': { ru: 'Подписка организации', section: S },
   'telegram.kind.sub_check': { ru: 'Чек подписки на проверку', section: S },
   'telegram.kind.storage_check': { ru: 'Сверка хранилища', section: S },
+  // {что} сообщения «Новый чек на проверку» (прототип SUB_WHAT строчными) и сверка хранилища (поток Т,
+  // этап 1, П12–П13; в прототипе сообщения о сверке нет — docs/deviations.md п. Т-24).
+  'telegram.sub.what.renew': { ru: 'продление', section: S },
+  'telegram.sub.what.grow': { ru: 'расширение пакета', section: S },
+  'telegram.sub.what.mem': { ru: 'память сверх', section: S },
+  'telegram.storage_check.new': {
+    ru: '🗂 Сверка хранилища нашла новые расхождения: {n}. Нет в хранилище — {missing}, лишних — {extra}, зависших загрузок — {stuck}, не стёрто — {failed}. Админка → «Файлы» → «Проверка хранилища».',
+    section: S,
+  },
   'telegram.notme.event.pass': { ru: 'пароль изменён', section: S },
   'telegram.notme.event.relink': { ru: 'привязан другой Telegram', section: S },
   'telegram.notme.event.unlink': { ru: 'Telegram отвязан', section: S },

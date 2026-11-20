@@ -110,6 +110,9 @@ export const RUNS_TEXTS = {
   'runs.done.reports_create_due': { ru: 'Создано отчётов: {n}', section: S },
   'runs.done.contractors_sync_service_status': { ru: 'Изменено статусов: {n}', section: S },
   'runs.done.kb_cleanup_video_uploads': { ru: 'Удалено загрузок видео: {n}', section: S },
+  'runs.done.files_storage_reconcile': { ru: 'Проверено объектов хранилища: {n}', section: S },
+  'runs.done.subs_reminders': { ru: 'Напоминаний об оплате: {n}', section: S },
+  'runs.done.subs_memory_checks': { ru: 'Сообщений о памяти и чеках: {n}', section: S },
   'runs.done.auth_cleanup_login_attempts': { ru: 'Удалено записей: {n}', section: S },
   'runs.done.system_cleanup_rate_limits': { ru: 'Удалено записей: {n}', section: S },
   'runs.done.contractor_page_cleanup_grants': { ru: 'Удалено записей: {n}', section: S },
@@ -168,6 +171,18 @@ export const RUNS_TEXTS = {
   },
   'runs.what.files_sent_purge': {
     ru: 'Удаляет файлы со страницы контрагента, которые не приняли за 30 дней',
+    section: S,
+  },
+  'runs.what.files_storage_reconcile': {
+    ru: 'Сверяет записи файлов с хранилищем: лишние файлы в хранилище и записи без файла — в итог для модуля «Файлы»; сама ничего не удаляет',
+    section: S,
+  },
+  'runs.what.subs_reminders': {
+    ru: 'Напоминает владельцам об оплате подписки за 7 дней до «Оплачено до» и каждый день до оплаты — в час напоминаний организации; после чека не напоминает',
+    section: S,
+  },
+  'runs.what.subs_memory_checks': {
+    ru: 'Память 80 % и 100 % — владельцам один раз, пока занятое не опустится ниже порога; непроверенные чеки — повтор администраторам, через 3 дня — пометка «Ждёт проверки больше 3 дней»',
     section: S,
   },
   'runs.what.files_storage_retry': {

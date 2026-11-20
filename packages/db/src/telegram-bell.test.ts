@@ -87,6 +87,7 @@ const ALL: BellSight = {
   files: undefined,
   cpFee: true,
   staff: true,
+  owner: true,
   news: null,
 };
 
