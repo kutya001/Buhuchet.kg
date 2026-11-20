@@ -27,6 +27,7 @@ import { RestDialog } from '../finance/finance-dialogs';
 import { useErrorText, useT } from '../l10n/provider';
 import { useShell } from '../shell/context';
 import { rollbackLabels, rollbackTitle, statusPillView } from '../status/status-view';
+import { useSeatGuard } from './seat-dialog';
 import { activeRegimesQuery, serviceQuery, useServiceRefresh } from './service-data';
 import { PauseServiceDialog, ResumeServiceDialog, ToRegularDialog } from './service-dialogs';
 import { serviceMenuEntries, servicePlanNote, type ServiceMenuAction } from './service-menu';
@@ -97,6 +98,7 @@ export function useServiceActions(
   const [backBusy, setBackBusy] = useState(false);
   const [backError, setBackError] = useState<string | undefined>();
   const [pending, setPending] = useState(false);
+  const seat = useSeatGuard();
 
   const fresh = (id: string) => client.fetchQuery({ ...serviceQuery(id), staleTime: 0 });
   /** После действия: обслуживание — в кэш, карточка, списки и отчёты — перечитать. */
@@ -188,11 +190,16 @@ export function useServiceActions(
   };
 
   const unarchive = async (contractorId: string) => {
+    // Возвращённый занимает место в пакете (прототип v152: unarchiveCp → seatOk).
+    if (!(await seat.ask())) return;
     const res = await callApi(() =>
       api.api.contractors[':id'].unarchive.$post({ param: { id: contractorId }, json: {} }),
     );
     refresh();
-    if (!res.ok) return toast(errorText(res.error), { bad: true });
+    if (!res.ok) {
+      if (seat.fromError(res.error)) return;
+      return toast(errorText(res.error), { bad: true });
+    }
     const card = ContractorUnarchived.safeParse(res.data);
     if (!card.success) return toast(t('err.unknown'), { bad: true });
     client.setQueryData(serviceQuery(contractorId).queryKey, card.data.service);
@@ -239,6 +246,7 @@ export function useServiceActions(
   const skipped = back?.data.service.skipped ?? [];
   const dialogs = (
     <>
+      {seat.node}
       {dialog?.data.kind === 'pause' ? <PauseServiceDialog {...dialogProps(dialog)} /> : null}
       {dialog?.data.kind === 'resume' ? (
         <ResumeServiceDialog

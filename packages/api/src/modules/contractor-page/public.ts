@@ -6,7 +6,6 @@ import {
   contractorPageOrg,
   cpCodeHelp,
   cpHelpForPage,
-  contractorPageState,
   getContractorPage,
   listContractorSentFiles,
   pageContractorFacts,
@@ -55,6 +54,7 @@ import { apiFail } from '../../errors';
 import { translateOf } from '../contractors/common';
 import { logoLink } from '../org/logo-link';
 import { notifyPageClosed } from './closed';
+import { pageAccess } from './org-closed';
 import { contractorPageBody } from './view';
 
 /*
@@ -130,7 +130,7 @@ export const publicPageRoute = createRoute({
   responses: {
     200: {
       description:
-        '«Страница недоступна», ввод кода, ввод закрыт после неверных кодов, «Страница закрыта» после 5 неверных кодов за сутки (до «Сменить код») или открытая страница (браузер с запомненным кодом)',
+        '«Страница недоступна», ввод кода, ввод закрыт после неверных кодов, «Страница закрыта» после 5 неверных кодов за сутки (до «Сменить код»), «Страница временно недоступна» (`org_closed`: доступ организации закрыт по подписке, браузеру с запомненным кодом) или открытая страница (браузер с запомненным кодом)',
       content: { 'application/json': { schema: PublicPage } },
     },
   },
@@ -146,7 +146,7 @@ export function publicPageHandler(deps: ApiDeps): RouteHandler<typeof publicPage
     const { slug, inn } = c.req.valid('param');
     privateHeaders(c);
     if (!isPageAddress(slug, inn)) return c.json({ state: 'unavailable' } as PublicPageBody, 200);
-    const state = await contractorPageState(deps.db, slug, inn, pageTokenHash(c, deps));
+    const state = await pageAccess(deps, slug, inn, pageTokenHash(c, deps));
     // Экран кода — только «Что это за страница?» и объяснение (доработки 15.11.2026, прототип v120
     // `cphCodeWhat`): остальные подсказки страница получает после кода.
     // До кода страница не называет и организацию: ТЗ «по чужому ИНН без его кода не видно ничего» строже
@@ -155,7 +155,8 @@ export function publicPageHandler(deps: ApiDeps): RouteHandler<typeof publicPage
     if (state.state === 'code') {
       return c.json({ state: 'code', help: await cpCodeHelp(deps.db) } as PublicPageBody, 200);
     }
-    if (state.state === 'unavailable' || state.state === 'closed') {
+    // Доступ организации закрыт по подписке: ни данных, ни названия и логотипа организации (п. К-24).
+    if (state.state === 'unavailable' || state.state === 'closed' || state.state === 'org_closed') {
       return c.json({ state: state.state } as PublicPageBody, 200);
     }
     if (state.state === 'locked') {
@@ -372,7 +373,7 @@ export function publicPageFileHandler(
     const unavailable = () =>
       apiFail(404, 'page_unavailable', 'Страница недоступна. Обратитесь к вашему бухгалтеру.');
     if (!isPageAddress(slug, inn)) return unavailable();
-    const state = await contractorPageState(deps.db, slug, inn, pageTokenHash(c, deps));
+    const state = await pageAccess(deps, slug, inn, pageTokenHash(c, deps));
     if (state.state !== 'open') return unavailable();
     const { orgId, contractorId } = state;
     const file = await withOrgContext(deps.db, { orgId, userId: null }, async (tx) => {

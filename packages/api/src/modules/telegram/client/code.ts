@@ -10,7 +10,9 @@ import {
   type RateLimit,
 } from '@buhuchet/db';
 import {
+  bishkekDate,
   botTemplate,
+  formatText,
   isPageCodeCommand,
   PAGE_CODE_TG_MAX,
   PAGE_CODE_TG_WINDOW_HOURS,
@@ -21,6 +23,8 @@ import {
   type PageForgotOutcome,
 } from '@buhuchet/domain';
 import type { ApiDeps } from '../../../deps';
+import { orgAccessClosed } from '../../contractor-page/org-closed';
+import { serverTexts } from '../../l10n/texts';
 import { botText, sendNow } from '../bot';
 import { botSendOptions } from '../outbox';
 
@@ -77,22 +81,30 @@ async function codeMessage(
   return { text, message: { text, code, buttons: [[{ text: copy, copy: target.code }]] } };
 }
 
-export type PageCodeSendOutcome = PageForgotOutcome | 'unavailable';
+/** `org_closed` — доступ организации закрыт по подписке: код не уходит (п. К-24). */
+export type PageCodeSendOutcome = PageForgotOutcome | 'unavailable' | 'org_closed';
 
 /**
  * Прислать код страницы контрагента в его подключённые Telegram (прототип `pgCodeSend`): `chatId` —
  * только в этот чат (команда бота), иначе во все подключённые. Чтение страницы и запись в историю —
  * транзакциями организации без пользователя, отправка — между ними (п. О-48). Страница выключена,
- * контрагент в архиве, организация заблокирована или функция выключена — `unavailable`.
+ * контрагент в архиве, организация заблокирована или функция выключена — `unavailable`; доступ
+ * организации закрыт по подписке — `org_closed`, код не уходит (прототип v152 `pubForgot`).
  */
 export async function sendPageCode(
   deps: ApiDeps,
   o: { orgId: string; contractorId: string; via: PageCodeVia; chatId?: number },
 ): Promise<{ outcome: PageCodeSendOutcome; contractor: string | null }> {
   const ctx = { orgId: o.orgId, userId: null };
-  const target = await withOrgContext(deps.db, ctx, (tx) => pageCodeTarget(tx, o.contractorId));
+  const today = bishkekDate(deps.clock.now());
+  const found = await withOrgContext(deps.db, ctx, async (tx) => ({
+    target: await pageCodeTarget(tx, o.contractorId),
+    closed: await orgAccessClosed(tx, today),
+  }));
+  const { target } = found;
   if (!target) return { outcome: 'unavailable', contractor: null };
   const { contractor } = target;
+  if (found.closed) return { outcome: 'org_closed', contractor };
   const chats = target.chats.filter((x) => o.chatId === undefined || x.chatId === o.chatId);
   if (!botOn(deps) || !target.tgShown || !chats.length) return { outcome: 'none', contractor };
   if (target.closed) return { outcome: 'closed', contractor };
@@ -154,7 +166,15 @@ export async function clientCodeCommand(
       chatId: msg.chatId,
     });
     if (r.outcome === 'sent') answered = true;
-    else if (r.outcome === 'limit' || r.outcome === 'closed') {
+    else if (r.outcome === 'org_closed') {
+      // Доступ организации закрыт по подписке: кода нет, ответ — как у кнопок старых сообщений (п. К-24).
+      const t = await serverTexts(deps);
+      const text = formatText(t('cppage.tg.org_closed_code'), {
+        contractor: r.contractor ?? link.contractor,
+      });
+      await sendNow(deps, msg.chatId, text, 'cp_telegram');
+      answered = true;
+    } else if (r.outcome === 'limit' || r.outcome === 'closed') {
       const key = r.outcome === 'limit' ? 'tgCpCodeLimit' : 'tgCpCodeClosed';
       const text = await botText(deps, key, {
         контрагент: r.contractor ?? link.contractor,

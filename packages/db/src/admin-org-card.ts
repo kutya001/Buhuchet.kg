@@ -13,25 +13,13 @@ import {
   type Tyiyn,
   type YearMonth,
 } from '@buhuchet/domain';
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  inArray,
-  isNull,
-  lt,
-  ne,
-  not,
-  notInArray,
-  sql,
-  type SQL,
-} from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, lt, ne, not, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Tx } from './client';
 import { adminGetOrganization, type AdminOrganizationRecord } from './admin-orgs';
 import { ADMIN_CARD_ROWS, adminSessions, countAll } from './admin-user-card';
-import { bankNamesOf, feeLedgers } from './fees';
+import { bankNamesOf, feeLedgers, feePaymentFileShown } from './fees';
+import { operationFileShown } from './finance-edit';
 import { writeHistory } from './history';
 import { adminLeadDocs } from './lead-docs';
 import { adminLeadOfOrganization } from './leads';
@@ -186,10 +174,11 @@ export const ADMIN_ORG_VIEW_ROWS = 30;
 const RECENT_FILES = 30;
 
 /**
- * Файлы карточки — те же, что в «Файловом менеджере» организации (прототип allFiles): файлов оплат
- * за обслуживание и финансовых операций в нём нет (у этих источников нет списка, `FileListSource.list`).
+ * Файлы карточки — те же, что в «Файловом менеджере» организации у владельца: файлы оплат за
+ * обслуживание и финансовых операций — пока оплата не удалена и операция не отменена (доработки
+ * 20.11.2026, пакет 2, блок 5, пункт 1; п. К-25).
  */
-const HIDDEN_FILE_KINDS = ['fee_payment', 'money_operation'] as const;
+const SHOWN_SOURCE_FILES = sql`(case ${files.sourceKind} when 'fee_payment' then ${feePaymentFileShown(undefined)} when 'money_operation' then ${operationFileShown(undefined)} else true end)`;
 
 /** Вид источника как в менеджере (`FILE_LIST_KIND_OF`): файлы оплат услуги и проекта — их вид. */
 const FILE_KIND = sql.raw(
@@ -425,7 +414,7 @@ export async function adminOrgCard(
   const shownFiles = and(
     eq(files.state, 'ready'),
     sql`${files.deletedAt} is null`,
-    notInArray(files.sourceKind, [...HIDDEN_FILE_KINDS]),
+    SHOWN_SOURCE_FILES,
   );
   const byKind = await tx
     .select({

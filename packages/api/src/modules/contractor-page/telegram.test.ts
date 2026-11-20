@@ -6,6 +6,7 @@ import {
   CP_TG_MAX,
   fillTemplate,
   TELEGRAM_TEMPLATE_DEFAULTS,
+  UI_TEXTS,
 } from '@buhuchet/domain';
 import {
   ApiError,
@@ -783,6 +784,38 @@ describe.skipIf(!databaseAvailable())('Telegram контрагента: мето
         });
         expect(await statusOf(id)).toBe('on');
       } finally {
+        await grantPage(false);
+        await wipe();
+      }
+    });
+
+    it('доступ организации закрыт по подписке (доработки 20.11.2026, блок 4, пункт 4): «Подтвердить» и «Отклонить» — «Доступ организации закрыт», клиенту ничего, запрос ждёт; после оплаты — работает', async () => {
+      const { id, messageId } = await request(CLIENT_1, 'client_one');
+      const subscription = (paidUntil: string) =>
+        f.t.admin.db
+          .insert(schema.orgSubscriptions)
+          .values({ orgId: f.a.orgId, planId: 'm1', seats: 1000, paidUntil })
+          .onConflictDoUpdate({ target: schema.orgSubscriptions.orgId, set: { paidUntil } });
+      await grantPage(true);
+      try {
+        await subscription('2000-01-01');
+        clear();
+        for (const action of ['cptgOk', 'cptgNo']) {
+          expect(await press(botPressData(action, id), CHAT_ACC, messageId)).toMatchObject({
+            text: UI_TEXTS['cppage.tg.org_closed'].ru,
+            alert: true,
+          });
+        }
+        expect(await statusOf(id)).toBe('wait');
+        expect(sentTo(CLIENT_1)).toEqual([]);
+        await subscription('2099-12-31');
+        await press(botPressData('cptgOk', id), CHAT_ACC, messageId);
+        expect(await statusOf(id)).toBe('on');
+        expect(sentTo(CLIENT_1)).toEqual([text('tgCpOn', { контрагент: cpAcc.name })]);
+      } finally {
+        await f.t.admin.db
+          .delete(schema.orgSubscriptions)
+          .where(eq(schema.orgSubscriptions.orgId, f.a.orgId));
         await grantPage(false);
         await wipe();
       }

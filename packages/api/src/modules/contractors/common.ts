@@ -6,6 +6,7 @@ import {
   employeeActive,
   findContractorByInn,
   orgMenuSettings,
+  orgUsage,
   phoneCodes,
   type ContractorFields,
   type ContractorRecord,
@@ -25,7 +26,11 @@ import {
   innDuplicateMessage,
   innProblem,
   scopeOf,
+  seatsOf,
+  seatsShort,
   type AccessSubject,
+  type IsoDate,
+  type Seats,
   type ContractorGkedConfirmation,
   type GkedCheck,
   type GkedConfirmation,
@@ -34,7 +39,7 @@ import {
   type Translate,
 } from '@buhuchet/domain';
 import { ApiError, type Contractor, type ContractorGkedNotes } from '@buhuchet/shared';
-import type { SQL } from 'drizzle-orm';
+import { sql, type SQL } from 'drizzle-orm';
 import type { Context } from 'hono';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
@@ -368,4 +373,44 @@ export async function checkResponsible(tx: Tx, employeeId: string): Promise<void
       field: 'responsibleEmployeeId',
     });
   }
+}
+
+/**
+ * Места в пакете организации контекста (доработки 20.11.2026, блок 3, пункт 1): под замком
+ * организации до конца транзакции — два сохранения сразу не займут одно последнее место. Звать до
+ * вставки или возврата контрагента, в той же транзакции.
+ */
+export async function lockedSeats(tx: Tx, today: IsoDate): Promise<Seats | null> {
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(hashtextextended('seats:' || app.current_org_id()::text, 0))`,
+  );
+  return currentSeats(tx, today);
+}
+
+/** Места в пакете сейчас — для показа (предпросмотр загрузки, окно до формы), без замка. */
+export async function currentSeats(tx: Tx, today: IsoDate): Promise<Seats | null> {
+  return seatsOf(await orgUsage(tx, today, { bytes: false }));
+}
+
+/**
+ * Хватает ли мест на `need` новых активных контрагентов; нет — 409 `no_seats` с числами и тем, владелец
+ * ли спрашивает: у владельца окно с «Расширить пакет», у сотрудника — «Обратитесь к владельцу
+ * организации» (прототип seatOk, seatDlg).
+ */
+export async function requireSeats(
+  tx: Tx,
+  today: IsoDate,
+  need: number,
+  subject: AccessSubject,
+  t: Translate,
+): Promise<void> {
+  const seats = await lockedSeats(tx, today);
+  if (!seats || !seatsShort(seats, need)) return;
+  apiFail(409, 'no_seats', t('err.no_seats', { used: seats.used, limit: seats.limit }), {
+    used: seats.used,
+    limit: seats.limit,
+    free: seats.free,
+    need,
+    owner: subject.isOwner,
+  });
 }

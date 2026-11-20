@@ -1283,6 +1283,32 @@ describe.skipIf(!databaseAvailable())(
       ]);
     });
 
+    it('«Ответить» при закрытом доступе организации (доработки 20.11.2026, блок 4, пункт 4): ответ клиенту не уходит, истории нет, просьба ждёт; после оплаты — уходит', async () => {
+      const q = await askQuestion('Можно позже?');
+      const before = sentTo(CLIENT_1).length;
+      const subscription = (paidUntil: string) =>
+        f.t.admin.db
+          .insert(schema.orgSubscriptions)
+          .values({ orgId: f.a.orgId, planId: 'm1', seats: 1000, paidUntil })
+          .onConflictDoUpdate({ target: schema.orgSubscriptions.orgId, set: { paidUntil } });
+      try {
+        // «Оплачено до» прошло (сегодня 18.10.2026).
+        await subscription('2026-10-17');
+        await toBot('Да, до конца месяца', CHAT_ACC, 'acc_a', q.staffMessage);
+        expect(sentTo(CHAT_ACC).at(-1)!.text).toBe(UI_TEXTS['cppage.tg.org_closed'].ru);
+        expect(sentTo(CLIENT_1)).toHaveLength(before);
+        expect(await answers()).toEqual([]);
+        await subscription('2026-12-31');
+        await toBot('Да, до конца месяца', CHAT_ACC, 'acc_a', q.staffMessage);
+        expect(sentTo(CLIENT_1)).toHaveLength(before + 1);
+        expect(await answers()).toHaveLength(1);
+      } finally {
+        await f.t.admin.db
+          .delete(schema.orgSubscriptions)
+          .where(eq(schema.orgSubscriptions.orgId, f.a.orgId));
+      }
+    });
+
     it('само «К оплате» в отмеченный день до срока: только при включённой настройке, одно на месяц, чат и день', async () => {
       // Настройка выключена — ничего не уходит.
       await runJob();
@@ -1626,6 +1652,48 @@ describe.skipIf(!databaseAvailable())(
       }
     });
 
+    it('доступ организации закрыт по подписке (доработки 20.11.2026, блок 4, пункт 4): само «К оплате» не уходит, вопрос клиента — «Доступ организации закрыт»; после оплаты — как прежде', async () => {
+      const subscription = (paidUntil: string) =>
+        f.t.admin.db
+          .insert(schema.orgSubscriptions)
+          .values({ orgId: f.b.orgId, planId: 'm1', seats: 1000, paidUntil })
+          .onConflictDoUpdate({ target: schema.orgSubscriptions.orgId, set: { paidUntil } });
+      const closedText = UI_TEXTS['cppage.tg.org_closed'].ru;
+      await autoPay(f.b.orgId, true);
+      try {
+        // «Оплачено до» прошло (сегодня 18.10.2026): доступ организации Б закрыт — бот сам не пишет.
+        await subscription('2026-10-17');
+        await runJob();
+        expect(tg.sent).toEqual([]);
+        expect(await messages(cpB)).toEqual([]);
+        await subscription('2026-12-31');
+        await runJob();
+        expect(tg.sent.map((m) => m.chatId)).toEqual([CLIENT_B]);
+
+        // Просьба «Вопрос бухгалтеру» — до закрытия; вопрос после закрытия сотрудникам не уходит.
+        await sent(ownerB, cpB);
+        await press(askData, CLIENT_B, lastMessageId(CLIENT_B));
+        const askId = lastMessageId(CLIENT_B);
+        const before = await history(cpB);
+        await subscription('2026-10-17');
+        tg.sent.length = 0;
+        await toBot('Можно оплатить частями?', CLIENT_B, 'client_b', askId);
+        expect(tg.sent.map((m) => [m.chatId, m.text])).toEqual([[CLIENT_B, closedText]]);
+        expect(await history(cpB)).toEqual(before);
+
+        // Оплатили — просьба ждала: вопрос принимается.
+        await subscription('2026-12-31');
+        await toBot('Можно оплатить частями?', CLIENT_B, 'client_b', askId);
+        expect(sentTo(CLIENT_B).at(-1)!.text).toBe(text('tgCpAskSent'));
+        expect(await history(cpB)).toHaveLength(before.length + 1);
+      } finally {
+        await f.t.admin.db
+          .delete(schema.orgSubscriptions)
+          .where(eq(schema.orgSubscriptions.orgId, f.b.orgId));
+        await autoPay(f.b.orgId, false);
+      }
+    });
+
     it('само «К оплате» не уходит без функций организации и когда срок далеко или прошёл', async () => {
       await autoPay(f.a.orgId, true);
       await autoPay(f.b.orgId, true);
@@ -1761,6 +1829,57 @@ describe.skipIf(!databaseAvailable())(
         await f.t.admin.db
           .delete(schema.contractorTariffs)
           .where(eq(schema.contractorTariffs.contractorId, cpA));
+      });
+
+      it('доступ организации закрыт по подписке (доработки 20.11.2026, блок 4, пункт 4): напоминание не уходит, кнопка старого сообщения и «Код от страницы» — «Доступ организации закрыт»; после оплаты напоминание уходит снова', async () => {
+        const subscription = (paidUntil: string) =>
+          f.t.admin.db
+            .insert(schema.orgSubscriptions)
+            .values({ orgId: f.a.orgId, planId: 'm1', seats: 1000, paidUntil })
+            .onConflictDoUpdate({ target: schema.orgSubscriptions.orgId, set: { paidUntil } });
+        const closedText = UI_TEXTS['cppage.tg.org_closed'].ru;
+        try {
+          // «Оплачено до» прошло (сегодня 18.10.2026): доступ организации закрыт — бот сам не пишет.
+          await subscription('2026-10-17');
+          await runDebt();
+          await runDebt(TUESDAY);
+          expect(tg.sent).toEqual([]);
+          expect(await messages(cpA)).toEqual([]);
+          // Сообщение, ушедшее до закрытия: его кнопка «Не напоминать» ничего не делает.
+          await subscription('2026-12-31');
+          await runDebt();
+          expect(tg.sent.map((m) => m.chatId)).toEqual([CLIENT_1, CLIENT_2]);
+          const old = lastMessageId(CLIENT_1);
+          await subscription('2026-10-17');
+          expect(await press(noDebtData, CLIENT_1, old)).toMatchObject({
+            text: closedText,
+            alert: true,
+          });
+          const [link] = await f.t.admin.db
+            .select({ noDebt: schema.contractorTelegramLinks.noDebt })
+            .from(schema.contractorTelegramLinks)
+            .where(eq(schema.contractorTelegramLinks.chatId, CLIENT_1));
+          expect(link!.noDebt).toBe(false);
+          expect(await debtHistory(cpA)).toEqual([]);
+          // «Код от страницы» — без кода: ответ на «/code» — только «доступ организации закрыт».
+          const before = sentTo(CLIENT_1).length;
+          await toBot('/code', CLIENT_1);
+          expect(
+            sentTo(CLIENT_1)
+              .slice(before)
+              .map((m) => m.text),
+          ).toEqual([formatText(UI_TEXTS['cppage.tg.org_closed_code'].ru, { contractor: CP_A })]);
+          // Оплатили — напоминание снова уходит (пропущенное задним числом — нет: неделя та же).
+          await subscription('2026-12-31');
+          await wipe();
+          await runDebt();
+          expect(tg.sent.map((m) => m.chatId)).toEqual([CLIENT_1, CLIENT_2]);
+        } finally {
+          await f.t.admin.db
+            .delete(schema.orgSubscriptions)
+            .where(eq(schema.orgSubscriptions.orgId, f.a.orgId));
+          await wipe();
+        }
       });
 
       it('в понедельник в 10:00 — каждому подключённому: недостача на налоги и долг за обслуживание, реквизиты, «Не напоминать»', async () => {

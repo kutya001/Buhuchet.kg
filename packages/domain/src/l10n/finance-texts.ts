@@ -291,6 +291,9 @@ export const FINANCE_TEXTS = {
   'fin.edit.done': { ru: 'Операция изменена', section: S },
   'fin.edit.same': { ru: 'Без изменений', section: S },
   'files.kind.money_operation': { ru: 'Финансовая операция', section: S },
+  // Файлы финансовых операций в «Файловом менеджере» (доработки 20.11.2026, пакет 2, блок 5, пункт 1).
+  'files.plate.money_operation': { ru: 'К финансовым операциям', section: S },
+  'files.src.money_operation': { ru: '{op} {amount} от {date}', section: S },
   'fin.edit.files': { ru: 'Добавить файлы', section: S },
   'fin.edit.files_have': { ru: 'Уже приложено: {n}', section: S },
   'fin.edit.load_error': { ru: 'Не удалось открыть окно изменения', section: S },

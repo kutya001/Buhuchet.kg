@@ -236,6 +236,11 @@ export async function addSentFiles(
     comment?: string | null;
     /** Чек к оплате (поток К): в истории — «чек», а не «файл». */
     receipt?: boolean;
+    /**
+     * Своя проверка вызывающего в обеих транзакциях записи (поток К: доступ организации не закрыт по
+     * подписке, п. К-24) — условие могло измениться, пока файл скачивался; отказ — `SentFilesRefused`.
+     */
+    guard?: (tx: Tx) => Promise<void>;
     files: readonly SentFileBody[];
   },
 ): Promise<{ ids: string[] }> {
@@ -271,6 +276,7 @@ export async function addSentFiles(
   await withOrgContext(deps.db, ctx, async (tx) => {
     await sentLimitCheck(tx, o.contractorId, list, today);
     if (o.source === 'telegram') await requireActiveChat(tx, o.contractorId, o.tgChatId ?? null);
+    await o.guard?.(tx);
     await insertPendingSentFiles(tx, rows);
   });
   const ids = rows.map((r) => r.id);
@@ -281,6 +287,7 @@ export async function addSentFiles(
     await withOrgContext(deps.db, ctx, async (tx) => {
       // Подключение могли отключить, пока файл шёл в хранилище: проверка — и в транзакции записи.
       if (o.source === 'telegram') await requireActiveChat(tx, o.contractorId, o.tgChatId ?? null);
+      await o.guard?.(tx);
       await finishSentFiles(tx, {
         contractorId: o.contractorId,
         ids,

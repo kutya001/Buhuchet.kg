@@ -506,13 +506,16 @@ export type PublicPageBody = z.infer<typeof PublicPageBody>;
 /**
  * Что показать по ссылке: «Страница недоступна» (выключенная, неизвестный ИНН, архив — одинаково),
  * ввод кода, перерыв после неверных кодов, «Страница закрыта» после 5 неверных кодов за сутки (до
- * смены кода, docs/deviations.md п. О-21) или саму страницу.
+ * смены кода, docs/deviations.md п. О-21), «Страница временно недоступна» — доступ организации закрыт
+ * по подписке, браузеру с верным кодом (доработки 20.11.2026, блок 4, пункт 4; п. К-24) — или саму
+ * страницу.
  */
 export const PublicPage = z.discriminatedUnion('state', [
   z.object({ state: z.literal('unavailable') }),
   z.object({ state: z.literal('code'), help: CpCodeHelp }),
   z.object({ state: z.literal('locked'), lockedUntil: z.iso.datetime() }),
   z.object({ state: z.literal('closed') }),
+  z.object({ state: z.literal('org_closed') }),
   z.object({ state: z.literal('open'), page: PublicPageBody }),
 ]);
 export type PublicPage = z.infer<typeof PublicPage>;

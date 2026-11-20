@@ -3,7 +3,6 @@ import { createRoute, z, type RouteHandler } from '@hono/zod-openapi';
 import {
   contractorDebtSwitch,
   contractorPageOrg,
-  contractorPageState,
   contractorTelegramDebtSettings,
   ContractorTelegramRefusedError,
   cpNoticeSettingsOf,
@@ -52,6 +51,7 @@ import { scopeSqlOf, todayOf } from '../contractors/common';
 import { notifyContractorTelegramClient } from '../telegram/client';
 import { contractorClientDebt } from '../telegram/client/debt';
 import { subjectOf } from './card';
+import { pageAccess } from './org-closed';
 import { pageCookieName } from './public';
 
 /*
@@ -399,7 +399,7 @@ export function publicPageTelegramHandler(
     if (!cookie || !isSessionTokenShape(cookie)) return unavailable();
     const grantHash = hashSessionToken(cookie);
     // Сначала — только чтение: без запомненного кода запрос ничего не пишет в базу.
-    const state = await contractorPageState(deps.db, slug, inn, grantHash);
+    const state = await pageAccess(deps, slug, inn, grantHash);
     if (state.state !== 'open') return unavailable();
     const slot = await takeRateLimit(deps.db, CP_TG_LINK_RATE_LIMIT, grantHash);
     const cpSlot = slot.ok

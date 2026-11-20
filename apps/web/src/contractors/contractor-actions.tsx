@@ -39,6 +39,7 @@ import {
   type MenuContractor,
 } from './contractor-menu';
 import { ResponsibleDialog, type ResponsibleTarget } from './responsible-dialogs';
+import { useSeatGuard } from './seat-dialog';
 import { useServiceActions, type ServiceContractor } from './service-actions';
 
 /** Пункты карточки, которые даёт `useContractorActions` (остальное карточка берёт сама). */
@@ -110,6 +111,7 @@ export function useContractorActions(): {
   const people = rights.assign || rights.createCp;
   const pagesOn = access.feature('cppage') && access.can('cpPage');
   const service = useServiceActions({ onRegular: (id) => openContractorCard({ id }, 'pick') });
+  const seat = useSeatGuard();
   const fee = useFeeDialogs();
   const feeRights = {
     fee: access.feature('fee') && access.can('fee'),
@@ -337,6 +339,7 @@ export function useContractorActions(): {
   const dialogs = (
     <>
       {service.dialogs}
+      {seat.node}
       {fee.dialogs}
       {pages.dialog}
       {edit ? (
@@ -433,9 +436,10 @@ export function useContractorActions(): {
     actions,
     bulk: bulk.length ? bulk : undefined,
     drop,
+    // Пакет заполнен — вместо формы окно «В пакете нет свободных мест» (прототип v152: addCpDlg → seatOk).
     newContractor: (kind: ContractorKind = 'regular') =>
-      setCreate(openSlot<NewContractorSlot>({ kind })),
-    regdocs: () => setRegdocs(openSlot(null)),
+      void seat.ask().then((ok) => ok && setCreate(openSlot<NewContractorSlot>({ kind }))),
+    regdocs: () => void seat.ask().then((ok) => ok && setRegdocs(openSlot(null))),
     card,
     dialogs,
   };

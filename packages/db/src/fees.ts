@@ -45,7 +45,9 @@ import {
 import { and, asc, eq, inArray, isNull, ne, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Tx } from './client';
+import type { FileListPart } from './files';
 import { writeHistory } from './history';
+import { somUnitText, type ListTexts } from './list';
 import {
   banks,
   contractors,
@@ -53,9 +55,11 @@ import {
   employees,
   feeAllocations,
   feePayments,
+  files,
   orgAccounts,
   orgSettings,
 } from './schema';
+import { dictLiteral } from './sql-text';
 import { dateOfMonth, servicePeriodsOf } from './service-periods';
 import { phoneCodeList } from './staff';
 
@@ -1104,5 +1108,25 @@ export async function feePaymentFileSource(
       archived: row.archived,
     },
     feeOn: row.feeOn,
+  };
+}
+
+/** Файл оплаты за обслуживание виден в списках: оплата не удалена, контрагент — в области `scope`. */
+export function feePaymentFileShown(scope: SQL | undefined): SQL {
+  return sql`exists (select 1 from ${feePayments} join ${contractors} on ${contractors.id} = ${feePayments.contractorId} where ${feePayments.id} = ${files.sourceId} and ${feePayments.deletedAt} is null and ${scope ?? sql`true`})`;
+}
+
+/**
+ * Файлы оплат за обслуживание в «Файловом менеджере» (доработки 20.11.2026, пакет 2, блок 5, пункт 1):
+ * оплата не удалена, контрагент — в области `scope`, где сотрудник видит плату (область группы
+ * «Контрагенты» над `contractors`); источник — «Оплата за обслуживание 3 000 сом от 05.10.2026».
+ * Право «Видеть плату за обслуживание» и функцию проверяет вызывающий.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#К-25
+export function feePaymentFilesPart(scope: SQL | undefined, t: ListTexts): FileListPart {
+  const label = sql`replace(replace(${dictLiteral(t('files.src.fee_payment'))}::text, '{amount}', ${somUnitText(feePayments.amount)}), '{date}', to_char(${feePayments.paidOn}, 'DD.MM.YYYY'))`;
+  return {
+    visible: feePaymentFileShown(scope),
+    source: sql`(select ${label} from ${feePayments} where ${feePayments.id} = ${files.sourceId})`,
   };
 }

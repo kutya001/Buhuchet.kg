@@ -3,7 +3,6 @@ import { createRoute, type RouteHandler } from '@hono/zod-openapi';
 import {
   adminCpHelp,
   adminCpHelpEdit,
-  contractorPageState,
   readCpHelp,
   takeRateLimit,
   withOrgContext,
@@ -25,6 +24,7 @@ import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiFail } from '../../errors';
 import { requirePlatformAdmin } from '../../middleware/access';
+import { pageAccess } from './org-closed';
 import { pageCookieName } from './public';
 
 /*
@@ -96,7 +96,7 @@ export function publicPageTourHandler(
     if (!isPageAddress(slug, inn) || !cookie || !isSessionTokenShape(cookie)) return unavailable();
     const grantHash = hashSessionToken(cookie);
     // Сначала — только чтение: без запомненного кода запрос ничего не пишет в базу.
-    const state = await contractorPageState(deps.db, slug, inn, grantHash);
+    const state = await pageAccess(deps, slug, inn, grantHash);
     if (state.state !== 'open') return unavailable();
     const help = await readCpHelp(deps.db);
     // Считаются только включённые облачка: с прототипа v135 выключается и последнее (`end`).

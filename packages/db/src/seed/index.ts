@@ -3,6 +3,7 @@ import type { Db } from '../client';
 import { readSpecJson, specCommit } from '../spec-data';
 import { seedPermissions, seedRoleTemplates } from './access';
 import { seedPlatformAdmin, type PlatformAdminReport, type PlatformAdminSeed } from './admin';
+import { seedDmTemplates } from './datamart';
 import { seedDemoOrganization, type DemoSeedReport } from './demo';
 import { seedUiTexts } from './l10n';
 import { seedNews } from './news';
@@ -13,6 +14,15 @@ import { seedMessageTemplates, seedStatusTones } from './system-dicts';
 
 export { checksumOf } from './checksum';
 export { seedPermissions, seedRoleTemplates } from './access';
+export {
+  DM_COLUMN_TYPES,
+  dmBuiltinRows,
+  dmParamDefsOf,
+  seedDmTemplates,
+  type DmTemplateColumn,
+  type DmTemplateParam,
+} from './datamart';
+export { DM_BUILTIN_SQL } from './datamart-templates';
 export { seedPlatformAdmin, type PlatformAdminReport, type PlatformAdminSeed } from './admin';
 export {
   DEMO_ORG_ID,
@@ -48,6 +58,8 @@ export interface SeedAllResult {
   roleTemplates: SeedReport;
   statusTones: SeedReport;
   messageTemplates: SeedReport;
+  /** Готовые шаблоны «Витрины данных» (блок 7). */
+  dmTemplates: SeedReport;
   uiTexts: SeedReport;
   news: SeedReport;
   /** Убранное прототипом, что завело прежнее наполнение (только с `update`). */
@@ -87,6 +99,7 @@ export async function seedAll(
       refDB.templateNotes,
       options,
     );
+    const dmTemplates = await seedDmTemplates(t, refDB.dmTemplates, options);
     const uiTexts = await seedUiTexts(t, refDB.localization, options);
     const newsReport = await seedNews(t, refDB.news, options);
     const retired = await seedRemoveRetired(t, options);
@@ -107,6 +120,7 @@ export async function seedAll(
       roleTemplates,
       statusTones,
       messageTemplates,
+      dmTemplates,
       uiTexts,
       news: newsReport,
       retired,

@@ -211,6 +211,9 @@ export const FEE_TEXTS = {
   'fee.receipt.aria': { ru: 'Распределить на обслуживание', section: S },
 
   'files.kind.fee_payment': { ru: 'Оплата за обслуживание', section: S },
+  // Файлы оплат за обслуживание в «Файловом менеджере» (доработки 20.11.2026, пакет 2, блок 5, пункт 1).
+  'files.plate.fee_payment': { ru: 'К оплатам за обслуживание', section: S },
+  'files.src.fee_payment': { ru: 'Оплата за обслуживание {amount} от {date}', section: S },
   'money.op.basis_fee': { ru: 'За обслуживание', section: S },
   'fee.hist.tariff': { ru: 'Новая ставка {amount} {per} с {month}', section: S },
   'fee.hist.tariff_edited': {
