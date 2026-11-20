@@ -7,6 +7,7 @@ import {
   subBar,
   subConfigText,
   subDaysText,
+  subFieldError,
   subGb,
   subGbLimit,
   subHistoryText,
@@ -308,5 +309,19 @@ describe('подписки: страница списка в браузере (�
     expect(ids(second)).toHaveLength(5);
     // За концом списка — последняя страница.
     expect(localGridPage(many, { page: '9' }, cols).page).toBe(2);
+  });
+});
+
+describe('subFieldError: отказ сервера по полю блока «Подписка»', () => {
+  const values = { planId: 'm1', seats: '15', paidUntil: '2026-12-20' };
+  it('блок включён и поле в форме — ошибка под этим полем', () => {
+    expect(subFieldError(true, values, 'seats', 'Пакет — число мест с шагом 10')).toEqual({
+      seats: 'Пакет — число мест с шагом 10',
+    });
+  });
+  it('блок выключен, поля нет или оно не из формы — уведомлением (null)', () => {
+    expect(subFieldError(false, values, 'seats', 'x')).toBeNull();
+    expect(subFieldError(true, values, null, 'x')).toBeNull();
+    expect(subFieldError(true, values, 'inn', 'x')).toBeNull();
   });
 });

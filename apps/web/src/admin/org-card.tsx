@@ -283,15 +283,17 @@ export function OrgCard({
         {card ? (
           <>
             <div data-org-states="" className="flex flex-wrap items-center gap-1.5">
-              {card.org.active ? (
-                <Pill tone="ok" icon="check">
-                  {t('orgs.active')}
-                </Pill>
-              ) : (
-                <Pill tone="bad" icon="lock">
-                  {card.org.blockedReason || t('orgs.blocked')}
-                </Pill>
-              )}
+              <span data-org-state="" className="contents">
+                {card.org.active ? (
+                  <Pill tone="ok" icon="check">
+                    {t('orgs.active')}
+                  </Pill>
+                ) : (
+                  <Pill tone="bad" icon="lock">
+                    {card.org.blockedReason || t('orgs.blocked')}
+                  </Pill>
+                )}
+              </span>
               {card.org.isDemo ? (
                 <Pill tone="violet" icon="star">
                   {t('orgs.card.demo')}
@@ -305,10 +307,11 @@ export function OrgCard({
                   data-org-sub=""
                   onClick={() => setTab('sub')}
                 >
+                  {/* В шапке — только статус, без «Ждёт проверки больше N дней» (прототип `ocCard`). */}
                   <SubStatusPill
                     t={t}
                     status={sub.data.status}
-                    late={sub.data.late}
+                    late={false}
                     days={sub.data.checkDays}
                   />
                   {sub.data.sub ? (

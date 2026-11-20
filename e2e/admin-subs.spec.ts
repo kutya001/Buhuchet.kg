@@ -174,6 +174,7 @@ test.describe('Админка → «Подписки»', () => {
   test('(доработки 20.11.2026, блок 6, пункт 4; прототип v153) «Новая организация»: блок «Подписка» свёрнут; «Поставить подписку сразу» проверяет поля и ставит бесплатный период', async ({
     page,
     baseURL,
+    isMobile,
   }) => {
     const origin = new URL(baseURL!).origin;
     await platformAdmin(page.request, origin);
@@ -213,16 +214,26 @@ test.describe('Админка → «Подписки»', () => {
     await expect(form).toBeHidden();
 
     // Подписка поставлена: пакет 20 и строка «Бесплатный период» в «Истории оплат».
-    const orgs = (await (await page.request.get('/api/admin/organizations?size=all')).json()) as {
-      items: { id: string; inn: string | null }[];
-    };
+    const orgs = (await (
+      await page.request.get('/api/admin/organizations?size=all', { maxRetries: 2 })
+    ).json()) as { items: { id: string; inn: string | null }[] };
     const org = orgs.items.find((o) => o.inn === inn)!;
     expect(org).toBeTruthy();
-    const sub = (await (await page.request.get(`/api/admin/subscriptions/${org.id}`)).json()) as {
+    const sub = (await (
+      await page.request.get(`/api/admin/subscriptions/${org.id}`, { maxRetries: 2 })
+    ).json()) as {
       sub: { seats: number } | null;
       payments: { kind: string }[];
     };
     expect(sub.sub?.seats).toBe(20);
     expect(sub.payments.map((p) => p.kind)).toEqual(['free']);
+
+    // Следующее окно — строка организации во вкладке «Подписки»: пакет 20 и «Бесплатный период до …».
+    const row = await subsRow(page, isMobile, name);
+    await row.click();
+    const win = page.getByRole('dialog', { name: 'Подписка организации' });
+    const body = win.locator(`[data-sub-body="${org.id}"]`);
+    await expect(body).toContainText('Занято 0 из 20');
+    await expect(body.locator('[data-sub-pays]')).toContainText('Бесплатный период до');
   });
 });

@@ -115,12 +115,14 @@ export function saveSubSettings(body: SubscriptionSettingsUpdate) {
 
 /**
  * После проверки чека, «Изменить подписку», правки видов и цен — перечитать список с плашками, окна
- * подписки, виды и цены и список организаций Админки (там тоже видна подписка).
+ * подписки, виды и цены, список организаций Админки (там тоже видна подписка) и открытую карточку
+ * организации: её «История» показывает изменение подписки сразу (ключ — `ORG_CARD_KEY`, typical-mistakes № 44).
  */
 export function useSubsRefresh() {
   const client = useQueryClient();
   return useCallback(() => {
     void client.invalidateQueries({ queryKey: SUBS_KEY });
+    void client.invalidateQueries({ queryKey: ['admin', 'org-card'] });
     void client.invalidateQueries({ queryKey: ['list', 'orgs.subs'] });
     void client.invalidateQueries({ queryKey: ['list', 'orgs.list'] });
     void client.invalidateQueries({ queryKey: ['admin', 'orgs-summary'] });

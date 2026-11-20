@@ -396,7 +396,7 @@ test.describe('Админка: организации', () => {
     const openTab = (tab: string) => cardTab(page, card, isMobile, tab);
 
     // Шапка: ИНН, адрес страницы, состояние, кнопки — как в меню строки и «Сбросить пароль владельцу».
-    await expect(card.locator('[data-org-states]')).toHaveText('Активна');
+    await expect(card.locator('[data-org-states] [data-org-state]')).toHaveText('Активна');
     await expect(card).toContainText(inn);
     await expect(card).toContainText(`buhuchet.kg/${slug}`);
     await expect(card).toContainText('подключена');
@@ -432,7 +432,7 @@ test.describe('Админка: организации', () => {
     );
     // Карточка организации открывается заново — поверх карточки пользователя.
     await account.getByRole('button', { name, exact: true }).first().click();
-    await expect(card.locator('[data-org-states]')).toHaveText('Активна');
+    await expect(card.locator('[data-org-states] [data-org-state]')).toHaveText('Активна');
     await expect(card.getByRole('tab', { selected: true })).toContainText('Основное');
 
     // Остальные вкладки — только просмотр.
@@ -465,14 +465,16 @@ test.describe('Админка: организации', () => {
     const ask = page.getByRole('dialog', { name: `Заблокировать ${name}?` });
     await ask.getByRole('button', { name: 'Заблокировать' }).click();
     await expect(toast.filter({ hasText: 'Организация заблокирована' })).toBeVisible();
-    await expect(card.locator('[data-org-states]')).toHaveText('Заблокирована администратором');
+    await expect(card.locator('[data-org-states] [data-org-state]')).toHaveText(
+      'Заблокирована администратором',
+    );
     await openTab('Основное');
     await expect(card.locator('[data-org-blocks]')).toContainText(
       'Организация заблокирована: Заблокирована администратором',
     );
     await card.locator('[data-org-action="unblock"]').click();
     await expect(toast.filter({ hasText: 'Организация разблокирована' })).toBeVisible();
-    await expect(card.locator('[data-org-states]')).toHaveText('Активна');
+    await expect(card.locator('[data-org-states] [data-org-state]')).toHaveText('Активна');
     await expect(card.locator('[data-org-blocks]')).toContainText(
       'Организация разблокирована (была: Заблокирована администратором)',
     );
@@ -499,7 +501,7 @@ test.describe('Админка: организации', () => {
 
     // Ссылка #orgs/<адрес организации> открывает карточку; нет такого адреса — уведомление.
     await page.goto(`/app/orgs#orgs/${slug}`);
-    await expect(card.locator('[data-org-states]')).toHaveText('Активна');
+    await expect(card.locator('[data-org-states] [data-org-state]')).toHaveText('Активна');
     await expect(page).toHaveURL(/\/app\/orgs(\/list)?$/);
     await page.goto('/app/orgs#orgs/net-takogo-adresa');
     const none = toast.filter({ hasText: 'Организация с таким адресом не найдена' });

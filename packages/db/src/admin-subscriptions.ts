@@ -113,7 +113,9 @@ function subscriptionsSource(today: IsoDate): SQL {
         u.seats_used as seats_used,
         coalesce(u.seats_limit, 0) as pack,
         coalesce(u.bytes_used, 0) as bytes_used,
-        u.bytes_limit as bytes_limit,
+        -- Без подписки — «из 2 ГБ», как в прототипе (subMem: пакет 0, предел — baseMb); у демо — без предела.
+        case when o.is_demo then u.bytes_limit
+          else coalesce(u.bytes_limit, st.base_mb::bigint * ${SUBSCRIPTION_MB_BYTES}) end as bytes_limit,
         round(coalesce(u.bytes_used, 0)::numeric / ${SUBSCRIPTION_MB_BYTES})::bigint as mem_mb,
         u.paid_until as paid_until,
         u.status as status,
@@ -142,8 +144,11 @@ function subscriptionsSource(today: IsoDate): SQL {
         where p.org_id = o.id and p.status = 'confirmed' and p.amount > 0
       ) f on true
       cross join (
-        select coalesce((select x.check_days from public.subscription_settings x where x.id = 1), 3)
-          as check_days
+        select
+          coalesce((select x.check_days from public.subscription_settings x where x.id = 1), 3)
+            as check_days,
+          coalesce((select x.base_mb from public.subscription_settings x where x.id = 1), 2000)
+            as base_mb
       ) st
     ) r0
   ) as r`;
@@ -254,6 +259,7 @@ function subscriptionColumns(t: ListTexts): ListColumns {
       type: 'int',
       label: 'subs.col.pack',
       value: field('pack'),
+      total: true,
       display: sql`${field('seats_used')}::text || ${` ${t('subs.of')} `} || ${field('pack')}::text`,
     },
     mem: {
@@ -675,7 +681,13 @@ export async function saveSubscription(
     updatedBy: sql`app.current_user_id()`,
   };
   if (!was) {
-    await tx.insert(orgSubscriptions).values({ orgId, ...values });
+    // Два первых сохранения разом: второе — «запись изменена другим пользователем», не 500.
+    const added = await tx
+      .insert(orgSubscriptions)
+      .values({ orgId, ...values })
+      .onConflictDoNothing({ target: orgSubscriptions.orgId })
+      .returning({ orgId: orgSubscriptions.orgId });
+    if (added.length === 0) throw new RecordChangedError('subscription', orgId, 1);
     return 1;
   }
   await tx

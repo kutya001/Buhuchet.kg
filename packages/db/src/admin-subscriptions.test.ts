@@ -168,6 +168,11 @@ describe.skipIf(!databaseAvailable())('Админка: подписки орга
       pendingId: latePay,
       pendingAmount: 570_000,
     });
+    // Без подписки — «из 2 ГБ» (прототип `subMem`: пакет 0), у демо — без предела; итог по «Пакету».
+    const limitOf = (name: string) => page.rows.find((r) => r.name === name)!.bytesLimit;
+    expect(limitOf('ОсОО «Бета»')).toBe(2_000 * 1024 * 1024);
+    expect(limitOf('Демо')).toBeNull();
+    expect(page.totals).toMatchObject({ pack: 30 });
     const kinds = await asAdmin((tx) => listSubscriptionValues(tx, 'kind', TODAY, t));
     expect(kinds.items.map((v) => v.value).sort()).toEqual(['', 'm1']);
     const file = await asAdmin((tx) =>
@@ -217,7 +222,9 @@ describe.skipIf(!databaseAvailable())('Админка: подписки орга
     });
     expect(await asAdmin((tx) => subscriptionPaymentOrg(tx, latePay))).toBe(c.orgId);
     expect(
-      await withUserContext(db.app.db, a.ownerUserId, (tx) => adminSubscriptionReceipt(tx, latePay)),
+      await withUserContext(db.app.db, a.ownerUserId, (tx) =>
+        adminSubscriptionReceipt(tx, latePay),
+      ),
     ).toBeNull();
     expect(
       await withUserContext(db.app.db, c.ownerUserId, (tx) => subscriptionPaymentOrg(tx, latePay)),
@@ -231,9 +238,9 @@ describe.skipIf(!databaseAvailable())('Админка: подписки орга
         decidePayment(tx, { id: latePay, version: 1 }, { status: 'rejected', reason: 'Сам' }),
       ),
     ).rejects.toEqual(pgError('23514'));
-    await expect(
-      adminIn(c.orgId, (tx) => lockPendingPayment(tx, latePay, 7)),
-    ).rejects.toThrow(RecordChangedError);
+    await expect(adminIn(c.orgId, (tx) => lockPendingPayment(tx, latePay, 7))).rejects.toThrow(
+      RecordChangedError,
+    );
     await adminIn(c.orgId, async (tx) => {
       const p = await lockPendingPayment(tx, latePay, 1);
       const cur = await lockSubscription(tx, c.orgId);
@@ -244,11 +251,15 @@ describe.skipIf(!databaseAvailable())('Админка: подписки орга
         TODAY,
       );
       await saveSubscription(tx, c.orgId, cur, r.sub);
-      await decidePayment(tx, { id: latePay, version: p.version }, {
-        status: 'confirmed',
-        months: r.months,
-        paidUntil: r.paidUntil,
-      });
+      await decidePayment(
+        tx,
+        { id: latePay, version: p.version },
+        {
+          status: 'confirmed',
+          months: r.months,
+          paidUntil: r.paidUntil,
+        },
+      );
       await writeSubscriptionHistory(tx, c.orgId, 'sub_paid', [
         { field: 'paidUntil', from: '2026-11-25', to: '2027-02-25' },
       ]);
@@ -285,7 +296,14 @@ describe.skipIf(!databaseAvailable())('Админка: подписки орга
       expect(cur).toBeNull();
       const r = subscriptionEdit(
         cur,
-        { planId: 'm1', seats: 10, extraGb: 0, paidUntil: '2026-12-20', extraDiscountPct: 0, free: true },
+        {
+          planId: 'm1',
+          seats: 10,
+          extraGb: 0,
+          paidUntil: '2026-12-20',
+          extraDiscountPct: 0,
+          free: true,
+        },
         150,
       )!;
       await saveSubscription(tx, b.orgId, cur, r.sub);
@@ -319,6 +337,17 @@ describe.skipIf(!databaseAvailable())('Админка: подписки орга
         insertFreePayment(tx, b.orgId, { ...card.sub!, paidUntil: '2030-01-01' }, 'Сам себе'),
       ),
     ).rejects.toEqual(denied);
+    // Два первых сохранения разом (второй администратор или «Подтвердить оплату»): подписку уже
+    // поставили — второе отвечает «запись изменена», а не ошибкой первичного ключа.
+    await expect(
+      adminIn(b.orgId, (tx) =>
+        saveSubscription(tx, b.orgId, null, { ...card.sub!, paidUntil: '2030-01-01' }),
+      ),
+    ).rejects.toThrow(RecordChangedError);
+    expect((await adminIn(b.orgId, (tx) => adminSubscriptionCard(tx, b.orgId))).sub).toMatchObject({
+      paidUntil: '2026-12-20',
+      version: 1,
+    });
   });
 
   it('«Виды подписок» и «Цены и реквизиты»: правит только администратор, с версией и историей', async () => {
@@ -344,9 +373,9 @@ describe.skipIf(!databaseAvailable())('Админка: подписки орга
         { field: 'months', from: 2, to: 36 },
       ]);
     });
-    await expect(
-      asAdmin((tx) => lockSubscriptionPlan(tx, 'k2m', 1)),
-    ).rejects.toThrow(RecordChangedError);
+    await expect(asAdmin((tx) => lockSubscriptionPlan(tx, 'k2m', 1))).rejects.toThrow(
+      RecordChangedError,
+    );
     // Срок вида — не больше 36 месяцев (миграция 0167).
     await expect(
       asAdmin((tx) =>

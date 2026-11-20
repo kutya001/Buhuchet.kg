@@ -83,11 +83,7 @@ export function subscriptionEditProblems(
   }
   if (!realDate(x.paidUntil)) out.push({ field: 'paidUntil', code: 'sub_paid_until' });
   const discount = subscriptionEditDiscount(x, prices);
-  if (
-    !Number.isInteger(discount) ||
-    discount < 0 ||
-    discount + (plan?.discountPct ?? 0) > 100
-  ) {
+  if (!Number.isInteger(discount) || discount < 0 || discount + (plan?.discountPct ?? 0) > 100) {
     out.push({ field: 'extraDiscountPct', code: 'sub_discount' });
   }
   return out;

@@ -63,7 +63,8 @@ export function subscriptionConfirmUntil(
   months: number,
   today: IsoDate,
 ): IsoDate {
-  if (p.kind === 'renew') return subscriptionPaidUntilAfter(sub?.paidUntil ?? null, months, p.sentDay);
+  if (p.kind === 'renew')
+    return subscriptionPaidUntilAfter(sub?.paidUntil ?? null, months, p.sentDay);
   return sub?.paidUntil ?? today;
 }
 
@@ -179,7 +180,9 @@ export function subscriptionEdit(
   for (const f of SUBSCRIPTION_HISTORY_FIELDS) {
     const was = current ? current[f] : undefined;
     if (was !== next[f]) {
-      changes.push(current ? { field: f, from: was ?? null, to: next[f] } : { field: f, to: next[f] });
+      changes.push(
+        current ? { field: f, from: was ?? null, to: next[f] } : { field: f, to: next[f] },
+      );
     }
   }
   if (x.free) changes.push({ field: 'free', to: true });
@@ -383,7 +386,8 @@ export function subscriptionSettingsProblems(
   for (const f of SUBSCRIPTION_REQUISITE_FIELDS) {
     const v = x[f.key].trim();
     if (f.required && !v) out.push({ field: f.key, code: 'sub_cfg_required' });
-    else if (f.key === 'bik' && v && !/^\d{6}$/.test(v)) out.push({ field: f.key, code: 'sub_cfg_bik' });
+    else if (f.key === 'bik' && v && !/^\d{6}$/.test(v))
+      out.push({ field: f.key, code: 'sub_cfg_bik' });
     else if (f.key === 'recipientInn' && v && !/^\d{14}$/.test(v)) {
       out.push({ field: f.key, code: 'sub_cfg_inn' });
     } else if (v.length > f.max) {
@@ -392,7 +396,8 @@ export function subscriptionSettingsProblems(
       const bad = (v.match(/\{([^{}]*)\}/g) ?? []).filter(
         (t) => !(SUBSCRIPTION_PURPOSE_VARS as readonly string[]).includes(t),
       );
-      if (bad.length) out.push({ field: f.key, code: 'sub_cfg_purpose', params: { bad: bad.join(', ') } });
+      if (bad.length)
+        out.push({ field: f.key, code: 'sub_cfg_purpose', params: { bad: bad.join(', ') } });
     }
   }
   return out;

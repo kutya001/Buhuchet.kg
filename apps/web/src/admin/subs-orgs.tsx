@@ -90,6 +90,8 @@ function subColumns(t: Translate, checkDays: number): GridColumn<AdminSubscripti
       width: 110,
       numeric: true,
       text: (o) => t('subs.used', { used: o.seatsUsed, pack: o.pack }),
+      // «Итоги по «Пакету» и «На проверке»» (ТЗ «Доработки 20.11.2026», блок 6, пункт 2).
+      total: (v) => formatCount(v),
       cell: (o) => (
         <span className={`tabular-nums ${o.seatsUsed > o.pack ? 'text-danger' : ''}`}>
           {t('subs.used', { used: o.seatsUsed, pack: o.pack })}

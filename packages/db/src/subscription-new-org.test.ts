@@ -139,7 +139,9 @@ describe.skipIf(!databaseAvailable())('подписка новой органи�
       bytesLimit: null,
     });
     const demo = await make({ subscription: null });
-    await db.admin.db.execute(sql`update organizations set is_demo = true where id = ${demo.orgId}`);
+    await db.admin.db.execute(
+      sql`update organizations set is_demo = true where id = ${demo.orgId}`,
+    );
     expect(await usage(demo, today)).toMatchObject({ status: 'demo', closed: false });
     expect(await closed(demo, '2099-01-01' as IsoDate)).toBe(false);
   });
@@ -171,7 +173,10 @@ describe.skipIf(!databaseAvailable())('подписка новой органи�
       .select()
       .from(auditLog)
       .where(and(eq(auditLog.entity, 'subscription'), eq(auditLog.entityId, paid.orgId)));
-    expect(entry).toMatchObject({ actorUserId: adminId, reason: 'Подписка при создании организации' });
+    expect(entry).toMatchObject({
+      actorUserId: adminId,
+      reason: 'Подписка при создании организации',
+    });
     expect(entry!.changes).toEqual([
       { field: 'planId', to: 'm3' },
       { field: 'seats', to: 60 },

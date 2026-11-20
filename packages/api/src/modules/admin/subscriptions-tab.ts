@@ -49,6 +49,7 @@ import {
   subscriptionConfirm,
   subscriptionEdit,
   subscriptionEditProblems,
+  subscriptionMemLimitBytes,
   subscriptionMemLimitMb,
   subscriptionPayLate,
   subscriptionPerksOf,
@@ -333,7 +334,9 @@ async function cardOf(tx: Tx, orgId: string, today: IsoDate): Promise<AdminSubsc
     seatsUsed: usage.seatsUsed,
     pack: usage.seatsLimit ?? 0,
     bytesUsed: usage.bytesUsed ?? 0,
-    bytesLimit: usage.bytesLimit,
+    // Без подписки — «из 2 ГБ», как в прототипе (`subMem`: пакет 0); у демо — без предела.
+    bytesLimit:
+      usage.bytesLimit ?? (card.org.demo ? null : subscriptionMemLimitBytes(prices, 0, 0)),
     memIncludedMb: subscriptionMemLimitMb(prices, usage.seatsLimit ?? seats, 0),
     sub:
       s && s.paidUntil

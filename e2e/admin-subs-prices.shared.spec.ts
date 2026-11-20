@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { randomInt } from 'node:crypto';
 import { platformAdmin } from './admin';
 
 // «Цены и реквизиты» вкладки «Подписки» Админки (доработки 20.11.2026, блок 6, пункт 6; прототип v153
@@ -14,11 +15,15 @@ test('(доработки 20.11.2026, блок 6, пункт 6; прототип
   const origin = new URL(baseURL!).origin;
   await platformAdmin(page.request, origin);
   const read = async () =>
-    (await (await page.request.get('/api/admin/subscription-settings')).json()) as Settings;
+    (await (
+      await page.request.get('/api/admin/subscription-settings', { maxRetries: 2 })
+    ).json()) as Settings;
   const before = await read();
-  // Цена — тыйыны в запросе, сомы на экране.
-  const next = before.seatPrice === 11_000 ? 12_000 : 11_000;
-  const som = String(next / 100);
+  // Цена — тыйыны в запросе, сомы на экране. Своё значение на каждый прогон (ПК и телефон идут друг за
+  // другом и возвращают прежнюю цену): строку истории прошлого прогона тест за свою не примет.
+  let nextSom = 101 + randomInt(499);
+  if (nextSom * 100 === before.seatPrice) nextSom += 1;
+  const som = String(nextSom);
   try {
     await page.goto('/app/orgs/subs');
     // Переключатель — после того, как страница ожила: список уже пришёл (typical-mistakes № 41).

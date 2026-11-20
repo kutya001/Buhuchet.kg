@@ -50,9 +50,9 @@ export const E2E_SUBSCRIPTION = {
  * «Изменить подписку» (`PUT /api/admin/subscriptions/{orgId}`), сеанс администратора — в `api`.
  */
 export async function giveSubscription(api: APIRequestContext, origin: string, inn: string) {
-  const orgs = (await (await api.get('/api/admin/organizations?size=all')).json()) as {
-    items: { id: string; inn: string }[];
-  };
+  const orgs = (await (
+    await api.get('/api/admin/organizations?size=all', { maxRetries: 2 })
+  ).json()) as { items: { id: string; inn: string }[] };
   const org = orgs.items.find((o) => o.inn === inn);
   expect(org, inn).toBeTruthy();
   const res = await api.put(`/api/admin/subscriptions/${org!.id}`, {
