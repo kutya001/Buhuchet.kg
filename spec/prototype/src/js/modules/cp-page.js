@@ -21,8 +21,9 @@ const pgSecs=c=>PG_SECS.filter(s=>pgSecOrg(s)&&!((c.page||{}).hide||[]).includes
 const pgOn=c=>feat('cppage')&&!c.archived&&!!(c.page&&c.page.on);
 // Копировать и отправить включённую ссылку может и ответственный бухгалтер без права «Управлять страницей контрагента»
 const pgSendWhy=c=>can('cpPage')||c.resp===S.me?'':'Отправлять ссылку может ответственный бухгалтер или сотрудник с правом «Управлять страницей контрагента»';
-// Код страницы — только из криптографически стойкого генератора, без запасного Math.random (замечание CodeQL, решение заказчика 20.11.2026)
-function pgNewCode(){return String(crypto.getRandomValues(new Uint32Array(1))[0]%1e6).padStart(6,'0')}
+// Код страницы — из криптографически стойкого генератора и без смещения: берутся старшие 20 бит (0…1 048 575), числа от 1 000 000 отбрасываются, остатка от деления нет
+// (замечания CodeQL «небезопасная случайность» и «смещение от остатка», решение заказчика 20.11.2026)
+function pgNewCode(){const a=new Uint32Array(1);let n;do{crypto.getRandomValues(a);n=a[0]>>>12}while(n>=1e6);return String(n).padStart(6,'0')}
 // Блок «Страница контрагента» на вкладке «Основное» карточки
 function pgBox(c){if(!feat('cppage'))return '';const p=c.page||{},on=pgOn(c),why=c.archived?'Контрагент в архиве: страница выключена':can('cpPage')?'':'Нужно право «Управлять страницей контрагента»',sw=pgSendWhy(c);
   const btn=(k,icon,l,w,cls='')=>`<button type="button" class="btn sm ${cls} ${w?'dis':''}" data-pg="${k}" ${w?`aria-disabled="true" data-why="${esc(w)}" title="${esc(w)}"`:`title="${esc(l)}"`} aria-label="${esc(l)}">${ic(icon,'sm')}<span class="bl">${esc(l)}</span></button>`;
