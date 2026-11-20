@@ -122,6 +122,7 @@ const retired = (keys) =>
 git('init', '-q', '-b', 'main');
 write(`${L10N_DIR}/tasks-texts.ts`, texts(['task.kept', 'task.gone', 'task.moved']));
 write(`${L10N_DIR}/texts.test.ts`, texts(['test.only']));
+write(`${L10N_DIR}/parts/kept-texts.ts`, texts(['part.kept', 'part.gone']));
 write(SPEC_REFDB, refDB(['spec.kept', 'spec.gone', 'task.shared']));
 write(RETIRED_FILE, retired([]));
 git('add', '.');
@@ -132,16 +133,20 @@ test('ветка убрала тексты продукта и прототип�
   // «task.moved» переехал в другой файл, «task.shared» теперь есть в продукте — они не убраны.
   write(`${L10N_DIR}/tasks-texts.ts`, texts(['task.kept']));
   write(`${L10N_DIR}/projects-texts.ts`, texts(['task.moved', 'task.shared', 'project.new']));
+  // Файл теста — не словарь: его «ключ» убранным текстом не считается.
+  write(`${L10N_DIR}/texts.test.ts`, texts([]));
+  // Подпапка читается и у коммита main, и в рабочей папке.
+  write(`${L10N_DIR}/parts/kept-texts.ts`, texts(['part.kept']));
   write(SPEC_REFDB, refDB(['spec.kept']));
   assert.deepEqual(checkRetiredTexts(root, base), {
     base,
-    removed: 2,
-    missing: ['spec.gone', 'task.gone'],
+    removed: 3,
+    missing: ['part.gone', 'spec.gone', 'task.gone'],
   });
-  write(RETIRED_FILE, retired(['task.gone']));
+  write(RETIRED_FILE, retired(['task.gone', 'part.gone']));
   assert.deepEqual(checkRetiredTexts(root, base).missing, ['spec.gone']);
-  write(RETIRED_FILE, retired(['task.gone', 'spec.gone']));
-  assert.deepEqual(checkRetiredTexts(root, base), { base, removed: 2, missing: [] });
+  write(RETIRED_FILE, retired(['task.gone', 'part.gone', 'spec.gone']));
+  assert.deepEqual(checkRetiredTexts(root, base), { base, removed: 3, missing: [] });
 });
 
 test('коммит main: названный; у PR в CI — HEAD^1; иначе общий предок с origin/main; нет — пусто', () => {
@@ -154,14 +159,19 @@ test('коммит main: названный; у PR в CI — HEAD^1; иначе 
   // origin/main в этой папке нет — сравнивать не с чем, проверка ничего не называет.
   assert.equal(resolveBase(root, undefined, {}), '');
   assert.deepEqual(checkRetiredTexts(root, undefined, {}), { base: '', removed: 0, missing: [] });
-  // У PR в CI HEAD — коммит слияния, main — его первый родитель.
+  // У PR в CI HEAD — коммит слияния, main — его первый родитель. Тест не зависит от соседнего:
+  // коммит создаётся и тогда, когда в папке нечего сохранять.
   git('add', '.');
-  git('commit', '-q', '-m', 'ветка');
+  git('commit', '-q', '--allow-empty', '-m', 'ветка');
   assert.equal(resolveBase(root, undefined, { GITHUB_EVENT_NAME: 'pull_request' }), 'HEAD^1');
   assert.deepEqual(
     checkRetiredTexts(root, undefined, { GITHUB_EVENT_NAME: 'pull_request' }).missing,
     [],
   );
+  // Локально (`pnpm check`): общий предок ветки с origin/main.
+  git('update-ref', 'refs/remotes/origin/main', base);
+  assert.equal(resolveBase(root, undefined, {}), base);
+  git('update-ref', '-d', 'refs/remotes/origin/main');
 });
 
 test('в этой ветке каждый убранный текст словаря записан в RETIRED.uiTexts', () => {

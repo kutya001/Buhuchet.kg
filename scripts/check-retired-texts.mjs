@@ -81,17 +81,18 @@ export function gitEnv(env = process.env) {
   return Object.fromEntries(Object.entries(env).filter(([name]) => !name.startsWith('GIT_')));
 }
 
-const git = (root, args) =>
+const git = (root, args, stderr = 'inherit') =>
   execFileSync('git', args, {
     cwd: root,
     encoding: 'utf8',
     env: gitEnv(),
     maxBuffer: 256 * 1024 * 1024,
+    stdio: ['ignore', 'pipe', stderr],
   });
 
 const gitOk = (root, args) => {
   try {
-    return git(root, args).trim();
+    return git(root, args, 'ignore').trim();
   } catch {
     return '';
   }
@@ -131,8 +132,9 @@ function keysAt(root, base) {
 }
 
 function keysNow(root) {
+  // С подпапками — как `ls-tree -r` у коммита main: иначе текст в подпапке считался бы убранным.
   const dir = path.join(root, L10N_DIR);
-  const keys = readdirSync(dir)
+  const keys = readdirSync(dir, { recursive: true })
     .filter(isL10nSource)
     .flatMap((f) => literalKeys(readFileSync(path.join(dir, f), 'utf8')));
   return [...keys, ...specKeys(readFileSync(path.join(root, SPEC_REFDB), 'utf8'))];
