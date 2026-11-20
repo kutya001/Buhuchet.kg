@@ -121,7 +121,7 @@ function openCp(c,tab){
         if(q('#cp-feepay'))q('#cp-feepay').onclick=()=>feePayDlg(c);if(q('#cp-feeacc'))q('#cp-feeacc').onclick=()=>feePayDlg(c);
         if(q('#cp-feewa'))q('#cp-feewa').onclick=()=>waDlg({cp:c,fee:true});
         if(q('#cp-feetg'))q('#cp-feetg').onclick=()=>pgFeeTgDlg(c);
-        if(q('#cp-file'))q('#cp-file').onchange=e=>{const fs=[...e.target.files];e.target.value='';attachDlg(fs,note=>{const f=fs.map(x=>x.name);f.forEach(n=>FUP.add(n));c.files.push(...f);fNoteAdd(c.id,fs,note);log('cp',c.id,'Прикреплены файлы: '+f.join(', ')+fNoteLog(note),c.id);mm.draw();toast('Файлы прикреплены','clip')},c.name)};
+        if(q('#cp-file'))q('#cp-file').onchange=e=>{const fs=[...e.target.files];e.target.value='';attachDlg(fs,note=>{const f=fs.map(x=>x.name);f.forEach(n=>FUP.add(n));c.files.push(...f);fNoteAdd(c.id,fs,note);log('cp',c.id,'Прикреплены файлы: '+f.join(', ')+fNoteLog(note),c.id);mm.draw();toast('Файлы прикреплены','clip')},c.name,c.id)};
         $$('[data-rep]',el).forEach(x=>x.onclick=()=>{if(x.dataset.lp){delete x.dataset.lp;return}openReport(REPORTS.find(r=>r.id===+x.dataset.rep))});
         if($('#cc-task',el))$('#cc-task',el).onclick=()=>taskDlg(null,{cp:c.id});
         $$('[data-task]',el).forEach(x=>x.onclick=()=>openTask(allTasks().find(t=>t.id===x.dataset.task)));
