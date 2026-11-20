@@ -471,6 +471,8 @@ const t=(e.indicators||[]).find(x=>x.name==='ФОТ');
       old.forEach(([k,n,p])=>{const x=l.find(y=>y.key===k),y=rl.find(z=>z.key===k);if(x&&y&&typeof x.ru==='string'&&x.ru.length===n&&x.ru.startsWith(p)){x.ru=y.ru;x._ua=y._ua;x._ub=y._ub}});
       nw.forEach(k=>{const n=rl.find(y=>y.key===k);if(n&&!l.some(x=>x.key===k))l.push(structuredClone(n))})}}
   // Лендинг v145: «Задачи» на лендинге — только поручения (решение заказчика 17.11.2026, v129)
+  // v149 (ТЗ ed177, 20.11.2026): ответ «Сколько стоит?» — цена; текст, который организация уже поправила, не трогаем
+  if(!db.meta.land149){db.meta.land149=1;const l=db.ref.localization,rl=r.localization||[];if(Array.isArray(l)){const x=l.find(y=>y.key==='land.faq.1.a'),y=rl.find(z=>z.key==='land.faq.1.a');if(x&&y&&x.ru==="Стоимость зависит от числа клиентов. Оставьте заявку — расскажем условия подключения."){x.ru=y.ru;x._ua=y._ua;x._ub=y._ub}}}
   if(!db.meta.land145){db.meta.land145=1;const l=db.ref.localization,rl=r.localization||[];if(Array.isArray(l)){const x=l.find(y=>y.key==='land.feat.5.d'),y=rl.find(z=>z.key==='land.feat.5.d');if(x&&y&&x.ru==="Поручения сотрудникам с подтверждением выполнения и задачи по каждому отчёту"){x.ru=y.ru;x._ua=y._ua;x._ub=y._ub}}}
   // Страница контрагента простыми словами (поток К, 17.11.2026, «Меньше текста, понятнее, плавнее», п. 6): пояснения разделов — из refDB.json; подсказки, обзор из 5 шагов,
   // «Помощь» из 9 вопросов и «Словарик» без пунктира у обычных слов — тоже, если администратор платформы их не менял (в истории справочника нет строк «Страница контрагента»)

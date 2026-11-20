@@ -408,6 +408,20 @@ test.describe('Этап 3: лендинг для гостей (задача #165
     expect(landing).toContain('og.jpg');
     expect((await request.get('/og.jpg')).headers()['content-type']).toBe('image/jpeg');
   });
+
+  test('(доработки 20.11.2026, цена; прототип v149) лендинг, «Вопросы», «Сколько стоит?»: 100 сом в месяц за клиента, пакетами по 10, скидка до 20 %, первый месяц за полцены', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    const faq = page.locator('#lp-faq');
+    const answer = faq.getByText(
+      '100 сом в месяц за одного вашего клиента, пакетами по 10. При оплате на 3–12 месяцев — скидка до 20 %, первый месяц за полцены.',
+    );
+    await expect(answer).toBeHidden();
+    await faq.getByText('Сколько стоит?', { exact: true }).click();
+    await expect(answer).toBeVisible();
+    await expect(faq.getByText('Стоимость зависит от числа клиентов')).toHaveCount(0);
+  });
 });
 
 test.describe('Этап 3: лендинг v78 — заставка, герб, «Подробнее»; спираль на фоне и карточки функций (прототип v78, v144–v146)', () => {

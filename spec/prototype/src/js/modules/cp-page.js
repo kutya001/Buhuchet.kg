@@ -112,7 +112,7 @@ function pubBind(el){const y=$('#pub-y',el);if(y)y.onchange=()=>{PUB.y=y.value;P
 function pubSecDraw(k){const el=$('#pub'),c=PUB.open&&pubCp(PUB.open),old=el&&$(`#pub .pub-s[data-sec="${k}"]`);if(!c||!old){pubDraw(true);return}
   const tmp=document.createElement('div');tmp.innerHTML=pubBody(c);cphGloss(tmp);const n=$(`.pub-s[data-sec="${k}"]`,tmp);if(!n){pubDraw(true);return}
   old.replaceWith(n);$$('.pub-fade',n).forEach(x=>x.classList.add('in'));pubBind(n)}
-// Поиск по названию в «Файлах»: строки скрываются на месте, поле не теряет фокус; при поиске список показывается целиком
+// Поиск по названию и примечанию в «Файлах»: строки скрываются на месте, поле не теряет фокус; при поиске список показывается целиком
 function pubFq(el){const q=norm(PUB.fq||'').trim(),l=$('.pub-fl',el);if(!l)return;let n=0;$$('[data-pub-fo]',l).forEach(r=>{const on=!q||r.dataset.n.includes(q);r.hidden=!on;if(on)n++});
   l.classList.toggle('all',!!q);const mb=$('.pub-more',l);if(mb)mb.hidden=!!q;const no=$('.pub-fnone',el);if(no)no.hidden=!!n}
 // Каждое открытие — в историю контрагента: дата, время, устройство
@@ -126,7 +126,7 @@ function pubClick(e){const x=e.target.closest('[data-pub-gl],[data-pub-tgon],[da
   if(d.pubPay){if(c)pubPayDlg(c,d.pubPay);return}
   if(d.pubSend){if(c)pubPayDlg(c,'tax',d.pubSend);return}
   if(d.pubTgon!=null){if(d.why)toast(d.why,'lock',true);else if(c)pgTgDlg(c);return}
-  if(d.pubFile!=null){e.preventDefault();const l=$$('[data-pub-file]',x.parentElement);pubFileOpen(l.map(a=>({name:a.dataset.pubFile})),l.indexOf(x));return}
+  if(d.pubFile!=null){e.preventDefault();const l=$$('[data-pub-file]',x.closest('.pub-files'));pubFileOpen(l.map(a=>({name:a.dataset.pubFile,note:c?fNoteOf(c.id,a.dataset.pubFile):''})),l.indexOf(x));return}
   if(d.pubFo!=null){const l=$$('[data-pub-fo]',x.parentElement).filter(r=>!r.hidden);pubFileOpen(l.map(r=>PUB.fl[+r.dataset.pubFo]),l.indexOf(x));return}
   if(d.pubFf!=null){PUB.ff=PUB.ff===d.pubFf?'':d.pubFf;pubSecDraw('files');return}
   if(d.pubFt){if(PUB.ft!==d.pubFt){PUB.ft=d.pubFt;pubSecDraw('files')}return}
@@ -220,7 +220,8 @@ const pubMore=n=>n>5?`<button type="button" class="linkbtn pub-more" data-pub-mo
 // «Файлы» (решение заказчика 06.11.2026): файлы контрагента, которые хранятся у нас, по категориям; категории следуют разделам страницы; файлы задач и скрытые со страницы (c.pgHide) не попадают никогда
 const PG_FCAT=[['rep','Отчёты'],['doc','Документы компании'],['pay','Оплаты налогов'],['in','Ваши переводы'],['prj','Проекты и услуги'],['fee','Услуги бухгалтера'],['oth','Прочие']];
 const PG_FCATL=Object.fromEntries(PG_FCAT);
-function pubFiles(c,has,fee){const out=[],hid=new Set(c.pgHide||[]),add=(cat,n,rel,date)=>{if(!n||hid.has(n))return;out.push({cat,name:n,rel:rel||'',date:String(date||TODAY).slice(0,10),size:fsize(n)})},tp=has('money');
+// Примечание к файлу видно клиенту (ТЗ ed177, 20.11.2026): у загруженного вручную — в самой записи, у остальных — у контрагента по названию файла
+function pubFiles(c,has,fee){const out=[],hid=new Set(c.pgHide||[]),add=(cat,n,rel,date,note)=>{if(!n||hid.has(n))return;out.push({cat,name:n,rel:rel||'',date:String(date||TODAY).slice(0,10),size:fsize(n),note:note??fNoteOf(c.id,n)})},tp=has('money');
   if(has('reports'))REPORTS.forEach(r=>{if(r.cp!==c.id)return;(r.files||[]).forEach(n=>add('rep',n,`${T[r.t].name} · ${r.plabel}`,r.subDate||r.due))});
   (c.files||[]).forEach(n=>add('doc',n,(c.regFiles||[]).includes(n)?'Из свидетельства и выписки':(c.fromCp||[]).includes(n)?'Отправлен вами':'',c._ua||c.start));
   if(tp)OPS.forEach(o=>{if(o.cp!==c.id||o.del||!(o.files||[]).length)return;const r=o.kind==='pay'&&REPORTS.find(y=>y.id===o.report);
@@ -229,12 +230,13 @@ function pubFiles(c,has,fee){const out=[],hid=new Set(c.pgHide||[]),add=(cat,n,r
   if(feat('projects')){SERVICES.forEach(x=>{if(x.cp!==c.id||x.del)return;[...(x.files||[]),...(x.pays||[]).filter(y=>!y.del).flatMap(y=>y.files||[])].forEach(n=>add('prj',n,`Услуга «${x.name}»`,x.date))});
     PROJECTS.forEach(x=>{if(x.cp!==c.id||x.del)return;[...(x.files||[]),...(x.pays||[]).filter(y=>!y.del).flatMap(y=>y.files||[])].forEach(n=>add('prj',n,`Проект «${x.name}»`,x.from))})}
   if(fee)FEEPAYS.forEach(x=>{if(x.cp===c.id&&!x.del)(x.files||[]).forEach(n=>add('fee',n,`Оплата ${som(x.amount)} от ${pubDW(x.date)}`,x.date))});
-  FILES.forEach(f=>{if(f.cp===c.id)add('oth',f.name,'',f.at)});
+  FILES.forEach(f=>{if(f.cp===c.id)add('oth',f.name,'',f.at,f.note||'')});
   return out.sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0)}
 const pubFIc=n=>/^(JPE?G|PNG|WEBP|GIF|HEIC|BMP)$/.test(fext(n))?'image':/^(XLSX?|CSV)$/.test(fext(n))?'table':/^(ZIP|RAR|7Z)$/.test(fext(n))?'folder':'file';
 // Любой файл открывается в окне просмотра (доработки 16.11.2026, блок 5): «‹ ›» — по файлам того же списка (вкладка «От бухгалтера» с плашкой и поиском,
 // файлы одного отчёта), «Скачать»; файл, который не показать, — «Предпросмотр недоступен» и «Скачать». Ссылка на файл в рабочей версии временная — 5 минут
-function pubFileOpen(list,i){fileView(list,i,{sub:f=>f.cat?`${esc(PG_FCATL[f.cat]||'')}${f.rel?' · '+esc(f.rel):''}`:'Просмотр файла',dl:f=>toast('Скачивание: '+f.name,'download')})}
+function pubFileOpen(list,i){fileView(list,i,{sub:f=>f.cat?`${esc(PG_FCATL[f.cat]||'')}${f.rel?' · '+esc(f.rel):''}`:'Просмотр файла',dl:f=>toast('Скачивание: '+f.name,'download'),
+  info:f=>f.note?`<div class="note pub-fvn">${ic('info')}<span><b>Примечание бухгалтера:</b> ${esc(f.note)}</span></div>`:''})}
 // Куда отчёт сдаётся — простыми словами
 const pubOrgan=o=>o?({'ГНС':'в налоговую','Нацстатком':'в Нацстатком','Соцфонд':'в Соцфонд'}[o]||'в '+o):'';
 // Подпись итога «Цифр компании»: «за 2026 год», «в среднем за 2026 год»
@@ -285,7 +287,7 @@ function pubBody(c){const secs=pgSecs(c),has=k=>secs.includes(k),e0=EM[c.resp],e
     const row=(r,wt)=>{const t=T[r.t],st=pubSt(r),lt=fk(r)==='late';
       return `<div class="pub-row${lt?' late':''}"><div class="pub-r1">${wt?`<b>${esc(t.name)}</b><span class="faint">·</span>`:''}<span>${esc(r.phuman)}</span><span class="grow"></span>${pill(st,ST)}</div>
         <div class="pub-r2">${st==='Сдан'&&r.subDate?`<span>сдан ${pubDW(r.subDate)}</span>`:`<span class="${lt?'calm strong':''}">${lt?'срок был ':'срок '}${pubDW(r.due)}</span>`}${t.sum?`<span>${r.sum!=null?`налог <b class="tnum">${som(r.sum)}</b>`:'<span class="faint">сумма ещё не рассчитана</span>'}</span>${tp&&r.sum>0?pill(r.payStatus,PST):''}`:''}</div>
-        ${rf(r).length?`<div class="pub-files">${rf(r).map(n=>`<a href="#" class="pub-file" data-pub-file="${esc(n)}">${ic('download','sm')}${esc(n)}</a>`).join('')}</div>`:''}</div>`};
+        ${rf(r).length?`<div class="pub-files">${rf(r).map(n=>{const t=fNoteOf(c.id,n);return `<span class="pub-fi"><a href="#" class="pub-file" data-pub-file="${esc(n)}">${ic('download','sm')}${esc(n)}</a>${t?`<span class="f-note">${esc(t)}</span>`:''}</span>`}).join('')}</div>`:''}</div>`};
     let list;
     // «По срокам» — группы по месяцу срока сдачи; «По месяцам» — по месяцу, за который отчёт (правило rmYm, общее с карточкой контрагента и сообщением «К оплате»): в шапке группы —
     // «осталось N сом» или «оплачено», внутри — «к оплате · оплачено · осталось» и «Оплатить» с остатком месяца (без «Учёта оплаты налогов» — только «к оплате»)
@@ -313,8 +315,8 @@ function pubBody(c){const secs=pgSecs(c),has=k=>secs.includes(k),e0=EM[c.resp],e
     const chip=(k,l,n)=>`<button type="button" class="pub-chip${ff===k?' on':''}" data-pub-ff="${k}" aria-pressed="${ff===k}">${esc(l)} <b>${n}</b></button>`;
     const tabs=sent.length||up?`<div class="chipsel pub-ftabs" role="tablist">${[['acc','От бухгалтера',fs.length],['you','От вас',sent.length]].map(([k,l,n])=>`<button type="button" role="tab" data-pub-ft="${k}" class="${tab===k?'on':''}" aria-selected="${tab===k}">${l}${n?` · ${n}`:''}</button>`).join('')}</div>`:'';
     const accL=fs.length?`${cats.length>1?`<div class="pub-chips">${chip('','Все',fs.length)}${cats.map(([k,l])=>chip(k,l,fs.filter(f=>f.cat===k).length)).join('')}</div>`:''}
-      ${fs.length>10?`<div class="pub-tools"><input class="inp pub-fq" id="pub-fq" type="search" placeholder="Поиск по названию" value="${esc(PUB.fq||'')}" aria-label="Поиск файла по названию" autocomplete="off"></div>`:''}
-      <div class="pub-list pub-fl">${vis.map((f,i)=>`<button type="button" class="pub-frow" data-pub-fo="${i}" data-n="${esc(norm(f.name))}" title="Открыть для просмотра">${ic(pubFIc(f.name))}<span class="pub-fm"><b>${esc(f.name)}</b><span class="hint">${esc(PG_FCATL[f.cat])}${f.rel?' · '+esc(f.rel):''}</span></span><span class="pub-fs hint">${pubDW(f.date)}</span></button>`).join('')}${pubMore(vis.length)}</div><span class="faint pub-fnone" hidden>Файлов с таким названием нет</span>`
+      ${fs.length>10?`<div class="pub-tools"><input class="inp pub-fq" id="pub-fq" type="search" placeholder="Поиск по названию и примечанию" value="${esc(PUB.fq||'')}" aria-label="Поиск файла по названию и примечанию" autocomplete="off"></div>`:''}
+      <div class="pub-list pub-fl">${vis.map((f,i)=>`<button type="button" class="pub-frow" data-pub-fo="${i}" data-n="${esc(norm(f.name+' '+(f.note||'')))}" title="Открыть для просмотра">${ic(pubFIc(f.name))}<span class="pub-fm"><b>${esc(f.name)}</b><span class="hint">${esc(PG_FCATL[f.cat])}${f.rel?' · '+esc(f.rel):''}</span>${f.note?`<span class="f-note">${esc(f.note)}</span>`:''}</span><span class="pub-fs hint">${pubDW(f.date)}</span></button>`).join('')}${pubMore(vis.length)}</div><span class="faint pub-fnone" hidden>Файлов с таким названием или примечанием нет</span>`
       :`<span class="faint">${esc(cphT('emptyFiles','Файлов пока нет'))}</span>`;
     H.files=pubSec('files','Файлы',fs.length+sent.length?`${fs.length+sent.length} ${plural(fs.length+sent.length,'файл','файла','файлов')}`:'',`${tabs}<div class="pub-fade">${tab==='you'?pubSentHtml(c):accL}</div>`,
       {act:up?`<button type="button" class="btn sm" data-pub-up>${ic('upload','sm')}Отправить файл</button>`:''})}

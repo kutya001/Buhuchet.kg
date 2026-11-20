@@ -10,7 +10,7 @@ const GS={};let ACTIVE=[];let FAIL_NEXT=false;const CLOSED=new Set();
 const norm=s=>String(s??'').toLowerCase().replace(/ё/g,'е').replace(/ /g,' ');
 const strip=s=>norm(s).replace(/[\s\-()+.,№«»"]/g,'');
 const COLL=new Intl.Collator('ru',{numeric:true,sensitivity:'base'});
-function gst(cfg){let s=GS[cfg.id];if(!s){const sv=store.get('g5.'+cfg.id,{});s=GS[cfg.id]={view:sv.view||cfg.defView||null,density:sv.density||'normal',width:sv.width||'full',hidden:new Set(sv.hidden||defHidden(cfg)),order:sv.order||null,widths:sv.widths||{},kb:sv.kb||null,sort:sv.sort!==undefined?sv.sort:defSort(cfg),group:sv.group||(cfg.defGroup||[]).slice(),agg:sv.agg||{},closed:new Set(),filters:{},page:0,size:sv.size||25,sel:new Set()}}return s}
+function gst(cfg){let s=GS[cfg.id];if(!s){const sv=store.get('g5.'+cfg.id,{});s=GS[cfg.id]={view:sv.view||cfg.defView||null,density:sv.density||'normal',width:sv.width||'full',hidden:new Set(sv.hidden||defHidden(cfg)),order:sv.order||null,widths:sv.widths||{},kb:sv.kb||null,sort:sv.sort!==undefined?sv.sort:defSort(cfg),group:sv.group||(cfg.defGroup||[]).slice(),agg:sv.agg||{},closed:new Set(),filters:{},page:0,size:sv.size||cfg.size||25,sel:new Set()}}return s}
 /* Сортировка по умолчанию во всех списках — от новых к старым по «Создано» */
 /* Видимые по умолчанию столбцы по спискам (ТЗ, «Столбцы, видимые по умолчанию»); остальные — в меню «Столбцы» */
 const SHOW={'rep-months':['type','act','period','due','status','sum','paydue','paid','resp'],'cp-rep':['type','act','period','due','status','sum','got','paid','resp'],'rep-':['cp','type','act','period','due','status','wait','sum','got','paid','resp'],
@@ -95,6 +95,11 @@ function grid(host,cfg){
     const VL={table:'Таблица',cards:'Карточки',kanban:'Доска'},VI={table:'table',cards:'cards',kanban:'board'},views=cfg.kanban?['table','cards','kanban']:['table','cards'];
     /* Телефон (17.11.2026, «Меньше текста», ТЗ п. 9): на виду счётчик, «Фильтр», «Сортировка» и «⋯»; под «⋯» — вид, группировка, поля, статистика, выбор нескольких, Excel.
        Фильтр и сортировка работают и в виде «Карточки» */
+    // группы есть — одна кнопка сворачивает все группы или, если все свёрнуты, разворачивает их (ТЗ, «Панель над списком»)
+    // на телефоне — значком рядом с меткой «Группировка», чтобы панель не переносилась на вторую строку
+    // считается до ветки телефона: на телефоне кнопка стоит в строке «Группировка» и в меню «⋯» (v150: раньше список с группировкой на телефоне падал)
+    let fold='';if(gt&&gt.length){const ps=[];const w=arr=>arr.forEach(x=>{ps.push(x.path);if(x.sub)w(x.sub)});w(gt);const shut=ps.every(p=>s.closed.has(p)),a=shut?'gall':'gnone',l=shut?'Развернуть все':'Свернуть все',t=shut?'Развернуть все группы':'Свернуть все группы';
+      g.fold={a,l};fold=mob?`<button class="icon-btn sm raised" data-a="${a}" title="${t}" aria-label="${t}">${ic(shut?'unfold':'fold','sm')}</button>`:`<button class="btn sm" data-a="${a}" title="${t}">${ic(shut?'unfold':'fold','sm')}${l}</button>`;}else g.fold=null;
     if(mob){const fn=fk.length;h+=`<button class="btn sm gt-m ${fn?'on':''}" data-a="mfilt" aria-label="Фильтр${fn?': '+fn:''}">${ic('filter','sm')}<span class="bl">Фильтр</span>${fn?`<span class="gt-n">${fn}</span>`:''}</button><button class="btn sm gt-m ${s.sort?'on':''}" data-a="msort" aria-label="Сортировка">${ic(s.sort&&s.sort.dir<0?'dn':'up','sm')}<span class="bl">Сортировка</span></button><button class="icon-btn sm raised" data-a="mmore" aria-label="Ещё: вид, группировка, поля, Excel" title="Ещё">${ic('more','sm')}</button>`}
     else{if(!cfg.fixedView){h+=`<div class="seg" role="group" aria-label="Вид списка">${views.map(v=>`<button data-view="${v}" class="${view===v?'on':''}" title="${VL[v]}${v==='kanban'?': записи карточками по столбцам':''}">${ic(VI[v],'sm')}<span>${VL[v]}</span></button>`).join('')}</div>`}
     // на доске вместо «Группировки» — выбор, по какому столбцу списка разложить записи
@@ -102,10 +107,7 @@ function grid(host,cfg){
       h+=false?'':`<button class="btn sm" data-a="cols" title="Какие поля показывать на карточке: первые пять видимых">${ic('columns','sm')}Поля (${vc.length}/${ac.length})</button>`}
     else if(false)h+=`<button class="icon-btn sm raised gt-ic ${ng?'on':''}" data-a="grp" title="Группировка${ng?` (${ng})`:''}" aria-label="Группировка${ng?` (${ng})`:''}">${ic('layers','sm')}${ng?`<span class="gt-n">${ng}</span>`:''}</button><button class="icon-btn sm raised" data-a="cols" title="Столбцы (${vc.length}/${ac.length})" aria-label="Столбцы (${vc.length}/${ac.length})">${ic('columns','sm')}</button><button class="icon-btn sm raised" data-a="opts" title="Плотность и ширина" aria-label="Настройки вида">${ic('sliders','sm')}</button>`;
     else h+=`<button class="btn sm ${ng?'on':''}" data-a="grp" title="Группировать список по столбцам (до двух уровней)">${ic('layers','sm')}Группировка${ng?` (${ng})`:''}</button><button class="btn sm" data-a="cols">${ic('columns','sm')}Столбцы (${vc.length}/${ac.length})</button><button class="icon-btn sm raised" data-a="opts" title="Плотность и ширина" aria-label="Настройки вида">${ic('sliders','sm')}</button>`;
-    // группы есть — одна кнопка сворачивает все группы или, если все свёрнуты, разворачивает их (ТЗ, «Панель над списком»)
-    // на телефоне — значком рядом с меткой «Группировка», чтобы панель не переносилась на вторую строку
-    let fold='';if(gt&&gt.length){const ps=[];const w=arr=>arr.forEach(x=>{ps.push(x.path);if(x.sub)w(x.sub)});w(gt);const shut=ps.every(p=>s.closed.has(p)),a=shut?'gall':'gnone',l=shut?'Развернуть все':'Свернуть все',t=shut?'Развернуть все группы':'Свернуть все группы';
-      g.fold={a,l};fold=mob?`<button class="icon-btn sm raised" data-a="${a}" title="${t}" aria-label="${t}">${ic(shut?'unfold':'fold','sm')}</button>`:`<button class="btn sm" data-a="${a}" title="${t}">${ic(shut?'unfold':'fold','sm')}${l}</button>`;if(!mob)h+=fold}else g.fold=null;
+    h+=fold;
     if(!mob&&cfg.exportable!==false&&(isAdmin()||can('export')))h+=false?`<button class="icon-btn sm raised" data-a="xls" title="В Excel: скачать файл .xlsx со всеми отфильтрованными записями" aria-label="В Excel">${ic('download','sm')}</button>`:`<button class="btn sm" data-a="xls" title="Скачать файл .xlsx со всеми отфильтрованными записями">${ic('download','sm')}В Excel</button>`;
     }
     h+=`</div>`;
