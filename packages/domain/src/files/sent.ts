@@ -6,6 +6,7 @@
  */
 import { addDays, diffDays, type IsoDate } from '../common/dates';
 import type { PageSection } from '../org/policy';
+import { MEMORY_FULL_CONTRACTOR_MESSAGE } from '../subscriptions/memory';
 import {
   cleanFileNote,
   fileExtension,
@@ -36,6 +37,8 @@ export const SENT_FILE_MESSAGES = {
   sent_reason_empty: 'Укажите причину',
   sent_reason_long: 'Причина длиннее 300 знаков',
   sent_decided: 'Файл уже принят или отклонён',
+  // Память организации заполнена (доработки 20.11.2026, блок 2, пункт 5).
+  sent_mem_full: MEMORY_FULL_CONTRACTOR_MESSAGE,
 } as const;
 export type SentFileProblem = keyof typeof SENT_FILE_MESSAGES;
 

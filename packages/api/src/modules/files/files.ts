@@ -67,6 +67,7 @@ import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiFail, versionedSaveResponses } from '../../errors';
 import { orgContextOf, requirePermission } from '../../middleware/access';
+import { requireFreeMemory, subscriptionToday } from '../../subscription-access';
 import { FILE_SOURCES, type FileSource, type FileSourceRecord } from './sources';
 
 /*
@@ -404,6 +405,7 @@ export const startUploadRoute = createRoute({
       content: error,
     },
     404: { description: 'Записи нет или она вне области', content: error },
+    409: { description: 'Память организации заполнена (`mem_full`)', content: error },
     429: { description: 'Больше 300 загрузок за час', content: error },
   },
 });
@@ -432,12 +434,14 @@ export function startUploadHandler(deps: ApiDeps): RouteHandler<typeof startUplo
     // Предел — до транзакции и на `db`: проверка держит блокировку пользователя до своего конца.
     const slot = await takeRateLimit(deps.db, UPLOAD_RATE_LIMIT, ctx.userId!);
     if (!slot.ok) apiFail(429, 'file_upload_limit', FILE_MESSAGES.file_upload_limit);
+    const today = subscriptionToday(deps);
     await withOrgContext(deps.db, ctx, async (tx) => {
       const features = await requireFilesFeature(tx, ctx.orgId);
       const record = await visibleSource(deps, tx, subject, source.kind, source.id, {
         contractorId,
       });
       if (!canUpload(subject, record)) apiFail(403, 'forbidden', 'Нет права на это действие');
+      await requireFreeMemory(tx, today);
       await insertPendingFile(tx, {
         id,
         sourceKind: source.kind,
@@ -853,6 +857,7 @@ export const startReplaceRoute = createRoute({
       content: error,
     },
     404: { description: 'Файла нет, он удалён или вне области', content: error },
+    409: { description: 'Память организации заполнена (`mem_full`)', content: error },
     429: { description: 'Больше 300 загрузок за час', content: error },
   },
 });
@@ -873,6 +878,7 @@ export function startReplaceHandler(deps: ApiDeps): RouteHandler<typeof startRep
     const ctx = orgContextOf(c);
     const subject = subjectOf(c);
     const now = realNow();
+    const today = subscriptionToday(deps);
     const uploadId = randomUUID();
     const storageKey = orgFileKey(ctx.orgId, FILES_SECTION, uploadId);
     const slot = await takeRateLimit(deps.db, UPLOAD_RATE_LIMIT, ctx.userId!);
@@ -886,6 +892,8 @@ export function startReplaceHandler(deps: ApiDeps): RouteHandler<typeof startRep
       if (deleteRefusal(subject, record, file, ctx.userId!, now) !== null) {
         apiFail(403, 'file_replace_forbidden', FILE_MESSAGES.file_replace_forbidden);
       }
+      // ОТКЛОНЕНИЕ: docs/deviations.md#О-90
+      await requireFreeMemory(tx, today);
       await insertPendingFile(tx, {
         id: uploadId,
         sourceKind: file.sourceKind,

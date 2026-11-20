@@ -1,3 +1,4 @@
+import { MEMORY_FULL_MESSAGE } from '../subscriptions/memory';
 import type { UiTextDefault } from './texts';
 
 const S = 'Подписки';
@@ -24,4 +25,6 @@ export const SUBSCRIPTIONS_TEXTS = {
     ru: 'От 0 %; вместе со скидкой за срок — не больше 100 %',
     section: 'Ошибки',
   },
+  // Память организации заполнена — загрузка не начинается (блок 2, пункт 5; прототип subMemFullDlg).
+  'err.mem_full': { ru: MEMORY_FULL_MESSAGE, section: 'Ошибки' },
 } as const satisfies Record<string, UiTextDefault>;

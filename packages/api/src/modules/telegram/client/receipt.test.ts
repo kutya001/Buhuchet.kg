@@ -536,6 +536,23 @@ describe.skipIf(!databaseAvailable())(
       expect(await sentFiles(cpA)).toEqual([]);
     });
 
+    it('память организации заполнена: файл клиента не принимается — «Сейчас файл отправить нельзя» (доработки 20.11, блок 2, пункт 5)', async () => {
+      // Предел — 0 МБ: занято (0) не меньше предела.
+      const memory = (baseMb: number, seatMb: number) =>
+        f.t.admin.db.update(schema.subscriptionSettings).set({ baseMb, seatMb });
+      await memory(0, 0);
+      try {
+        await sendFile(CLIENT_2, { name: 'Акт.pdf' });
+        expect(lastText(CLIENT_2)).toBe(text('tgCpFileMem'));
+        expect(lastText(CLIENT_2)).toBe(
+          'Сейчас файл отправить нельзя. Сообщите вашему бухгалтеру.',
+        );
+      } finally {
+        await memory(2000, 200);
+      }
+      expect(await sentFiles(cpA)).toEqual([]);
+    });
+
     it('файл без просьбы от клиента одного контрагента: в «Отправленные файлы» с подписью; тип, размер и 20 в сутки вместе со страницей', async () => {
       await sendFile(CLIENT_2, { name: 'setup.exe', body: EXE });
       expect(lastText(CLIENT_2)).toBe(text('tgCpFileNo', { мб: 20 }));

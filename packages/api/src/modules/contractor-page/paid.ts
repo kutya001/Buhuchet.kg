@@ -206,7 +206,11 @@ export const pagePaidStartRoute = createRoute({
       description: 'Страница недоступна, не открыта в этом браузере или «Как оплатить» не показан',
       content: error,
     },
-    409: { description: 'Контрагенту сейчас нельзя отправлять файлы', content: error },
+    409: {
+      description:
+        'Контрагенту сейчас нельзя отправлять файлы или память организации заполнена (`sent_mem_full`)',
+      content: error,
+    },
     429: { description: 'Больше 20 файлов в сутки или слишком много отправок', content: error },
   },
 });
@@ -249,7 +253,7 @@ export function pagePaidStartHandler(
       await withOrgContext(deps.db, { orgId: page.orgId, userId: null }, async (tx) => {
         const ctx = await paidContext(tx, { ...page, today, t });
         checkPaid(ctx, { ...body, file });
-        await sentLimitCheck(tx, page.contractorId, [file]);
+        await sentLimitCheck(tx, page.contractorId, [file], today);
         await insertPendingSentFiles(tx, [row]);
       });
     } catch (err) {

@@ -1,6 +1,13 @@
-import { orgSubscriptionClosed, withOrgContext } from '@buhuchet/db';
-import { bishkekDate } from '@buhuchet/domain';
+import { orgSubscriptionClosed, orgUsage, withOrgContext, type Tx } from '@buhuchet/db';
+import {
+  bishkekDate,
+  memoryFull,
+  memoryFullParams,
+  memoryFullText,
+  type IsoDate,
+} from '@buhuchet/domain';
 import type { ApiDeps } from './deps';
+import { apiFail } from './errors';
 import { serverTexts } from './modules/l10n/texts';
 
 /*
@@ -17,10 +24,7 @@ import { serverTexts } from './modules/l10n/texts';
 export const subscriptionToday = (deps: Pick<ApiDeps, 'clock'>) => bishkekDate(deps.clock.now());
 
 /** Закрыт ли доступ организации сейчас: своя короткая транзакция организации без пользователя. */
-export function orgClosedNow(
-  deps: Pick<ApiDeps, 'db' | 'clock'>,
-  orgId: string,
-): Promise<boolean> {
+export function orgClosedNow(deps: Pick<ApiDeps, 'db' | 'clock'>, orgId: string): Promise<boolean> {
   return withOrgContext(deps.db, { orgId, userId: null }, (tx) =>
     orgSubscriptionClosed(tx, subscriptionToday(deps)),
   );
@@ -48,4 +52,27 @@ export const ownerOpenWhenClosed = (path: string) =>
 /** Ответ бота сотруднику, пока доступ организации закрыт: кнопки, просьбы, команды (блок 4, пункт 4). */
 export async function closedBotText(deps: ApiDeps): Promise<string> {
   return (await serverTexts(deps))('subs.tg.closed');
+}
+
+/**
+ * Память организации заполнена (блок 2, пункт 5; прототип `subMemFullDlg`) — в транзакции организации,
+ * до того как загрузка заведена: занятое и предел, если загружать нельзя, иначе null. Предела нет у
+ * демо-организации и без подписки.
+ */
+export async function memoryFullOf(
+  tx: Tx,
+  today: IsoDate,
+): Promise<{ bytesUsed: number; bytesLimit: number } | null> {
+  const usage = await orgUsage(tx, today);
+  if (!usage || !memoryFull(usage)) return null;
+  return { bytesUsed: usage.bytesUsed!, bytesLimit: usage.bytesLimit! };
+}
+
+/**
+ * Загрузку сотрудника память не пускает: 409 `mem_full`, в `details` — ГБ словами (`used`, `limit`) для
+ * текста словаря и байты (`usedBytes`, `limitBytes`) для окна «Память организации заполнена».
+ */
+export async function requireFreeMemory(tx: Tx, today: IsoDate): Promise<void> {
+  const full = await memoryFullOf(tx, today);
+  if (full) apiFail(409, 'mem_full', memoryFullText(full), memoryFullParams(full));
 }

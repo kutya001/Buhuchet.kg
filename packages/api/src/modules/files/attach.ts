@@ -7,6 +7,7 @@ import {
 } from '@buhuchet/db';
 import type { AccessSubject } from '@buhuchet/domain';
 import type { ApiDeps } from '../../deps';
+import { memoryFullOf, subscriptionToday } from '../../subscription-access';
 import { canUpload, canView, sourceOf } from './files';
 
 /*
@@ -22,7 +23,8 @@ import { canUpload, canView, sourceOf } from './files';
  * тип — `fileContentType(name)`; имя и размер проверены `fileUploadProblem`, размер — фактический.
  */
 
-export type AttachRefusal = 'files_off' | 'not_found' | 'forbidden';
+/** `mem_full` — память организации заполнена (доработки 20.11.2026, блок 2, пункт 5). */
+export type AttachRefusal = 'files_off' | 'not_found' | 'forbidden' | 'mem_full';
 
 export interface StoredFile {
   /** Номер файла от сервера (он же — последняя часть ключа хранилища). */
@@ -54,6 +56,8 @@ export async function attachStoredFile(
   const record = source ? await source.resolve(tx, subject, file.source.id) : null;
   if (!record || !canView(subject, record)) return 'not_found';
   if (!canUpload(subject, record)) return 'forbidden';
+  // ОТКЛОНЕНИЕ: docs/deviations.md#О-90
+  if (await memoryFullOf(tx, subscriptionToday(deps))) return 'mem_full';
   await insertPendingFile(tx, {
     id: file.id,
     sourceKind: file.source.kind,

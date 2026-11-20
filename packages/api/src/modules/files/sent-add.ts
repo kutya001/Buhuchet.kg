@@ -30,10 +30,12 @@ import {
   sentUploadOn,
   SENT_FILE_SENDER_MAX,
   withOrganization,
+  type IsoDate,
   type SentFileRefusal,
   type SentFileSource,
 } from '@buhuchet/domain';
 import type { ApiDeps } from '../../deps';
+import { memoryFullOf, subscriptionToday } from '../../subscription-access';
 import { serverTexts } from '../l10n/texts';
 import { bellContractor } from '../telegram/bell';
 import { flushEvents, queueEvents } from '../telegram/outbox';
@@ -68,18 +70,22 @@ export class SentFilesRefused extends Error {
 /**
  * Можно ли отправлять и сколько ещё за сутки — в транзакции организации контрагента (страница и бот
  * работают без пользователя), под блокировкой отправок контрагента до конца транзакции: вставку строк
- * делать в ней же. Отправлять нельзя — `sent_off`.
+ * делать в ней же. Отправлять нельзя — `sent_off`, память организации заполнена — `sent_mem_full`;
+ * `today` — по Бишкеку от часов приложения (`subscriptionToday`).
  */
 export async function sentLimitCheck(
   tx: Tx,
   contractorId: string,
   files: readonly { name: string; size: number }[],
+  today: IsoDate,
 ): Promise<void> {
   await lockSentFilesOf(tx, contractorId);
   const state = await sentUploadState(tx, contractorId);
   if (!state || !sentUploadOn(state)) throw new SentFilesRefused({ code: 'sent_off' });
   const refusal = sentFilesSendRefusal(files, await sentFilesLastDay(tx, contractorId));
   if (refusal) throw new SentFilesRefused(refusal);
+  // Память организации заполнена (доработки 20.11.2026, блок 2, пункт 5): со страницы и из Telegram.
+  if (await memoryFullOf(tx, today)) throw new SentFilesRefused({ code: 'sent_mem_full' });
 }
 
 /**
@@ -260,9 +266,10 @@ export async function addSentFiles(
     };
   });
   const ctx = { orgId: o.orgId, userId: null };
+  const today = subscriptionToday(deps);
   // Строки «pending» — под лимитом: две отправки одновременно не превысят 20 в сутки.
   await withOrgContext(deps.db, ctx, async (tx) => {
-    await sentLimitCheck(tx, o.contractorId, list);
+    await sentLimitCheck(tx, o.contractorId, list, today);
     if (o.source === 'telegram') await requireActiveChat(tx, o.contractorId, o.tgChatId ?? null);
     await insertPendingSentFiles(tx, rows);
   });
