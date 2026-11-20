@@ -227,6 +227,7 @@ describe.skipIf(!databaseAvailable())('витрина данных: роли б�
       ['ключ хранилища', 'SELECT storage_key FROM files', '42501'],
       ['таблица платформы', 'SELECT * FROM platform_leads', '42501'],
       ['подписки всех организаций', 'SELECT * FROM org_subscriptions', '42501'],
+      ['черновики видео платформы', 'SELECT title FROM videos', '42501'],
       ['чтение файла сервера', "SELECT pg_read_file('/etc/passwd')", '42501'],
       ['пользователи базы', 'SELECT * FROM pg_authid', '42501'],
       ['запись в CTE', 'WITH d AS (DELETE FROM contractors RETURNING id) SELECT * FROM d', '25006'],

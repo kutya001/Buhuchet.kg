@@ -11,9 +11,16 @@
 --     строку, ни организацию не поменять (set_config('app.org_id') на роли Витрины не действует: их
 --     политики смотрят на dm.runs, а не на настройки);
 --   - транзакция исполнителя всегда откатывается: строка dm.runs не остаётся.
--- Таблиц не перестраивает (только права и политики), но GRANT и CREATE POLICY ждут долгих транзакций на
--- своих таблицах — ждём не дольше 10 с, как 0147 и 0165.
-SET LOCAL lock_timeout = '10s';--> statement-breakpoint
+-- Блокировки: таблиц не перестраивает и данных не меняет, но CREATE POLICY берёт ACCESS EXCLUSIVE на
+-- каждую открытую таблицу (115 из 135 в public) и держит до конца транзакции пачки `db:migrate`: всё это
+-- время чтение и запись этих таблиц ждут. Сама работа — доли секунды (0,25 с на демо-базе); дольше —
+-- ожидание долгих транзакций на каждой таблице, поэтому ждём не дольше 3 с на таблицу. Таблицы берутся по
+-- алфавиту — запрос, который держит одну и ждёт другую, может взаимоблокироваться с миграцией: тогда
+-- откатывается один из двух (запрос сайта — ошибкой, миграция — красным выпуском, повторить выпуск).
+-- Поэтому 0166 — последней в своей пачке, на рабочий сайт — в тихое время (docs/decisions.md п. О-62).
+-- Откат (если понадобится): DROP OWNED BY buhuchet_dm_org, buhuchet_dm_admin; DROP SCHEMA dm CASCADE —
+-- снимает политики, права, функции и dm.runs; роли общие для сервера, DROP ROLE — не в миграции.
+SET LOCAL lock_timeout = '3s';--> statement-breakpoint
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'buhuchet_dm_org') THEN
@@ -50,7 +57,7 @@ GRANT USAGE ON SCHEMA public TO buhuchet_dm_org, buhuchet_dm_admin;--> statement
 --   closed — секреты (пароли, сеансы, ключи и коды Telegram и страниц, хеши токенов, счётчики попыток
 --     входа, частота) и служебное хранилища — закрыты обеим ролям;
 --   admin_only — данные платформы (организации целиком, заявки, подписки и чеки, журналы платформы,
---     черновики новостей, шаблоны Витрины) — только роли Админки;
+--     черновики новостей и видео, шаблоны Витрины) — только роли Админки;
 --   platform — справочники платформы без организации — обеим ролям целиком;
 --   остальные таблицы с org_id — роли организаций только свои строки, Админки — все; организация видит
 --     только свою строку organizations. Таблица без org_id, которой нет в списках, — только Админке.
@@ -67,13 +74,13 @@ DECLARE
     'file_trash', 'news', 'news_admin_texts', 'org_subscriptions', 'platform_audit_log',
     'platform_lead_docs', 'platform_lead_events', 'platform_lead_uploads', 'platform_leads',
     'scheduler_jobs', 'scheduler_runs', 'session_log', 'subscription_payments', 'subscription_plans',
-    'subscription_settings', 'video_guest_stats', 'video_uploads'];
+    'subscription_settings', 'video_guest_stats', 'video_uploads', 'videos'];
   platform text[] := ARRAY['authorities', 'banks', 'due_change_reasons', 'gked_items',
     'message_templates', 'ownership_forms', 'permissions', 'phone_codes', 'platform_reference',
     'production_calendar', 'report_bases', 'report_type_bases', 'report_type_regimes', 'report_types',
     'role_templates', 'single_tax_rates', 'status_tones', 'task_categories', 'tax_benefit_due_rules',
     'tax_benefit_offices', 'tax_benefit_report_types', 'tax_benefits', 'tax_offices', 'tax_regimes',
-    'ui_texts', 'videos'];
+    'ui_texts'];
   secret_columns text[] := ARRAY['contractor_pages.code', 'contractor_pages.code_version',
     'contractor_pages.failures', 'contractor_pages.locked_until', 'contractor_sent_files.storage_key',
     'contractor_sent_files.tg_chat_id', 'contractor_telegram_links.chat_id',

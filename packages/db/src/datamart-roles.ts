@@ -30,7 +30,10 @@ export const DM_CLOSED_TABLES = [
   'telegram_relink_codes',
 ] as const;
 
-/** Только роли Админки: организации целиком, заявки, подписки и чеки, журналы и задачи платформы. */
+/**
+ * Только роли Админки: организации целиком, заявки, подписки и чеки, журналы и задачи платформы,
+ * черновики новостей и видео.
+ */
 export const DM_ADMIN_ONLY_TABLES = [
   'dict_loads',
   'dm_requests',
@@ -53,6 +56,9 @@ export const DM_ADMIN_ONLY_TABLES = [
   'subscription_settings',
   'video_guest_stats',
   'video_uploads',
+  // Видео платформы: организации приложение показывает только опубликованные «для всех» (`videos_read`),
+  // а роль Витрины фильтровала бы только по организации — черновики и видео «для Админки» открылись бы.
+  'videos',
 ] as const;
 
 /** Справочники платформы без организации — обеим ролям целиком. */
@@ -82,7 +88,6 @@ export const DM_PLATFORM_TABLES = [
   'tax_offices',
   'tax_regimes',
   'ui_texts',
-  'videos',
 ] as const;
 
 /**
