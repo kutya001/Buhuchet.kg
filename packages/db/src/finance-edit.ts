@@ -1010,6 +1010,11 @@ export async function operationFileSource(
   };
 }
 
+/** Файл финансовой операции виден в списках: операция с файлами не отменена, контрагент — в области `scope`. */
+export function operationFileShown(scope: SQL | undefined): SQL {
+  return sql`exists (select 1 from ${moneyOperations} join ${contractors} on ${contractors.id} = ${moneyOperations.contractorId} where ${moneyOperations.id} = ${files.sourceId} and ${inArray(moneyOperations.kind, [...OPERATION_FILE_KINDS])} and ${moneyOperations.cancelledAt} is null and ${scope ?? sql`true`})`;
+}
+
 /**
  * Файлы финансовых операций в «Файловом менеджере» (доработки 20.11.2026, пакет 2, блок 5, пункт 1):
  * списание, возврат, перевод, обратная запись, возврат по уточнённому (`OPERATION_FILE_KINDS`) — не
@@ -1026,7 +1031,7 @@ export function operationFilesPart(scope: SQL | undefined, t: ListTexts): FileLi
   )} end)`;
   const label = sql`replace(replace(replace(${dictLiteral(t('files.src.money_operation'))}::text, '{op}', ${op}), '{amount}', ${somUnitText(sql`abs(${moneyOperations.amount})`)}), '{date}', to_char(${moneyOperations.opDate}, 'DD.MM.YYYY'))`;
   return {
-    visible: sql`exists (select 1 from ${moneyOperations} join ${contractors} on ${contractors.id} = ${moneyOperations.contractorId} where ${moneyOperations.id} = ${files.sourceId} and ${inArray(moneyOperations.kind, [...OPERATION_FILE_KINDS])} and ${moneyOperations.cancelledAt} is null and ${scope ?? sql`true`})`,
+    visible: operationFileShown(scope),
     source: sql`(select ${label} from ${moneyOperations} where ${moneyOperations.id} = ${files.sourceId})`,
   };
 }

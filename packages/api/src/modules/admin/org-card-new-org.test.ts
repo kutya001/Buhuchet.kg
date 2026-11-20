@@ -14,6 +14,7 @@ import {
   ContractorTabCounts,
   EmployeeList,
   FeePaymentForm,
+  FeePaymentSaved,
   FileManagerSummary,
   FileUploadTicket,
   FileUsage,
@@ -194,24 +195,30 @@ describe.skipIf(!databaseAvailable())('Админка на новой орган
       FeePaymentForm.parse(x),
     );
     const month = form.months.at(-1)!;
-    await ok(
+    const feePayment = await ok(
       await call('POST', `/api/contractors/${c1}/fee-payments`, owner, {
         amount: month.left,
         date: today,
         to: form.to[0]!.key,
         allocation: [{ month: month.month, amount: month.left }],
       }),
-      (x) => x,
+      (x) => FeePaymentSaved.parse(x),
       201,
     );
-    // Файлы: у контрагента и общий.
-    const upload = async (name: string, size: number, contractorId: string | null) => {
+    // Файлы: у контрагента, общий и у оплаты за обслуживание — фирма видит его в «Файловом менеджере»
+    // (доработки 20.11.2026, пакет 2, блок 5, пункт 1; п. К-25), карточка считает его так же.
+    const upload = async (
+      name: string,
+      size: number,
+      contractorId: string | null,
+      source: { kind: string; id: string | null } = { kind: 'manual', id: null },
+    ) => {
       const ticket = await ok(
         await call('POST', '/api/files/uploads', owner, {
-          source: { kind: 'manual', id: null },
+          source,
           name,
           size,
-          contractorId,
+          ...(source.kind === 'manual' ? { contractorId } : {}),
         }),
         (x) => FileUploadTicket.parse(x),
         201,
@@ -227,6 +234,10 @@ describe.skipIf(!databaseAvailable())('Админка на новой орган
     };
     await upload('Договор первого клиента.pdf', 30_000, c1);
     await upload('Общий приказ.pdf', 12_000, null);
+    await upload('Квитанция за обслуживание.pdf', 8_000, c1, {
+      kind: 'fee_payment',
+      id: feePayment.id,
+    });
     await ok(
       await call('POST', '/api/tasks', owner, {
         title: 'Сверить акты',
@@ -325,7 +336,8 @@ describe.skipIf(!databaseAvailable())('Админка на новой орган
       plateCounts,
     );
     expect(s.telegram).toBe(staff.items.filter((e) => e.telegram).length);
-    expect(usage).toEqual({ count: 2, bytes: 42_000 });
+    expect(usage).toEqual({ count: 3, bytes: 50_000 });
+    expect(card.files.byKind.map((k) => k.kind)).toContain('fee_payment');
 
     // Плата за обслуживание месяца карточки — сумма начислений и оплат по карточкам контрагентов фирмы.
     let charged = 0;

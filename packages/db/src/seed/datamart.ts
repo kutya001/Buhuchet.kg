@@ -1,4 +1,4 @@
-import { DM_MODULES, DM_PARAM_TYPES, type DmParamDef } from '@buhuchet/domain';
+import { DM_MODULES, DM_PARAM_TYPES, PERMISSIONS, type DmParamDef } from '@buhuchet/domain';
 import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../client';
@@ -86,6 +86,8 @@ export interface DmTemplateColumn {
 export const dmParamDefsOf = (params: readonly DmTemplateParam[]): DmParamDef[] =>
   params.map((p) => ({ k: p.code, type: p.type, req: p.required, def: p.default }));
 
+const PERMISSION_CODES = new Set<string>(PERMISSIONS.map(([id]) => id));
+
 /** Строка `dm_templates` и запрос готового шаблона из записи refDB.json. */
 export function dmBuiltinRows(section: unknown) {
   const list = z.array(Template).parse(section ?? []);
@@ -97,6 +99,8 @@ export function dmBuiltinRows(section: unknown) {
     if (!query) throw new Error(`dmTemplates: у готового шаблона «${t.code}» нет запроса продукта`);
     if ((t.kind === 'org') !== (t.mod !== null))
       throw new Error(`dmTemplates: «${t.code}» — модуль только у шаблона организаций`);
+    if (t.perm !== null && !PERMISSION_CODES.has(t.perm))
+      throw new Error(`dmTemplates: у «${t.code}» право «${t.perm}» не из каталога прав`);
     if (t.cpCol !== null && !t.cols.some((c) => c.k === t.cpCol && c.type === 'cp'))
       throw new Error(`dmTemplates: «${t.code}» — столбец «Контрагент» не из списка столбцов`);
     const params: DmTemplateParam[] = t.params.map((p) => ({

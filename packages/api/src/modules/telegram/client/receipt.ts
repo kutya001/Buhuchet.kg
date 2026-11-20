@@ -356,6 +356,11 @@ async function sendClientFile(
       tgChatId: o.chatId,
       comment: o.comment,
       receipt: o.receipt,
+      // Доступ организации могли закрыть, пока файл скачивался: проверка — и в транзакциях записи (п. К-24).
+      guard: async (tx) => {
+        if (await orgAccessClosed(tx, bishkekDate(deps.clock.now())))
+          throw new SentFilesRefused({ code: 'sent_off' });
+      },
       files: [{ name: o.name, bytes: loaded.body }],
     });
   } catch (err) {
@@ -608,12 +613,14 @@ async function freeFile(deps: ApiDeps, msg: BotIncoming, today: IsoDate): Promis
     return true;
   }
   const active: ActiveLink[] = [];
-  // Контрагенты организаций с закрытым доступом в «От какой компании?» не попадают (п. К-24).
+  // Контрагенты организаций с закрытым доступом в «От какой компании?» не попадают (п. К-24); о закрытом
+  // доступе бот говорит только действующему подключению — бывшему клиенту, как прежде, «не подключён».
   let closed = 0;
   for (const link of chats) {
-    const on = await withOrgContext(deps.db, { orgId: link.orgId, userId: null }, async (tx) =>
-      (await orgAccessClosed(tx, today)) ? ('closed' as const) : activeLink(tx, link),
-    );
+    const on = await withOrgContext(deps.db, { orgId: link.orgId, userId: null }, async (tx) => {
+      const found = await activeLink(tx, link);
+      return found && (await orgAccessClosed(tx, today)) ? ('closed' as const) : found;
+    });
     if (on === 'closed') closed += 1;
     else if (on) active.push({ ...link, sender: on.name });
   }
@@ -802,12 +809,12 @@ async function fileToChosen(
       if (row.answered || !parsed.success || parsed.data.fileTo.day !== today) {
         return { key: 'tgActStale' };
       }
-      if (await orgAccessClosed(tx, today)) return 'org_closed';
       const chat = chats.find((c) => c.linkId === row.linkId && c.orgId === orgId);
       const on = chat
         ? await activeLink(tx, { linkId: row.linkId, contractorId: row.contractorId })
         : null;
       if (!chat || !on) return { key: 'tgCpNotLinked' };
+      if (await orgAccessClosed(tx, today)) return 'org_closed';
       if (!(await clientFilesOn(tx, row.contractorId)))
         return refusalOf({ code: 'sent_off' }, false);
       if ((await sentFilesLastDay(tx, row.contractorId)) >= SENT_FILES_PER_DAY) {

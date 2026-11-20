@@ -846,7 +846,7 @@ describe.skipIf(!databaseAvailable())(
         // Чек ответом на просьбу — не принят.
         await sendFile(CLIENT_2, { name: 'Чек.pdf', replyTo: askId });
         expect(lastText(CLIENT_2)).toBe(closedText);
-        // Файл без просьбы из чата одной фирмы — не принят.
+        // Второй файл, пока просьба открыта, — тоже не принят.
         await sendFile(CLIENT_2, { name: 'Скан.pdf' });
         expect(lastText(CLIENT_2)).toBe(closedText);
         // Выбор в вопросе, заданном до закрытия, — «Доступ организации закрыт», файл никуда не ушёл.
@@ -869,6 +869,12 @@ describe.skipIf(!databaseAvailable())(
         expect(lastText(CLIENT_2)).toBe(text('tgCpReceiptOk'));
         expect((await sentFiles(cpA)).map((x) => x.name)).toEqual(['Скан.pdf']);
         expect(await claims(cpA)).toHaveLength(1);
+
+        // Просьба закрыта: файл из чата одной фирмы — без просьбы, и тоже «Доступ организации закрыт».
+        await subscription('2026-10-17');
+        await sendFile(CLIENT_2, { name: 'Ещё скан.pdf' });
+        expect(lastText(CLIENT_2)).toBe(closedText);
+        expect((await sentFiles(cpA)).map((x) => x.name)).toEqual(['Скан.pdf']);
       } finally {
         await f.t.admin.db
           .delete(schema.orgSubscriptions)

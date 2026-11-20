@@ -490,13 +490,6 @@ export async function clientPress(deps: ApiDeps, press: BotPress): Promise<boole
   const refuse = async (key: TelegramTemplateKey, values?: Readonly<Record<string, string>>) =>
     answer(await templateText(deps.db, key, values), true);
 
-  // Доступ организации закрыт по подписке: кнопки старых сообщений отвечают «Доступ организации
-  // закрыт» и ничего не делают (доработки 20.11.2026, блок 4, пункт 4; п. К-24).
-  if (await orgClosedNow(deps, target.orgId)) {
-    await answer((await serverTexts(deps))('cppage.tg.org_closed'), true);
-    return true;
-  }
-
   const parsed = parseBotPress(press.data);
   const action = parsed?.action;
   if (!parsed || !(CP_TG_CLIENT_ACTIONS as readonly string[]).includes(action ?? '')) {
@@ -505,6 +498,13 @@ export async function clientPress(deps: ApiDeps, press: BotPress): Promise<boole
   }
   if (!target.linked) {
     await refuse('tgCpNotLinked');
+    return true;
+  }
+  // Доступ организации закрыт по подписке: кнопки старых сообщений отвечают «Доступ организации
+  // закрыт» и ничего не делают (доработки 20.11.2026, блок 4, пункт 4; п. К-24) — только своему
+  // подключению: бывшему клиенту — как прежде «не подключён».
+  if (await orgClosedNow(deps, target.orgId)) {
+    await answer((await serverTexts(deps))('cppage.tg.org_closed'), true);
     return true;
   }
   // Каждое «Показать реквизиты» присылает новые сообщения: не больше стольких в час с подключения.

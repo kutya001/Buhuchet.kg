@@ -28,7 +28,13 @@ import {
 } from '@buhuchet/shared';
 import { and, eq, inArray } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../testing';
+import {
+  apiRequest,
+  createStaffFixture,
+  signIn,
+  TEST_PASSWORD,
+  withRoleScopes,
+} from '../../testing';
 
 type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
 
@@ -530,6 +536,39 @@ describe.skipIf(!databaseAvailable())(
       } finally {
         await features(f.a.orgId, ALL_ON);
       }
+      // Область «Свои» группы «Финансовые операции» у главного бухгалтера: операция чужого контрагента —
+      // файла не видно, хотя «Файловый менеджер» и «Контрагенты» у него — «Все».
+      await withRoleScopes(
+        f.t.admin.db,
+        employee('chief-a'),
+        { fin: 'own', cps: 'all', files: 'all' },
+        async () => {
+          expect(await inManager(chief)).toEqual([]);
+        },
+      );
+      expect(await inManager(chief)).toEqual([fileRow]);
+      // Отменённой операции файлов в списке нет — как у отменённых поступлений. Отмена — прямо в базе и
+      // на время проверки: операция нужна следующим тестам.
+      const cancelled = (on: boolean) =>
+        f.t.admin.db
+          .update(schema.moneyOperations)
+          .set(
+            on
+              ? {
+                  cancelledAt: new Date(),
+                  cancelledBy: f.people['chief-a']!.userId,
+                  cancelReason: 'Ошибка в сумме',
+                }
+              : { cancelledAt: null, cancelledBy: null, cancelReason: null },
+          )
+          .where(eq(schema.moneyOperations.id, saved.id));
+      await cancelled(true);
+      try {
+        expect(await inManager(owner)).toEqual([]);
+      } finally {
+        await cancelled(false);
+      }
+      expect(await inManager(owner)).toEqual([fileRow]);
     });
 
     it('«Списания в бонус» и «Закрыть <месяц>»: только прошлый, один раз; в закрытом месяце операции не изменить, не удалить, не перенести в него и оплату не отменить', async () => {

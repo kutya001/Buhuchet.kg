@@ -1030,9 +1030,29 @@ describe.skipIf(!databaseAvailable())(
       const g = await grant(owner, cpA, INN_A, 'org-a');
       const read = async (cookie?: string) =>
         f.app.request(`/api/page/org-a/${INN_A}`, { headers: cookie ? { cookie } : {} });
+      // Файл раздела «Файлы» страницы: до закрытия открывается, после — «Страница недоступна».
+      const fileId = randomUUID();
+      await f.t.admin.db.insert(schema.files).values({
+        id: fileId,
+        orgId: f.a.orgId,
+        sourceKind: 'manual',
+        sourceId: null,
+        contractorId: cpA,
+        name: 'Договор.pdf',
+        contentType: 'application/pdf',
+        sizeBytes: 2048,
+        storageKey: `org/${f.a.orgId}/files/${fileId}`,
+        createdBy: f.people['acc-a']!.userId,
+        state: 'ready',
+      });
+      const pageFile = () =>
+        f.app.request(`/api/page/org-a/${INN_A}/files/${fileId}`, {
+          headers: { cookie: g.cookie },
+        });
       try {
         await subscription('2026-12-31');
         expect((await publicPage('org-a', INN_A, g.cookie)).contractor.name).toBe(CP_A);
+        expect((await pageFile()).status).toBe(302);
         // Ссылка «Подключить Telegram», полученная до закрытия.
         const link = await pagePost(`/api/page/org-a/${INN_A}/telegram`, g.cookie);
         expect(link.status, await link.clone().text()).toBe(200);
@@ -1075,9 +1095,7 @@ describe.skipIf(!databaseAvailable())(
           await pagePost(`/api/page/org-a/${INN_A}/sent`, g.cookie, {
             files: [{ name: 'Акт.pdf', size: PDF.length }],
           }),
-          await f.app.request(`/api/page/org-a/${INN_A}/files/${randomUUID()}`, {
-            headers: { cookie: g.cookie },
-          }),
+          await pageFile(),
         ];
         for (const res of refused) {
           expect(res.status, await res.clone().text()).toBe(404);
@@ -1097,6 +1115,7 @@ describe.skipIf(!databaseAvailable())(
           .delete(schema.contractorTelegramLinks)
           .where(eq(schema.contractorTelegramLinks.chatId, NEWCHAT));
       } finally {
+        await f.t.admin.db.delete(schema.files).where(eq(schema.files.id, fileId));
         await f.t.admin.db
           .delete(schema.orgSubscriptions)
           .where(eq(schema.orgSubscriptions.orgId, f.a.orgId));

@@ -47,6 +47,7 @@ import {
 import {
   DEMO_ORG_ID,
   demoId,
+  dmBuiltinRows,
   dmParamDefsOf,
   seedAll,
   seedDmTemplates,
@@ -212,6 +213,17 @@ describe.skipIf(!databaseAvailable())('готовые шаблоны «Витр�
       holderKind: 'org',
       note: 'Чужое поступление',
     });
+    // Поступление только за обслуживание (сумма за налоги 0): шаблон его не показывает (п. В-19).
+    await db.admin.db.insert(moneyOperations).values({
+      orgId: org,
+      contractorId: bCp,
+      kind: 'in',
+      amount: 0,
+      total: 50_000,
+      opDate: '2026-10-11',
+      holderKind: 'org',
+      note: 'Только за обслуживание',
+    });
     const [project] = await db.admin.db
       .insert(projects)
       .values({
@@ -272,6 +284,18 @@ describe.skipIf(!databaseAvailable())('готовые шаблоны «Витр�
 
   afterAll(async () => {
     await db?.drop();
+  });
+
+  it('наполнение останавливается на ошибке refDB.json: код дважды, нет запроса продукта, право не из каталога, чужой столбец «Контрагент»', () => {
+    const list = refDB.dmTemplates as Record<string, unknown>[];
+    const debtors = list.find((t) => t.code === 'debtors')!;
+    expect(() => dmBuiltinRows([debtors, debtors])).toThrow(/дважды/);
+    expect(() => dmBuiltinRows([{ ...debtors, code: 'dm-unknown' }])).toThrow(
+      /нет запроса продукта/,
+    );
+    expect(() => dmBuiltinRows([{ ...debtors, perm: 'feeSee' }])).toThrow(/не из каталога прав/);
+    expect(() => dmBuiltinRows([{ ...debtors, cpCol: 'debt' }])).toThrow(/Контрагент/);
+    expect(dmBuiltinRows([debtors])[0]!.template.needPermission).toBe('fee');
   });
 
   it('наполнение: 12 шаблонов организаций и 6 Админки из refDB.json — опубликованы, готовые, для всех; повтор ничего не дублирует, --update возвращает запрос и описание, но не состояние', async () => {
@@ -558,7 +582,8 @@ describe.skipIf(!databaseAvailable())('готовые шаблоны «Витр�
   });
 
   it('«Плата за обслуживание» и «Выручка по контрагентам» за год — те же числа, что «Аналитика» на «Главной»', async () => {
-    const year = Number(TODAY.slice(0, 4));
+    // Год данных — постоянный: оплаты в демо — за 2025–2026, «сегодня» — по часам.
+    const year = 2026;
     const source = await inDemo((tx) =>
       revenueSource(tx, { scope: undefined, today: TODAY, from: year, to: year }),
     );
@@ -635,6 +660,7 @@ describe.skipIf(!databaseAvailable())('готовые шаблоны «Витр�
       r.objs.map((x) => [x.contractor_id, x.date, x.kind, num(x.amount)].join('|')).sort(),
     ).toEqual(
       own
+        .filter((x) => !(x.kind === 'in' && x.amount === 0))
         .map((x) =>
           [
             x.contractorId,
@@ -645,6 +671,13 @@ describe.skipIf(!databaseAvailable())('готовые шаблоны «Витр�
         )
         .sort(),
     );
+    // Поступление только за обслуживание видно только тому, кто видит плату (п. В-19): в шаблоне его нет.
+    const inB = await run(
+      'money-operations',
+      { date_from: '2026-10-01', date_to: '2026-10-31' },
+      b.orgId,
+    );
+    expect(inB.objs.map((x) => x.note)).toEqual(['Чужое поступление']);
   });
 
   it('«Проекты и разовые услуги»: проекты, начатые в периоде, и услуги с датой в нём — стоимость, оплачено, долг', async () => {
@@ -829,6 +862,8 @@ describe.skipIf(!databaseAvailable())('готовые шаблоны «Витр�
       .set({ status: 'blocked', blockedReason: 'Сквозная проверка витрины' })
       .where(eq(organizations.id, b.orgId));
     const orgs = await run('orgs');
+    // Телефона контрагента Б и владельца нет ни в каком виде.
+    expect(JSON.stringify(orgs.rows).replace(/\D/g, '')).not.toContain('555100999');
     expect(orgs.objs.find((x) => x.org === 'Организация Витрины Б')).toEqual({
       org: 'Организация Витрины Б',
       status: 'Заблокирована',
@@ -892,7 +927,7 @@ describe.skipIf(!databaseAvailable())('готовые шаблоны «Витр�
     expect(leads.objs.filter((x) => x.firm === 'ОсОО «Заявка Витрины»')).toEqual([
       { at: day, firm: 'ОсОО «Заявка Витрины»', size: 'До 20', status: 'Новая' },
     ]);
-    expect(JSON.stringify(leads.rows)).not.toContain('+996555777888');
+    expect(JSON.stringify(leads.rows)).not.toContain('555777888');
 
     const botDay = '2020-01-15';
     for (const status of ['sent', 'sent', 'error', 'pending'] as const)

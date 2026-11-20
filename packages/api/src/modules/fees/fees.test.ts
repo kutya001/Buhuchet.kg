@@ -18,7 +18,13 @@ import {
 } from '@buhuchet/shared';
 import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../testing';
+import {
+  apiRequest,
+  createStaffFixture,
+  signIn,
+  TEST_PASSWORD,
+  withRoleScopes,
+} from '../../testing';
 
 type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
 
@@ -457,6 +463,17 @@ describe.skipIf(!databaseAvailable())('Плата за обслуживание 
     } finally {
       await features(ALL_ON);
     }
+    // Область «Свои» группы «Контрагенты» у главного бухгалтера: файл оплаты чужого контрагента не виден,
+    // хотя «Файловый менеджер» у него — «Все».
+    await withRoleScopes(
+      f.t.admin.db,
+      employee('chief-a'),
+      { cps: 'own', files: 'all' },
+      async () => {
+        expect(await inManager(chief)).toEqual([]);
+      },
+    );
+    expect(await inManager(chief)).toEqual([fileRow]);
   });
 
   it('поступление с частью за обслуживание: без права на плату — только часть на налоги, поступления только за обслуживание не видно (п. В-19)', async () => {

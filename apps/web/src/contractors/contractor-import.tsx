@@ -28,7 +28,7 @@ import {
   TOUCH_AREA,
   useToast,
 } from '@buhuchet/ui';
-import { queryOptions, useQueryClient } from '@tanstack/react-query';
+import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query';
 import { memo, useCallback, useId, useState, type ReactNode } from 'react';
 import { ApiFailure, api, apiFailure, callApi } from '../api-client';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
@@ -36,7 +36,7 @@ import { useErrorText, useT } from '../l10n/provider';
 import { exportFailureText, saveFile } from '../lists/export';
 import { useShell } from '../shell/context';
 import { useContractorsRefresh } from './contractor-data';
-import { SeatGrowButton, useSeatGuard } from './seat-dialog';
+import { SeatGrowButton, seatsQuery, useSeatGuard } from './seat-dialog';
 
 /*
  * Загрузка контрагентов вставкой из Excel (задача 2.16; ТЗ «Загрузка текущих контрагентов при переходе на
@@ -83,6 +83,16 @@ export function useContractorImport(): { open: () => void; dialog: ReactNode } {
   return { open, dialog };
 }
 
+const FREE_MARK = '\uE000';
+const NEW_MARK = '\uE001';
+
+/** Текст словаря с числами жирным (прототип `<b>` в `#im-seat`): метки в тексте заменяются числами. */
+function boldNumbers(text: string, values: Readonly<Record<string, string>>): ReactNode[] {
+  return text
+    .split(/([\uE000\uE001])/)
+    .map((part, i) => (part in values ? <b key={i}>{values[part]}</b> : part));
+}
+
 /** Ячейка строки с новым значением; недостающие слева досоздаются пустыми. */
 function withCell(cells: readonly string[], index: number, value: string): string[] {
   const next = [...cells];
@@ -105,14 +115,18 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
   const [table, setTable] = useState<ImportTable | null>(null);
   const [busy, setBusy] = useState(false);
   const [template, setTemplate] = useState<DialogSlot<ContractorImportTemplate> | null>(null);
-  // Места в пакете из последней проверки (доработки 20.11.2026, блок 3, пункт 1; прототип v152 `#im-seat`).
+  // Места в пакете (доработки 20.11.2026, блок 3, пункт 1; прототип v152 `#im-seat`): строка видна, как
+  // только показана таблица («новых: 0» до проверки), числа — из последней проверки или загрузки, а до
+  // них — из «Мест в пакете».
   const [seats, setSeats] = useState<ContractorSeats | null>(null);
+  const seatsNow = useQuery({ ...seatsQuery, enabled: !!table && !seats });
   const seat = useSeatGuard();
 
   // Готово к загрузке — только когда проверены все строки (прототип: `rows.every(r => r.errs)`).
   const checked = !!table && table.rows.every((r) => r.check);
   const ready = checked ? table.rows.filter((r) => !r.check!.errors.length).length : 0;
-  const free = checked ? seats?.seats?.free : undefined;
+  const seatsShown = seats ?? seatsNow.data ?? null;
+  const free = table ? seatsShown?.seats?.free : undefined;
   const seatOver = free !== undefined && ready > free;
 
   const parse = () => {
@@ -398,12 +412,15 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
             <Note tone={seatOver ? 'bad' : 'info'} center>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="min-w-0 flex-1">
-                  {t('cp.seat.import', { free: formatCount(free), n: formatCount(ready) })}
+                  {boldNumbers(t('cp.seat.import', { free: FREE_MARK, n: NEW_MARK }), {
+                    [FREE_MARK]: formatCount(free),
+                    [NEW_MARK]: formatCount(ready),
+                  })}
                   {seatOver
-                    ? ` ${t(seats?.owner ? 'cp.seat.import_over_owner' : 'cp.seat.import_over')}`
+                    ? ` ${t(seatsShown?.owner ? 'cp.seat.import_over_owner' : 'cp.seat.import_over')}`
                     : null}
                 </span>
-                {seatOver && seats?.owner ? (
+                {seatOver && seatsShown?.owner ? (
                   <SeatGrowButton className={`${buttonClass('default', 'sm')} ${TOUCH_AREA}`} />
                 ) : null}
               </div>

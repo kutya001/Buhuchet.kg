@@ -1,7 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { search } from './admin';
-import { DEMO_PASSWORD, newOrgOwner, showStats, signIn } from './helpers';
+import { DEMO_PASSWORD, newOrgOwner, showStats, signIn, stillElement } from './helpers';
+import { newContractor } from './reports';
 import { tinyPdf, tinyPng } from './view-files';
 
 // «Файловый менеджер» (задача 2.29, #85): все файлы организации с источником, ручная загрузка с
@@ -288,5 +289,62 @@ test.describe('Этап 2: Файловый менеджер', () => {
     await expect(box).toContainText('Хранилище файлов');
     await expect(box).toContainText('Занято 0 КБ · файлов: 0');
     await expect(box).toContainText('Ограничение на один файл — 20 МБ');
+  });
+});
+
+/** Сегодня по Бишкеку (UTC+6), `YYYY-MM-DD`: дата оплаты не позже сегодняшней. */
+const bishkekToday = () => new Date(Date.now() + 6 * 3_600_000).toISOString().slice(0, 10);
+
+const reEsc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** Текст с суммой: на экране пробелы в числе неразрывные — в сравнении любой пробел. */
+const loose = (value: string) => new RegExp(reEsc(value).replace(/ /g, '\\s'));
+
+test.describe('Доработки 20.11, блок 5: файлы оплат в «Файловом менеджере»', () => {
+  test('(приёмка 20.11, блок 5, пункт 1) скрин к «Принять оплату за обслуживание» — в «Файловом менеджере» с источником «Оплата за обслуживание 5 000 сом от …»; «Перейти к источнику» открывает окно самой оплаты', async ({
+    page,
+    baseURL,
+    isMobile,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    const tag = uniqueTag();
+    await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
+    // Свой контрагент со ставкой 10 000 сом и своя оплата 5 000 сом за текущий месяц.
+    const cp = await newContractor(page.request, origin, { name: `ОсОО «Квитанция ${tag}»` });
+    const form = (await (
+      await page.request.get(`/api/contractors/${cp.id}/fee-payment-form`)
+    ).json()) as { to: { key: string }[] };
+    const date = bishkekToday();
+    const paid = await page.request.post(`/api/contractors/${cp.id}/fee-payments`, {
+      headers: { origin },
+      data: {
+        amount: 500_000,
+        date,
+        to: form.to[0]!.key,
+        allocation: [{ month: date.slice(0, 7), amount: 500_000 }],
+        files: 1,
+      },
+    });
+    expect(paid.status(), await paid.text()).toBe(201);
+    const feeId = ((await paid.json()) as { id: string }).id;
+    const fileName = `квитанция-${tag}.pdf`;
+    const file = await apiUpload(page.request, origin, {
+      name: fileName,
+      source: { kind: 'fee_payment', id: feeId },
+    });
+
+    await openManager(page, isMobile, tag);
+    const row = fileRow(page, file);
+    await expect(row).toContainText(
+      loose(`Оплата за обслуживание 5 000 сом от ${date.split('-').reverse().join('.')}`),
+    );
+    await row.getByText(fileName, { exact: true }).click();
+    const card = page.getByRole('dialog', { name: fileName });
+    await expect(card).toBeVisible();
+    // Кнопка стоит под просмотром: пока файл грузится, она уезжает вниз (docs/typical-mistakes.md № 34).
+    await expect(card.locator('[data-fv-state="loading"]')).toHaveCount(0);
+    const go = card.getByRole('button', { name: 'Перейти к источнику' });
+    await stillElement(go);
+    await go.click();
+    await expect(page.locator(`[data-fee-payment-window="${feeId}"]`)).toBeVisible();
   });
 });

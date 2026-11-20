@@ -30,9 +30,9 @@ describe.skipIf(!databaseAvailable())('Контрагенты: места в п�
   /** Что покажет экран: текст словаря по коду ошибки с подстановками из подробностей. */
   const screen = ({ code, details }: { code: string; details?: unknown }) =>
     formatText(UI_TEXTS[`err.${code}` as UiTextKey].ru, details as Record<string, string | number>);
-  const body = () => ({
+  const body = (o: { inn?: string; resp?: string } = {}) => ({
     name: `ОсОО «Место ${innSeq}»`,
-    inn: nextInn(),
+    inn: o.inn ?? nextInn(),
     phone: '+996505890076',
     kind: 'regular',
     formCode: 'ФС-01',
@@ -41,9 +41,10 @@ describe.skipIf(!databaseAvailable())('Контрагенты: места в п�
     gkedExtra: [],
     bases: [],
     startDate: '2026-10-01',
-    responsibleEmployeeId: f.people['acc-a']!.employeeId,
+    responsibleEmployeeId: f.people[o.resp ?? 'acc-a']!.employeeId,
   });
-  const create = (cookie: string) => apiRequest(f.app, 'POST', '/api/contractors', cookie, body());
+  const create = (cookie: string, o?: { inn?: string; resp?: string }) =>
+    apiRequest(f.app, 'POST', '/api/contractors', cookie, body(o));
   const seats = async (cookie: string) => {
     const res = await apiRequest(f.app, 'GET', '/api/contractors/seats', cookie);
     expect(res.status, await res.clone().text()).toBe(200);
@@ -143,6 +144,59 @@ describe.skipIf(!databaseAvailable())('Контрагенты: места в п�
     expect(byAcc.code).toBe('no_seats');
     expect(NoSeatsDetails.parse(byAcc.details).owner).toBe(false);
     expect(await active()).toBe(limit);
+  });
+
+  it('чужая организация: полный пакет А организации Б не виден и не мешает; без права «Просматривать контрагентов» — 403', async () => {
+    await pack(0);
+    expect(await seats(ownerB)).toEqual({ seats: null, owner: true });
+    const inB = await create(ownerB, { resp: 'acc-b' });
+    expect(inB.status, await inB.clone().text()).toBe(201);
+    expect((await failure(await create(owner))).code).toBe('no_seats');
+
+    const [senior] = await f.t.admin.db
+      .select({ roleId: schema.employees.roleId })
+      .from(schema.employees)
+      .where(eq(schema.employees.id, f.people['senior-a']!.employeeId));
+    const cpView = and(
+      eq(schema.rolePermissions.roleId, senior!.roleId),
+      eq(schema.rolePermissions.permissionId, 'cpView'),
+    );
+    await f.t.admin.db.delete(schema.rolePermissions).where(cpView);
+    try {
+      const cookie = await signIn(f.app, 'senior-a', TEST_PASSWORD);
+      expect((await apiRequest(f.app, 'GET', '/api/contractors/seats', cookie)).status).toBe(403);
+    } finally {
+      await f.t.admin.db
+        .insert(schema.rolePermissions)
+        .values({ orgId: f.a.orgId, roleId: senior!.roleId, permissionId: 'cpView' });
+    }
+  });
+
+  it('два «Новый контрагент» одновременно на последнее место: создаётся ровно один', async () => {
+    const limit = await pack(1);
+    const both = await Promise.all([create(owner), create(owner)]);
+    expect(both.map((r) => r.status).sort()).toEqual([201, 409]);
+    const refused = both.find((r) => r.status === 409)!;
+    expect((await failure(refused)).code).toBe('no_seats');
+    expect(await active()).toBe(limit);
+  });
+
+  it('пакет полон, ИНН — у контрагента в архиве: отказ «такой ИНН уже есть (в архиве)», а не «нет мест»', async () => {
+    await pack(1);
+    const inn = nextInn();
+    const first = await create(owner, { inn });
+    expect(first.status).toBe(201);
+    const cp = Contractor.parse(await first.json());
+    const archived = await apiRequest(f.app, 'POST', '/api/contractors/archive', owner, {
+      ids: [cp.id],
+    });
+    expect(archived.status).toBe(200);
+    await pack(0);
+    const again = await create(owner, { inn });
+    expect(again.status).toBe(409);
+    const err = await failure(again);
+    expect(err.code).toBe('inn_duplicate');
+    expect(err.details).toMatchObject({ archived: true, variant: 'archived' });
   });
 
   it('«В архиве» освобождает место; «Вернуть из архива» при полном пакете — 409, контрагент в архиве', async () => {

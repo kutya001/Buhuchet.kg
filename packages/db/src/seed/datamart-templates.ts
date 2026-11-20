@@ -216,13 +216,15 @@ GROUP BY c.id, c.name, e.short_name
 ORDER BY debt DESC, c.name`,
 
   // Прототип: `DM_RUN['money-operations']` — действующие операции с датой в периоде; сумма без части за
-  // обслуживание (она — в «Плате за обслуживание»).
+  // обслуживание (она — в «Плате за обслуживание»). Поступления только за обслуживание (сумма 0) журнал
+  // показывает только тому, кто видит плату (п. В-19), а право шаблона — одно: их здесь нет.
   'money-operations': `SELECT o.contractor_id, o.op_date AS date, c.name AS cp,
        coalesce(k.text, o.kind) AS kind, o.amount, o.note
 FROM money_operations o
 LEFT JOIN contractors c ON c.id = o.contractor_id
 LEFT JOIN ui_texts k ON k.lang = 'ru' AND k.key = 'money.op.' || o.kind
 WHERE o.cancelled_at IS NULL
+  AND NOT (o.kind = 'in' AND o.amount = 0)
   AND o.op_date BETWEEN :date_from AND :date_to
 ORDER BY o.op_date, o.created_at, o.id`,
 

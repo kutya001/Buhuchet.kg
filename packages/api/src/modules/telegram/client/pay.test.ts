@@ -1283,6 +1283,32 @@ describe.skipIf(!databaseAvailable())(
       ]);
     });
 
+    it('«Ответить» при закрытом доступе организации (доработки 20.11.2026, блок 4, пункт 4): ответ клиенту не уходит, истории нет, просьба ждёт; после оплаты — уходит', async () => {
+      const q = await askQuestion('Можно позже?');
+      const before = sentTo(CLIENT_1).length;
+      const subscription = (paidUntil: string) =>
+        f.t.admin.db
+          .insert(schema.orgSubscriptions)
+          .values({ orgId: f.a.orgId, planId: 'm1', seats: 1000, paidUntil })
+          .onConflictDoUpdate({ target: schema.orgSubscriptions.orgId, set: { paidUntil } });
+      try {
+        // «Оплачено до» прошло (сегодня 18.10.2026).
+        await subscription('2026-10-17');
+        await toBot('Да, до конца месяца', CHAT_ACC, 'acc_a', q.staffMessage);
+        expect(sentTo(CHAT_ACC).at(-1)!.text).toBe(UI_TEXTS['cppage.tg.org_closed'].ru);
+        expect(sentTo(CLIENT_1)).toHaveLength(before);
+        expect(await answers()).toEqual([]);
+        await subscription('2026-12-31');
+        await toBot('Да, до конца месяца', CHAT_ACC, 'acc_a', q.staffMessage);
+        expect(sentTo(CLIENT_1)).toHaveLength(before + 1);
+        expect(await answers()).toHaveLength(1);
+      } finally {
+        await f.t.admin.db
+          .delete(schema.orgSubscriptions)
+          .where(eq(schema.orgSubscriptions.orgId, f.a.orgId));
+      }
+    });
+
     it('само «К оплате» в отмеченный день до срока: только при включённой настройке, одно на месяц, чат и день', async () => {
       // Настройка выключена — ничего не уходит.
       await runJob();
@@ -1835,13 +1861,14 @@ describe.skipIf(!databaseAvailable())(
             .where(eq(schema.contractorTelegramLinks.chatId, CLIENT_1));
           expect(link!.noDebt).toBe(false);
           expect(await debtHistory(cpA)).toEqual([]);
-          // «Код от страницы» — без кода.
+          // «Код от страницы» — без кода: ответ на «/code» — только «доступ организации закрыт».
+          const before = sentTo(CLIENT_1).length;
           await toBot('/code', CLIENT_1);
-          const texts = sentTo(CLIENT_1).map((m) => m.text);
-          expect(texts).toContain(
-            formatText(UI_TEXTS['cppage.tg.org_closed_code'].ru, { contractor: CP_A }),
-          );
-          expect(texts.join('\n')).not.toMatch(/\d{3} \d{3}/);
+          expect(
+            sentTo(CLIENT_1)
+              .slice(before)
+              .map((m) => m.text),
+          ).toEqual([formatText(UI_TEXTS['cppage.tg.org_closed_code'].ru, { contractor: CP_A })]);
           // Оплатили — напоминание снова уходит (пропущенное задним числом — нет: неделя та же).
           await subscription('2026-12-31');
           await wipe();
