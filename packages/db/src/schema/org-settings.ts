@@ -65,6 +65,12 @@ export const orgSettings = pgTable(
       .array()
       .notNull()
       .default(sql`'{pay,reports,files,money,fee,kpi,contacts,tg}'`),
+    /**
+     * «Внешний доступ по API» в «Моя организация» (доработки 20.11.2026: Витрина данных, блок 5,
+     * пункт 9; миграция 0165): сначала выключен у всех, включает владелец; выключен — токены Витрины не
+     * отвечают и не выпускаются.
+     */
+    extApi: boolean('ext_api').notNull().default(false),
     createdBy: uuid('created_by').references(() => users.id),
     updatedBy: uuid('updated_by').references(() => users.id),
     ...timestamps(),

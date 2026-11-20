@@ -8,6 +8,8 @@
 export const HISTORY_ENTITIES = [
   'organization',
   'org_settings',
+  // Подписка организации (доработки 20.11.2026, блоки 4–6): изменения администратора, проверка чека.
+  'subscription',
   'user',
   'employee',
   'role',
