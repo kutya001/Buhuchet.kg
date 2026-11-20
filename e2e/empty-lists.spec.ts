@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { orgWithTypes } from './orgs';
+import { newContractor } from './reports';
 
 // Пустой список контрагентов (доработки 20.11.2026, пакет 2, этап Б, блок 2, «Приёмка на пустой
 // организации»; прототип ui/empty.js `firstEmpty`, ui/grid.js `emptyadd`, modules/contractors.js `empty`):
@@ -34,27 +35,9 @@ test.describe('Доработки 20.11: пустые списки контра�
       'Загрузить из Excel',
     ]);
 
-    // Один контрагент — и тот в архиве: в организации контрагенты уже есть.
-    const staff = (await (await page.request.get('/api/staff?size=all')).json()) as {
-      items: { id: string }[];
-    };
-    const inn = `2${String(Date.now()).slice(-9)}${String(Math.floor(Math.random() * 1e4)).padStart(4, '0')}`;
-    const created = await page.request.post('/api/contractors', {
-      headers: { origin },
-      data: {
-        name: `ИП Архивный ${inn}`,
-        inn,
-        phone: '+996505890076',
-        kind: 'regular',
-        formCode: 'ФС-01',
-        regimeCode: 'РЕЖ-01',
-        gked: '46.34.0',
-        startDate: `${new Date().toISOString().slice(0, 7)}-01`,
-        responsibleEmployeeId: staff.items[0]!.id,
-      },
-    });
-    expect(created.status(), await created.text()).toBe(201);
-    const { id } = (await created.json()) as { id: string };
+    // Один контрагент — и тот в архиве: в организации контрагенты уже есть. Плата включена — ставка
+    // обязательна («0 — допустимо»): ноль, чтобы долга не было.
+    const { id } = await newContractor(page.request, origin, { tariffAmount: 0 });
     const archived = await page.request.post('/api/contractors/archive', {
       headers: { origin },
       data: { ids: [id] },
