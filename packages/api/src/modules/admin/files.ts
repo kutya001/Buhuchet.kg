@@ -213,7 +213,7 @@ export function storageFilesHandler(deps: ApiDeps): RouteHandler<typeof storageF
     const params = c.req.valid('query');
     const query = listQueryOf(params);
     const t = await serverTexts(deps);
-    const now = deps.clock.now();
+    const now = new Date(); // срок стирания и «старше суток» — по часам базы, не `deps.clock`
     const page = await withUserContext(deps.db, adminOf(c), (tx) =>
       listAdminStorageFilesPage(tx, query, t, params.org),
     );
@@ -402,7 +402,7 @@ export function trashListHandler(deps: ApiDeps): RouteHandler<typeof trashListRo
     c.header('Cache-Control', 'no-store');
     const { org } = c.req.valid('query');
     const t = await serverTexts(deps);
-    const now = deps.clock.now();
+    const now = new Date(); // срок стирания и «старше суток» — по часам базы, не `deps.clock`
     const { rows, total } = await withUserContext(deps.db, adminOf(c), (tx) =>
       adminFileTrash(tx, org ? { orgId: org } : {}),
     );
@@ -421,10 +421,10 @@ export const trashRestoreRoute = createRoute({
     200: { description: 'Файл снова там, где был', content: json(AdminTrashRestore) },
     400: { description: 'Номер неверного вида', content: error },
     ...denied,
-    404: { description: 'Строки «Ждут удаления» нет', content: error },
+    404: { description: 'Файла организации уже нет', content: error },
     409: {
       description:
-        'Вернуть нельзя: прежняя версия после замены (`file_back_rep`), непринятый от контрагента (`file_back_auto`), уже стёрт или возвращён (`file_back_gone`), запись файла удалена (`file_back_record`)',
+        'Вернуть нельзя: строки «Ждут удаления» нет — стёрт или возвращён (`file_back_gone`), прежняя версия после замены (`file_back_rep`), непринятый от контрагента (`file_back_auto`), уже стёрт или возвращён (`file_back_gone`), запись файла удалена (`file_back_record`)',
       content: error,
     },
   },
@@ -466,7 +466,8 @@ export function trashRestoreHandler(deps: ApiDeps): RouteHandler<typeof trashRes
     const { id } = c.req.valid('param');
     const userId = adminOf(c);
     const row = await withUserContext(deps.db, userId, (tx) => adminFileTrashRow(tx, id));
-    if (!row) apiFail(404, 'not_found', 'Файл не найден');
+    // В «Ждут удаления» только живые строки: нет строки — её стёрли или вернули (окно было открыто).
+    if (!row) back('file_back_gone');
     if (row!.why === 'rep') back('file_back_rep');
     if (row!.why === 'auto') back('file_back_auto');
     if (row!.why === 'extra') {
@@ -489,7 +490,9 @@ export function trashRestoreHandler(deps: ApiDeps): RouteHandler<typeof trashRes
       const trash = await fileTrashForRestore(tx, id);
       if (!trash) apiFail(404, 'not_found', 'Файл не найден');
       if (!trash!.live || !trash!.fileId) back('file_back_gone');
-      const file = await getFile(tx, trash!.fileId!, { lock: true });
+      // Без блокировки: удалённый файл роль приложения не меняет (и FOR UPDATE его не видит), строку
+      // «Ждут удаления» и файл под блокировкой сверяет и меняет функция базы.
+      const file = await getFile(tx, trash!.fileId!);
       if (!file || file.state !== 'deleted') back('file_back_gone');
       // Контрагент файла удалён (его номер у файла и строки стал пустым) или файл уже не его — вернуть
       // некуда: общим файлом организации он не возвращается.
@@ -584,7 +587,7 @@ export function storageCheckHandler(deps: ApiDeps): RouteHandler<typeof storageC
   return async (c) => {
     c.header('Cache-Control', 'no-store');
     const t = await serverTexts(deps);
-    const now = deps.clock.now();
+    const now = new Date(); // срок стирания и «старше суток» — по часам базы, не `deps.clock`
     const { lists, checkedAt } = await withUserContext(deps.db, adminOf(c), (tx) =>
       adminStorageCheck(tx),
     );
