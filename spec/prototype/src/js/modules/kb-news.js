@@ -77,7 +77,8 @@ function newsOrder(l){const v=l.filter(n=>n.ver).sort((a,b)=>newsVerCmp(a,b)||ne
   v.forEach(n=>{while(i<o.length&&o[i].date>=n.date)out.push(o[i++]);out.push(n)});return out.concat(o.slice(i))}
 /* Новость в ленте и в окне «Что нового» — строкой-заголовком: главный смысл в заголовке, подробности раскрываются по нажатию
    (решение заказчика 13.11.2026). Раскрыта сама только самая новая; «версия N» в строке — только если номера нет в самом заголовке */
-const newsVerInT=n=>new RegExp('(^|\\D)'+String(n.ver).replace(/\./g,'\\.')+'(\\D|$)').test(n.t);
+// Номер версии в заголовке — отдельным числом (не частью другого числа); без регулярного выражения из данных (замечание CodeQL, 20.11.2026)
+const newsVerInT=n=>{const v=String(n.ver),t=String(n.t||''),dg=c=>c>='0'&&c<='9';if(!v)return false;for(let i=t.indexOf(v);i>=0;i=t.indexOf(v,i+1)){if(!dg(t[i-1]||'')&&!dg(t[i+v.length]||''))return true}return false};
 const newsRow=(n,open,fresh)=>`<div class="nw-it${open?' open':''}${fresh?' unread':''}" data-nwit="${n.id}"><button type="button" class="nw-h" data-news="${n.id}" aria-expanded="${!!open}">${ic(open?'down':'right','sm')}<b class="nw-t">${esc(n.t)}</b><span class="nw-m">${fresh?'<span class="pill sm red">Новое</span>':''}${n.pin?`<span class="tag">${ic('star','sm')}Закреплено</span>`:''}${newsPill(n.type)}<span class="muted">${fmtD(n.date)}${n.ver&&!newsVerInT(n)?' · версия '+esc(n.ver):''}</span></span></button>${open?`<div class="nw-b"><div class="kb-art md">${mdHtml(n.md)}</div>${newsAdmHtml(n)}${n.link&&newsLinkOk(n.link)?`<button class="btn sm" data-nwmore="${n.id}">${newsLinkBtn(n.link)}</button>`:''}</div>`:''}</div>`;
 function whatsNew(how){if(navigator.webdriver&&!store.get('wntest',false))return;if(DEMO.on)return;// в демо-версии окно не открывается само: новости — во вкладке «Новости»
   if(how==='open'){let seen=null;try{seen=sessionStorage.getItem(BU_P+'wn.'+S.me)}catch(e){}if(seen)return}
