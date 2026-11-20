@@ -10,6 +10,9 @@ export const HISTORY_ENTITIES = [
   'org_settings',
   // Подписка организации (доработки 20.11.2026, блоки 4–6): изменения администратора, проверка чека.
   'subscription',
+  // Виды подписок и «Цены и реквизиты» платформы (блок 6, пункты 5–6) — история платформы.
+  'subscription_plan',
+  'subscription_settings',
   'user',
   'employee',
   'role',
@@ -131,6 +134,10 @@ export const HISTORY_ACTIONS = [
   // Справочники платформы: загрузка из Excel и её откат («Загрузки»).
   'import',
   'rollback',
+  // Подписка организации (доработки 20.11.2026, блок 6, пункт 3): чек подтверждён или отклонён
+  // администратором платформы.
+  'sub_paid',
+  'sub_rejected',
 ] as const;
 export type HistoryAction = (typeof HISTORY_ACTIONS)[number];
 
