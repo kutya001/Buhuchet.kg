@@ -1,4 +1,4 @@
-import { SUBSCRIPTION_GB_MB, SUBSCRIPTION_MB_BYTES } from './subscriptions';
+import { subscriptionGbText } from './notify';
 
 /*
  * Память заполнена — новые файлы не загружаются (доработки 20.11.2026, блок 2, пункт 5; прототип v155
@@ -19,16 +19,6 @@ export function memoryFull(u: MemoryUsage | null): boolean {
   return u.bytesUsed >= u.bytesLimit;
 }
 
-/**
- * ГБ одним знаком после запятой, как «9,4 из 14 ГБ» (прототип `subGb`; 1 ГБ = 1 000 МБ). Та же функция —
- * `subscriptionGbText` потока Т: при общей сборке этапа 1 эта заменяется ею.
- */
-function gbText(bytes: number): string {
-  const tenths = Math.round(bytes / SUBSCRIPTION_MB_BYTES / (SUBSCRIPTION_GB_MB / 10));
-  const rest = tenths % 10;
-  return rest ? `${Math.floor(tenths / 10)},${rest}` : String(Math.floor(tenths / 10));
-}
-
 /** Отказ сотруднику (сайт, бот): тексты прототипа `subMemFullDlg`, `{used}` и `{limit}` — ГБ. */
 export const MEMORY_FULL_MESSAGE =
   'Память организации заполнена: занято {used} из {limit} ГБ. Купите память или удалите лишние файлы.';
@@ -45,8 +35,8 @@ export function memoryFullParams(u: { bytesUsed: number; bytesLimit: number }): 
   limitBytes: number;
 } {
   return {
-    used: gbText(u.bytesUsed),
-    limit: gbText(u.bytesLimit),
+    used: subscriptionGbText(u.bytesUsed),
+    limit: subscriptionGbText(u.bytesLimit),
     usedBytes: u.bytesUsed,
     limitBytes: u.bytesLimit,
   };

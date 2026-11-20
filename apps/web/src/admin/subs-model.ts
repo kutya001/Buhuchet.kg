@@ -7,9 +7,7 @@ import {
   formatSomWithUnit,
   matchesSearch,
   pageLimit,
-  pluralForm,
-  SUBSCRIPTION_GB_MB,
-  SUBSCRIPTION_MB_BYTES,
+  subscriptionGbText,
   type IsoDate,
   type SubscriptionPaymentKind,
   type SubscriptionPaymentStatus,
@@ -35,15 +33,8 @@ type Payment = AdminSubscriptionPayment;
 type HistoryEntry = AdminSubscriptionCard['history'][number];
 type CalcLine = Payment['lines'][number];
 
-/**
- * ГБ одним знаком после запятой, как «9,4 из 14 ГБ» (прототип `subGb`; 1 ГБ = 1 000 МБ). При общей
- * сборке этапа 1 (П15) — `subscriptionGbText` потока Т.
- */
-export function subGb(bytes: number): string {
-  const tenths = Math.round(bytes / SUBSCRIPTION_MB_BYTES / (SUBSCRIPTION_GB_MB / 10));
-  const rest = tenths % 10;
-  return rest ? `${Math.floor(tenths / 10)},${rest}` : String(Math.floor(tenths / 10));
-}
+/** ГБ одним знаком после запятой, как «9,4 из 14 ГБ» (прототип `subGb`): правило домена. */
+export const subGb = subscriptionGbText;
 
 /**
  * Отказ сервера по полю формы подписки (`sub_*`, `details.field`): ошибка — под этим полем, если блок
@@ -62,9 +53,6 @@ export function subFieldError(
 export const subGbLimit = (bytes: number | null) => (bytes === null ? '∞' : subGb(bytes));
 
 const date = (d: string) => formatDateRu(d as IsoDate);
-
-/** «3 дня», «11 дней» (прототип `plural(n,'день','дня','дней')`). */
-export const subDaysText = (t: Translate, n: number) => `${n} ${t(`subs.day.${pluralForm(n)}`)}`;
 
 /** Статус подписки словами. */
 export const subStatusText = (t: Translate, st: SubscriptionStatus) => t(`subs.st.${st}`);
@@ -155,46 +143,6 @@ export function subPayWho(
   if (who.name) return who.name;
   if (who.admin) return t('subs.who.admin');
   return t('subs.who.system');
-}
-
-/** «Скидки» окна (прототип `subSummaryHtml`): за срок, дополнительная, первый месяц. */
-export function subDiscountsText(t: Translate, card: AdminSubscriptionCard): string {
-  const s = card.sub;
-  if (!s) return '—';
-  return [
-    s.planDiscountPct
-      ? t('subs.sum.disc_term', { n: s.planDiscountPct })
-      : t('subs.sum.disc_term_no'),
-    s.extraDiscountOn && s.extraDiscountPct
-      ? t('subs.sum.disc_extra', { n: s.extraDiscountPct })
-      : '',
-    s.firstPaid ? '' : t('subs.sum.disc_first', { n: card.firstMonthPct }),
-  ]
-    .filter(Boolean)
-    .join(' · ');
-}
-
-/** «Оплачено до»: «20.12.2026 · осталось 30 дней» или «просрочено 3 дня». */
-export function subPaidToText(t: Translate, paidUntil: string | null, today: string): string {
-  if (!paidUntil) return '—';
-  const left = Math.round(
-    (Date.parse(`${paidUntil}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000,
-  );
-  return left >= 0
-    ? t('subs.sum.left', { date: date(paidUntil), days: subDaysText(t, left) })
-    : t('subs.sum.over', { date: date(paidUntil), days: subDaysText(t, -left) });
-}
-
-/** Цвет полосы занятого: до 80 % — зелёный, до 100 % — жёлтый, дальше — красный (прототип `subBar`). */
-export function subBar(
-  used: number,
-  limit: number | null,
-): { pct: number; tone: 'ok' | 'warn' | 'bad' } {
-  const pct =
-    limit && Number.isFinite(limit) && limit > 0
-      ? Math.min(100, Math.round((used / limit) * 100))
-      : 0;
-  return { pct, tone: pct >= 100 ? 'bad' : pct >= 80 ? 'warn' : 'ok' };
 }
 
 /** Цвета плашек (прототип `subOrgsPart`): есть такие — свой цвет, нет — зелёный. */

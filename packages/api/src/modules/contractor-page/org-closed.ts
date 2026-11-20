@@ -1,13 +1,13 @@
 import {
   contractorPageState,
-  orgUsage,
-  withOrgContext,
+  orgSubscriptionClosed,
   type ContractorPageState,
   type Db,
   type Tx,
 } from '@buhuchet/db';
-import { bishkekDate, type IsoDate } from '@buhuchet/domain';
+import type { IsoDate } from '@buhuchet/domain';
 import type { ApiDeps } from '../../deps';
+import { orgClosedNow } from '../../subscription-access';
 
 /*
  * Доступ организации закрыт по подписке (доработки 20.11.2026, блок 4, пункт 4; этап 1, П9; прототип
@@ -19,22 +19,15 @@ import type { ApiDeps } from '../../deps';
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#К-24
 
-/** Закрыт ли доступ организации контекста `tx` (`withOrgContext`) на день `today`. */
-export async function orgAccessClosed(tx: Tx, today: IsoDate): Promise<boolean> {
-  // Организация без подписки закрыта так же, как с просроченной (блок 4, пункт 5): как вход сотрудников.
-  const usage = await orgUsage(tx, today, { bytes: false });
-  return usage?.closed ?? false;
-}
+/**
+ * Закрыт ли доступ организации контекста `tx` (`withOrgContext`) на день `today`: та же проверка, что у
+ * входа сотрудников (`orgSubscriptionClosed`); без подписки — закрыт, как с просроченной (блок 4, пункт 5).
+ */
+export const orgAccessClosed = (tx: Tx, today: IsoDate): Promise<boolean> =>
+  orgSubscriptionClosed(tx, today);
 
 /** То же вне транзакции: своя короткая транзакция организации без пользователя. */
-export async function orgClosedNow(
-  deps: { db: Db; clock: ApiDeps['clock'] },
-  orgId: string,
-): Promise<boolean> {
-  return withOrgContext(deps.db, { orgId, userId: null }, (tx) =>
-    orgAccessClosed(tx, bishkekDate(deps.clock.now())),
-  );
-}
+export { orgClosedNow };
 
 /** Страница по ссылке (`contractorPageState`) с закрытым доступом организации — `org_closed`. */
 export type PageAccess = ContractorPageState | { state: 'org_closed' };

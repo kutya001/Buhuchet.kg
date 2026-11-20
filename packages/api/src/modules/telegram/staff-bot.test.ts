@@ -534,7 +534,7 @@ describe.skipIf(!databaseAvailable())(
       await needFile(false);
     });
 
-    it('память организации заполнена: файл из чата не прикрепляется и не остаётся в хранилище (доработки 20.11, блок 2, пункт 5)', async () => {
+    it('память организации заполнена: файл из чата не скачивается, не прикрепляется и не остаётся в хранилище (доработки 20.11, блок 2, пункт 5)', async () => {
       await needFile(true);
       const id = await manual(cpAcc, 't1m', '2025-06-01', '2026-10-22');
       const files = storage.files.size;
@@ -551,13 +551,22 @@ describe.skipIf(!databaseAvailable())(
       const memory = (baseMb: number, seatMb: number) =>
         f.t.admin.db.update(schema.subscriptionSettings).set({ baseMb, seatMb });
       await memory(0, 0);
+      // Проверка памяти — до скачивания: Telegram файл не отдаёт.
+      const load = tg.loadFile.bind(tg);
+      let loads = 0;
+      tg.loadFile = async (fileId, maxBytes) => {
+        loads += 1;
+        return load(fileId, maxBytes);
+      };
       try {
         expect((await say(CHAT.acc, null, { document: pdf('m1') })).text).toBe(
           fill(TPL.tgActMemFull, { занято: '0', лимит: '0' }),
         );
       } finally {
+        tg.loadFile = load;
         await memory(2000, 200);
       }
+      expect(loads).toBe(0);
       expect((await report(id)).status).toBe('todo');
       expect(await filesOf('report', id)).toEqual([]);
       expect(storage.files.size).toBe(files);

@@ -4,15 +4,12 @@ import { describe, expect, it } from 'vitest';
 import { makeTranslate } from '../l10n/translate';
 import {
   localGridPage,
-  subBar,
   subConfigText,
-  subDaysText,
   subFieldError,
   subGb,
   subGbLimit,
   subHistoryText,
   subLineText,
-  subPaidToText,
   subPayTerm,
   subPayWhat,
   subPlanPrice,
@@ -20,7 +17,7 @@ import {
 } from './subs-model';
 
 // Тексты вкладки «Подписки» Админки (доработки 20.11.2026, блок 6; прототип admin/subs-admin.js и
-// core/subs.js): ГБ, дни, что оплачено, строки расчёта, «Оплачено до», полосы, плашки, «История
+// core/subs.js): ГБ, что оплачено, строки расчёта, плашки, «История
 // изменений» подписки и видов с ценами, страница списка «Виды подписок».
 
 const t = makeTranslate(defaultUiTexts());
@@ -59,19 +56,13 @@ const ctx = {
   paidUntil: null,
 };
 
-describe('подписки: ГБ и дни', () => {
+describe('подписки: ГБ', () => {
   it('ГБ одним знаком после запятой, 1 ГБ = 1 000 МБ (прототип subGb)', () => {
     expect(subGb(0)).toBe('0');
     expect(subGb(9_400 * MB)).toBe('9,4');
     expect(subGb(14_000 * MB)).toBe('14');
     expect(subGbLimit(null)).toBe('∞');
     expect(subGbLimit(2_000 * MB)).toBe('2');
-  });
-
-  it('дни в нужной форме', () => {
-    expect(subDaysText(t, 1)).toBe('1 день');
-    expect(subDaysText(t, 3)).toBe('3 дня');
-    expect(subDaysText(t, 11)).toBe('11 дней');
   });
 });
 
@@ -112,20 +103,7 @@ describe('подписки: что оплачено и расчёт', () => {
   });
 });
 
-describe('подписки: срок, полосы и плашки', () => {
-  it('«Оплачено до» с остатком или просрочкой', () => {
-    expect(subPaidToText(t, null, '2026-11-20')).toBe('—');
-    expect(subPaidToText(t, '2026-12-20', '2026-11-20')).toBe('20.12.2026 · осталось 30 дней');
-    expect(subPaidToText(t, '2026-11-17', '2026-11-20')).toBe('17.11.2026 · просрочено 3 дня');
-  });
-
-  it('полоса: до 80 % зелёная, до 100 % жёлтая, дальше красная; без предела — пустая', () => {
-    expect(subBar(5, 10)).toEqual({ pct: 50, tone: 'ok' });
-    expect(subBar(8, 10)).toEqual({ pct: 80, tone: 'warn' });
-    expect(subBar(12, 10)).toEqual({ pct: 100, tone: 'bad' });
-    expect(subBar(12, null)).toEqual({ pct: 0, tone: 'ok' });
-  });
-
+describe('подписки: плашки', () => {
   it('плашки: есть такие — свой цвет, нет — зелёный', () => {
     expect(subPlateColors({ pending: 2, overdue: 1 })).toEqual({
       pending: 'blue',
