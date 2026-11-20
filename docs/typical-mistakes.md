@@ -275,9 +275,9 @@
     - Как правильно: поток отдаёт ветку, когда у её PR (с `hold`) на последнем коммите зелёные `check` и `docker-e2e` и разобраны замечания проверки «CodeQL» в коде продукта и тестах (замечание в `spec/` — строкой треду «Прототип»: копию прототипа продукт не правит); тред сборки перед слиянием ветки смотрит проверки её PR и красную или идущую не вливает.
     - Кто ловит: скилл `combined-build` п. 2, тред сборки.
     - Было: общая сборка #301 (ветка потока И #300).
-73. **Перед PR форматирование проверили только у файлов последних правок.** `pnpm check` форматирование не проверяет, а CI в задании `check` запускает `pnpm format:check` по всему репозиторию: два файла из ранних коммитов ветки (`packages/domain/src/telegram/messages.ts`, `packages/shared/src/datamart.ts`) ушли неотформатированными, и `check` стал красным после типов и линтера.
-    - Как правильно: перед PR — `pnpm format:check` по всему репозиторию (или `prettier --check` по `git diff --name-only origin/main...`), не только по файлам последнего коммита.
-    - Кто ловит: CI `check` (шаг «pnpm lint && pnpm format:check»).
+73. **Перед PR прошли только `pnpm check`, а задание CI `check` проверяет больше.** `pnpm check` не запускает `pnpm format:check` и `pnpm test:scripts`: два файла из ранних коммитов ветки (`packages/domain/src/telegram/messages.ts`, `packages/shared/src/datamart.ts`) ушли неотформатированными, а новая папка API `packages/api/src/modules/datamart` дала в «Технической документации» раздел без названия (`scripts/build-techdocs.test.mjs`: SECTIONS скрипта прототипа её не знает) — и `check` был красным два прогона подряд.
+    - Как правильно: перед PR, кроме `pnpm check`, — `pnpm format:check` по всему репозиторию и `pnpm test:scripts`; новая папка модуля в `packages/api/src/modules` — название раздела в `PRODUCT_SECTIONS` (`scripts/build-techdocs.mjs`), пока его нет в SECTIONS `db/api_snapshot.py` прототипа.
+    - Кто ловит: CI `check` (шаги «pnpm lint && pnpm format:check» и «pnpm check:acceptance && pnpm test:scripts»).
     - Было: поток Т, PR #312 (общий план 20.11, этап 1).
 
 ## Процесс
