@@ -93,6 +93,9 @@ async function checkOne(
     const pg = dmErrorOf(err);
     // Не ошибка запроса (нет связи с базой) — шаблон не виноват: задача падает и повторится.
     if (!pg) throw err;
+    // В пустом контексте ошибка данных (класс 22: деление на count(*) = 0 и т. п.) — от пустоты, а не
+    // от выпуска: у организаций с данными шаблон работает (п. О-96).
+    if (on.orgId === DM_NO_DATA_ORG && pg.code.startsWith('22')) return { ok: true };
     return {
       ok: false,
       error: pg.code === QUERY_CANCELED ? t('err.dm_timeout') : `${pg.code}: ${pg.message}`,

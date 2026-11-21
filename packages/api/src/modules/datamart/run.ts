@@ -113,11 +113,12 @@ export function dmSqlProblemText(tr: DmTr, p: DmQueryProblem | DmSqlProblem): st
 }
 
 /**
- * Запусков шаблонов одновременно на весь сайт — все организации, Админка и внешний адрес вместе
- * (защита строже ТЗ, п. О-96): каждый держит соединение пула до 15 с, а пул — 5 соединений
- * (`DATABASE_POOL_MAX`); пятерых, нажавших «Показать» на тяжёлом шаблоне, иначе хватило бы, чтобы сайт
- * встал для всех (п. О-46). Места — строки `rate_limits` вида `dm_run_all` с арендой: упавший процесс
- * отпускает своё через `leaseSeconds`.
+ * Запусков шаблонов с экрана одновременно на весь сайт — «Показать» всех организаций, Админки и
+ * «Проверить» вместе (защита строже ТЗ, п. О-96): каждый держит соединение пула до 15 с, а пул — 5
+ * соединений (`DATABASE_POOL_MAX`); пятерых, нажавших «Показать» на тяжёлом шаблоне, иначе хватило бы,
+ * чтобы сайт встал для всех (п. О-46). Внешний адрес по токену — своим пределом потока Т (п. Т-20:
+ * ответ «Слишком часто, повторите через N секунд» по ТЗ, блок 6, пункты 4–5). Места — строки
+ * `rate_limits` вида `dm_run_all` с арендой: упавший процесс отпускает своё через `leaseSeconds`.
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#О-96 — предела одновременных запусков на весь сайт нет в ТЗ и прототипе.
 export const DM_RUN_SLOTS = 2;
@@ -241,11 +242,11 @@ export async function runDmTemplate(deps: ApiDeps, r: DmRunRequest): Promise<DmR
   let res: DmResult;
   try {
     const who = r.who;
-    res = await withDmPoolSlot(deps, t, () =>
+    const exec = () =>
       who.kind === 'org'
         ? runDmOrg(deps.db, { orgId: who.orgId, userId: who.userId }, q)
-        : runDmAdmin(deps.db, who.adminId, q),
-    );
+        : runDmAdmin(deps.db, who.adminId, q);
+    res = r.via === 'api' ? await exec() : await withDmPoolSlot(deps, t, exec);
   } catch (err) {
     const pg = dmErrorOf(err);
     if (!pg) throw err;
