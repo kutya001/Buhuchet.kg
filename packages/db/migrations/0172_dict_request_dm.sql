@@ -1,6 +1,0 @@
--- «Попросить шаблон» «Витрины данных» (доработки 20.11.2026: Витрина данных, блок 3, пункт 2; общий план
--- 20.11, этап 2, П7, поток И; прототип v155 `dmAskDlg`): код справочника `dm` в запросах организаций
--- администратору платформы. Таблица запросов маленькая: проверка строк под ACCESS EXCLUSIVE — доли секунды.
-SET LOCAL lock_timeout = '5s';--> statement-breakpoint
-ALTER TABLE "dict_change_requests" DROP CONSTRAINT "dict_change_requests_dict_check";--> statement-breakpoint
-ALTER TABLE "dict_change_requests" ADD CONSTRAINT "dict_change_requests_dict_check" CHECK ("dict_change_requests"."dict" in ('types', 'regimes', 'forms', 'organs', 'benefits', 'banks', 'cats', 'reasons', 'ugns', 'bases', 'dm'));
