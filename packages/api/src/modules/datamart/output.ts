@@ -47,7 +47,14 @@ import { apiError, apiFail } from '../../errors';
 import { orgContextOf, requirePermission, requirePlatformAdmin } from '../../middleware/access';
 import { guardCardRead } from '../admin/card-guard';
 import { serverTexts } from '../l10n/texts';
-import { DM_ROWS_MAX, logDmRun, runDmTemplate, type DmRunOutcome, type DmRunWho } from './run';
+import {
+  DM_ROWS_MAX,
+  logDmRun,
+  runDmTemplate,
+  withDmPoolSlot,
+  type DmRunOutcome,
+  type DmRunWho,
+} from './run';
 
 /*
  * «Витрина данных» → «Вывод» и каталог «Шаблоны» (доработки 20.11.2026: Витрина данных, блоки 3–4;
@@ -327,12 +334,15 @@ export interface OutputRun {
   side: OutputSide;
 }
 
-/** Как запускает «В Excel» (этап 2, П6). */
+/** Как запускать: место пула и «В Excel» (этап 2, П6). */
 export interface OutputOpts {
   /**
-   * Выгрузка: место пула запусков уже взято (`withDmPoolSlot` до места выгрузки), а в истории
-   * организации у Админки — «выгружен в Excel», а не «открыт».
+   * Место пула запусков сайта уже взято вызывающим (`withDmPoolSlot` — первым, до очереди человека и места
+   * выгрузки): занятый пул не тратит ни одного из 600 запусков человека в час и ни одной из 20 выгрузок, а
+   * у Админки «глазами организации» строка истории и предел открытий карточек идут только с местом.
    */
+  poolHeld?: boolean;
+  /** «В Excel»: в истории организации у Админки — «выгружен в Excel», а не «открыт». */
   exported?: boolean;
 }
 
@@ -368,7 +378,7 @@ export async function orgOutput(
     tokenId: null,
     ip: null,
     maxRows: DM_ROWS_MAX,
-    poolHeld: opts.exported,
+    poolHeld: opts.poolHeld,
     today: todayOf(deps),
   });
   return { tpl: facts.tpl, out, side: { admin: false, orgName: null } };
@@ -433,7 +443,7 @@ export async function adminOutput(
     tokenId: null,
     ip: null,
     maxRows: DM_ROWS_MAX,
-    poolHeld: opts.exported,
+    poolHeld: opts.poolHeld,
     today: todayOf(deps),
   });
   return { tpl, out, side: { admin: true, orgName: found.orgName } };
@@ -468,10 +478,13 @@ export function outputHandlers(deps: ApiDeps) {
   const run: RouteHandler<typeof OUTPUT_ROUTES.run, AppEnv> = async (c) => {
     const input = c.req.valid('json');
     const t = await serverTexts(deps);
-    return withRunSlot(deps, c.get('session')!.userId, t, async () => {
-      const { tpl, out, side } = await orgOutput(deps, c, input);
-      return respond(c, tpl, out, t, side);
-    });
+    // Сначала место пула сайта: занятый пул не тратит запуски человека (п. О-96).
+    return withDmPoolSlot(deps, t, () =>
+      withRunSlot(deps, c.get('session')!.userId, t, async () => {
+        const { tpl, out, side } = await orgOutput(deps, c, input, { poolHeld: true });
+        return respond(c, tpl, out, t, side);
+      }),
+    );
   };
 
   const adminCatalog: RouteHandler<typeof OUTPUT_ROUTES.adminCatalog, AppEnv> = async (c) => {
@@ -491,10 +504,13 @@ export function outputHandlers(deps: ApiDeps) {
   const adminRun: RouteHandler<typeof OUTPUT_ROUTES.adminRun, AppEnv> = async (c) => {
     const input = c.req.valid('json');
     const t = await serverTexts(deps);
-    return withRunSlot(deps, c.get('session')!.userId, t, async () => {
-      const { tpl, out, side } = await adminOutput(deps, c, input);
-      return respond(c, tpl, out, t, side);
-    });
+    // Место пула — до истории организации и предела открытий карточек («глазами организации»).
+    return withDmPoolSlot(deps, t, () =>
+      withRunSlot(deps, c.get('session')!.userId, t, async () => {
+        const { tpl, out, side } = await adminOutput(deps, c, input, { poolHeld: true });
+        return respond(c, tpl, out, t, side);
+      }),
+    );
   };
 
   return { catalog, run, adminCatalog, adminRun };

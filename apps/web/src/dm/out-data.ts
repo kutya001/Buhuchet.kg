@@ -27,11 +27,22 @@ export interface DmRunRequest extends DmRunInput {
   n: number;
 }
 
-/** Сколько раз переспросить при `dm_busy` и `dm_busy_all`: 40 × 0,5 с — дольше предела запроса в 15 с. */
+/** Идёт прежний запрос человека (`dm_busy`): 40 × 0,5 с — дольше предела запроса в 15 с. */
 const BUSY_RETRIES = 40;
+const BUSY_DELAY_MS = 500;
 
-/** Очередь: идёт прежний запрос человека (`dm_busy`) или заняты все места запуска сайта (`dm_busy_all`). */
-const BUSY_CODES: ReadonlySet<string> = new Set(['dm_busy', 'dm_busy_all']);
+/**
+ * Заняты все места запуска сайта чужими запросами (`dm_busy_all`, п. О-96): реже — 10 × 2 с, чтобы ждущие
+ * браузеры не нагружали ту же базу, которую ждут.
+ */
+const POOL_RETRIES = 10;
+const POOL_DELAY_MS = 2_000;
+
+const busyCode = (error: unknown) =>
+  error instanceof ApiFailure &&
+  (error.error.code === 'dm_busy' || error.error.code === 'dm_busy_all')
+    ? error.error.code
+    : null;
 
 /**
  * «Показать»: результат целиком (до 50 000 строк); повтор того же нажатия берётся из памяти. Ключ — не
@@ -58,9 +69,13 @@ export const runOutQuery = (side: DmSide, run: DmRunRequest) =>
     staleTime: Infinity,
     gcTime: 60_000,
     // Прежний запрос идёт не дольше 15 с: ждём его, переспрашивая раз в полсекунды (этап 2, П6).
-    retry: (count, error) =>
-      count < BUSY_RETRIES && error instanceof ApiFailure && BUSY_CODES.has(error.error.code),
-    retryDelay: 500,
+    retry: (count, error) => {
+      const code = busyCode(error);
+      if (code === 'dm_busy') return count < BUSY_RETRIES;
+      return code === 'dm_busy_all' && count < POOL_RETRIES;
+    },
+    retryDelay: (_count, error) =>
+      busyCode(error) === 'dm_busy_all' ? POOL_DELAY_MS : BUSY_DELAY_MS,
   });
 
 /** Админка: организации для «Глазами организации» — сначала демо, затем по названию. */

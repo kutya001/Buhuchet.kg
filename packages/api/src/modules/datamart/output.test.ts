@@ -3,7 +3,7 @@ import { releaseRateLimit, schema, takeRateLimit } from '@buhuchet/db';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
 import { UI_TEXTS } from '@buhuchet/domain';
 import { DmCatalog, DmRunResult } from '@buhuchet/shared';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../testing';
 import { DM_RUN_RATE_LIMIT } from './output';
@@ -343,10 +343,31 @@ describe.skipIf(!databaseAvailable())('Витрина данных: «Вывод
       if (!slot.ok) throw new Error('место занято');
       slots.push({ subject: `slot:${i}`, ticket: slot.ticket });
     }
+    const runsOf = async (userId: string) =>
+      (
+        await f.t.admin.db
+          .select({ n: sql<number>`count(*)::int` })
+          .from(schema.rateLimits)
+          .where(and(eq(schema.rateLimits.kind, 'dm_run'), eq(schema.rateLimits.subject, userId)))
+      )[0]!.n;
+    const views = async () =>
+      (
+        await f.t.admin.db
+          .select({ n: sql<number>`count(*)::int` })
+          .from(auditLog)
+          .where(and(eq(auditLog.orgId, f.b.orgId), eq(auditLog.action, 'card_view')))
+      )[0]!.n;
+    const runsBefore = await runsOf(f.b.ownerUserId);
+    const viewsBefore = await views();
     const busy = await fail(await run('owner-b', 'out-cps'), 429);
     expect(busy).toMatchObject({ code: 'dm_busy_all', message: txt('err.dm_busy_all') });
     // Другая организация и Админка — тоже ждут: место одно на всех.
     expect((await fail(await adminRun('out-adm'), 429)).code).toBe('dm_busy_all');
+    // Место пула берётся первым: ожидание не тратит запуски человека за час, а «глазами организации»
+    // не пишет строку в её историю (браузер переспрашивает при занятом пуле).
+    expect((await fail(await adminRun('out-cps', {}, f.b.orgId), 429)).code).toBe('dm_busy_all');
+    expect(await runsOf(f.b.ownerUserId)).toBe(runsBefore);
+    expect(await views()).toBe(viewsBefore);
     // Внешний адрес по токену в эти места не входит: у него свой предел потока Т (п. Т-20).
     const [token] = await f.t.admin.db
       .insert(schema.dmTokens)

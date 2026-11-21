@@ -16,7 +16,13 @@ import type { Context } from 'hono';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiFail, listQueryOf } from '../../errors';
-import { exportRateResponses, withExportSlot, xlsxContent, xlsxResponse } from '../../lists/export';
+import {
+  exportRateResponses,
+  releaseExportSlot,
+  takeExportSlot,
+  xlsxContent,
+  xlsxResponse,
+} from '../../lists/export';
 import type { XlsxCell } from '../../lists/xlsx';
 import { requirePermission, requirePlatformAdmin } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
@@ -29,9 +35,7 @@ import { withDmPoolSlot } from './run';
  * тем же путём, что «Показать» (`orgOutput`, `adminOutput`: права, область «Свои», журнал, у Админки —
  * открытие «глазами организации» в истории), строки — с фильтрами, поиском и сортировкой таблицы
  * (`dmOutList` домена — те же правила, что на экране), столбцы — видимые по порядку экрана. Выгрузка —
- * в очереди запусков человека (`withRunSlot`), на месте пула запусков сайта (`withDmPoolSlot`, п. О-96)
- * и в очереди выгрузок (`withExportSlot`) — в этом порядке: занятый запуск или пул выгрузку из 20 в час
- * не тратят.
+ * на месте пула запусков сайта, в очереди запусков человека и в очереди выгрузок (`exportFile`).
  */
 
 const error = { 'application/json': { schema: ApiError } };
@@ -151,20 +155,43 @@ function fileOf(
   });
 }
 
+/**
+ * Места выгрузки по порядку: пул запусков сайта (`withDmPoolSlot`, п. О-96), очередь человека
+ * (`withRunSlot`), место выгрузки (`takeExportSlot`) — занятое раньше не тратит следующее (одну из 600
+ * запусков и из 20 выгрузок в час). Пул и очередь отпускаются сразу после запроса к базе: файл до 50 000
+ * строк собирается уже только на месте выгрузки и мест пула у «Показать» других организаций не держит.
+ */
+async function exportFile(
+  c: Context<AppEnv>,
+  deps: ApiDeps,
+  userId: string,
+  t: (key: string) => string,
+  output: () => Promise<OutputRun>,
+  query: ListQuery,
+  cols: string,
+) {
+  let ticket: number | null = null;
+  try {
+    const run = await withDmPoolSlot(deps, t, () =>
+      withRunSlot(deps, userId, t, async () => {
+        ticket = await takeExportSlot(deps, userId);
+        return output();
+      }),
+    );
+    return fileOf(c, deps, run, query, cols, t);
+  } finally {
+    if (ticket !== null) await releaseExportSlot(deps, userId, ticket);
+  }
+}
+
 export function outputExportHandlers(deps: ApiDeps) {
   const exportOrg: RouteHandler<typeof OUTPUT_EXPORT_ROUTES.export, AppEnv> = async (c) => {
     const { list, ...input } = c.req.valid('json');
     const query = listQueryOf(list);
     const userId = c.get('session')!.userId;
     const t = await serverTexts(deps);
-    // Сначала очередь запуска и пул: пока идёт «Показать» или пул занят, выгрузка не тратит одну из 20 в час.
-    return withRunSlot(deps, userId, t, () =>
-      withDmPoolSlot(deps, t, () =>
-        withExportSlot(deps, userId, async () =>
-          fileOf(c, deps, await orgOutput(deps, c, input, { exported: true }), query, list.cols, t),
-        ),
-      ),
-    );
+    const opts = { poolHeld: true, exported: true };
+    return exportFile(c, deps, userId, t, () => orgOutput(deps, c, input, opts), query, list.cols);
   };
 
   const exportAdmin: RouteHandler<typeof OUTPUT_EXPORT_ROUTES.adminExport, AppEnv> = async (c) => {
@@ -172,19 +199,15 @@ export function outputExportHandlers(deps: ApiDeps) {
     const query = listQueryOf(list);
     const userId = c.get('session')!.userId;
     const t = await serverTexts(deps);
-    return withRunSlot(deps, userId, t, () =>
-      withDmPoolSlot(deps, t, () =>
-        withExportSlot(deps, userId, async () =>
-          fileOf(
-            c,
-            deps,
-            await adminOutput(deps, c, input, { exported: true }),
-            query,
-            list.cols,
-            t,
-          ),
-        ),
-      ),
+    const opts = { poolHeld: true, exported: true };
+    return exportFile(
+      c,
+      deps,
+      userId,
+      t,
+      () => adminOutput(deps, c, input, opts),
+      query,
+      list.cols,
     );
   };
 

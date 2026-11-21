@@ -12,13 +12,25 @@ describe('«Вывод»: прежний запрос человека ещё и
     expect(retry(0, busy)).toBe(true);
     expect(retry(39, busy)).toBe(true);
     expect(retry(40, busy)).toBe(false);
-    // Заняты все места запуска сайта (п. О-96) — тоже очередь, а не ошибка на экране.
+    const delay = runOutQuery('admin', { code: 'orgs', params: {}, orgId: null, n: 0 }).retryDelay;
+    if (typeof delay !== 'function') throw new Error('retryDelay — функция');
+    expect(delay(1, busy)).toBe(500);
+  });
+
+  it('429 `dm_busy_all` (заняты места запуска сайта, п. О-96) — тоже очередь, но реже: 10 раз раз в 2 с', () => {
+    if (typeof retry !== 'function') throw new Error('retry — функция');
     const busyAll = new ApiFailure(429, { code: 'dm_busy_all', message: 'busy all' });
     expect(retry(0, busyAll)).toBe(true);
-    expect(retry(40, busyAll)).toBe(false);
-    expect(runOutQuery('admin', { code: 'orgs', params: {}, orgId: null, n: 0 }).retryDelay).toBe(
-      500,
-    );
+    expect(retry(9, busyAll)).toBe(true);
+    expect(retry(10, busyAll)).toBe(false);
+    const delay = runOutQuery('org', {
+      code: 'reports-due',
+      params: {},
+      orgId: null,
+      n: 1,
+    }).retryDelay;
+    if (typeof delay !== 'function') throw new Error('retryDelay — функция');
+    expect(delay(1, busyAll)).toBe(2_000);
   });
 
   it('остальные отказы — сразу на экран, без повтора', () => {

@@ -82,6 +82,20 @@ export async function withExportSlot<T>(
   userId: string,
   run: () => Promise<T>,
 ): Promise<T> {
+  const ticket = await takeExportSlot(deps, userId);
+  try {
+    return await run();
+  } finally {
+    await releaseExportSlot(deps, userId, ticket);
+  }
+}
+
+/**
+ * Место выгрузки без обёртки — когда его надо держать дольше вложенного места другой очереди («В Excel»
+ * «Витрины данных»: место пула запусков отпускается после запроса, а файл собирается ещё на месте
+ * выгрузки). Отказ — те же 429, что у `withExportSlot`; взятое отпускается `releaseExportSlot`.
+ */
+export async function takeExportSlot(deps: ApiDeps, userId: string): Promise<number> {
   const slot = await takeRateLimit(deps.db, EXPORT_RATE_LIMIT, userId);
   if (!slot.ok) {
     if (slot.reason === 'busy') {
@@ -89,13 +103,18 @@ export async function withExportSlot<T>(
     }
     apiFail(429, 'export_limit', 'Слишком много выгрузок за час', { n: EXPORT_HOURLY_LIMIT });
   }
-  try {
-    return await run();
-  } finally {
-    await releaseRateLimit(deps.db, EXPORT_RATE_LIMIT, userId, slot.ticket).catch((err: unknown) =>
-      deps.logger.error({ err }, 'выгрузка не отпущена'),
-    );
-  }
+  return slot.ticket;
+}
+
+/** Отпустить место `takeExportSlot`; ошибка — только в журнал (место отпустит аренда). */
+export async function releaseExportSlot(
+  deps: ApiDeps,
+  userId: string,
+  ticket: number,
+): Promise<void> {
+  await releaseRateLimit(deps.db, EXPORT_RATE_LIMIT, userId, ticket).catch((err: unknown) =>
+    deps.logger.error({ err }, 'выгрузка не отпущена'),
+  );
 }
 
 /** Ответ 429 метода выгрузки — для описания OpenAPI (`createRoute`). */
