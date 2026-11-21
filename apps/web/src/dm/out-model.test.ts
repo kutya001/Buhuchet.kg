@@ -107,9 +107,11 @@ describe('параметры (прототип dmPar, dmParRead)', () => {
       date_to: '2026-11-21',
       status: '',
     });
-    expect(outParamsOf(params, { date_from: '2026-10-01', date_to: '', status: 'todo' })).toEqual(
-      { date_from: '2026-10-01', date_to: '2026-11-21', status: 'todo' },
-    );
+    expect(outParamsOf(params, { date_from: '2026-10-01', date_to: '', status: 'todo' })).toEqual({
+      date_from: '2026-10-01',
+      date_to: '2026-11-21',
+      status: 'todo',
+    });
     // Не строка в памяти браузера — не значение.
     expect(outParamsOf(params, { date_from: 5 })).toMatchObject({ date_from: '2026-11-01' });
   });
@@ -121,9 +123,9 @@ describe('параметры (прототип dmPar, dmParRead)', () => {
     expect(outParamProblems(params, { date_from: '01.11.2026', date_to: '2026-11-21' })).toEqual({
       date_from: 'type',
     });
-    expect(outParamProblems(params, { date_from: '', date_to: '2026-11-21', status: 'todo' })).toEqual(
-      {},
-    );
+    expect(
+      outParamProblems(params, { date_from: '', date_to: '2026-11-21', status: 'todo' }),
+    ).toEqual({});
   });
 
   it('«По дату» раньше «С даты» и «Месяц раньше начального» — у второго поля', () => {
@@ -164,7 +166,10 @@ describe('параметры (прототип dmPar, dmParRead)', () => {
 });
 
 describe('запуск при открытии и отказы «Показать»', () => {
-  const tpl = card({ code: 'x', params: [param({ code: 'month', type: 'month', required: true })] });
+  const tpl = card({
+    code: 'x',
+    params: [param({ code: 'month', type: 'month', required: true })],
+  });
 
   it('сразу — опубликованный с верными параметрами; Админка по шаблону организации — только по «Показать»', () => {
     expect(outAutoRun(tpl, { month: '2026-11' }, false)).toBe(true);
@@ -246,7 +251,10 @@ describe('таблица результата (прототип dmCol, dmEx)', (
       ed: false,
       why: 'нет',
     });
-    expect(outExCell(shown, result.rows[0], 0, texts, 'нет')).toMatchObject({ t: 'Альфа', n: null });
+    expect(outExCell(shown, result.rows[0], 0, texts, 'нет')).toMatchObject({
+      t: 'Альфа',
+      n: null,
+    });
     expect(outExCell(shown, undefined, 0, texts, 'нет')).toEqual({
       t: '',
       n: null,

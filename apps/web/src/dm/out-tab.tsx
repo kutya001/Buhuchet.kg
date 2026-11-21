@@ -75,9 +75,7 @@ export function OutTab({ side }: { side: DmSide }) {
     );
   }
   const tpl = items.find((x) => x.code === choice.tpl) ?? items[0]!;
-  return (
-    <OutBody key={tpl.code} side={side} items={items} tpl={tpl} canExport={canExport} />
-  );
+  return <OutBody key={tpl.code} side={side} items={items} tpl={tpl} canExport={canExport} />;
 }
 
 function OutBody({
@@ -134,9 +132,7 @@ function OutBody({
     failure?.kind === 'param' ? { [failure.param]: failure.problem, ...errors } : errors;
 
   const exportRun: OutExport | undefined =
-    canExport && run
-      ? { side, code: tpl.code, params: run.params, orgId: run.orgId }
-      : undefined;
+    canExport && run ? { side, code: tpl.code, params: run.params, orgId: run.orgId } : undefined;
 
   const show = () => {
     const problems = outParamProblems(tpl.params, values);

@@ -77,10 +77,7 @@ export interface DmExportRun {
 }
 
 /** «В Excel»: сервер выполняет шаблон заново и отдаёт файл с фильтрами и столбцами таблицы. */
-export const exportOut = (
-  run: DmExportRun,
-  list: Record<string, string> & { cols: string },
-) => {
+export const exportOut = (run: DmExportRun, list: Record<string, string> & { cols: string }) => {
   const body = { code: run.code, params: run.params, list };
   return run.side === 'admin'
     ? api.api.admin.dm.output.export.$post({

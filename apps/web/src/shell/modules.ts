@@ -432,8 +432,8 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
     ],
   },
   // «Витрина данных» (доработки 20.11.2026: Витрина данных; прототип v155 dmTabs, dmAdd): «Вывод»,
-  // «Шаблоны» (у Админки — список шаблонов треда сборки, у организации — каталог), «API Токены»
-  // (Админка или право «Управлять API-токенами»); «Журнал запросов» — этап 2 треда сборки.
+  // «Шаблоны» (у Админки — список шаблонов, у организации — каталог), «API Токены» (Админка или право
+  // «Управлять API-токенами»); «Журнал запросов» — этап 2 треда сборки.
   dm: {
     icon: 'table',
     title: 'nav.dm',
@@ -441,10 +441,11 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
     desc: 'nav.desc.dm',
     tabs: [
       { id: 'out', icon: 'table', label: 'tab.dm.out' },
-      { id: 'tpl', icon: 'layers', label: 'tab.dm.tpl', when: (a) => !a.admin },
+      { id: 'tpl', icon: 'layers', label: 'tab.dm.tpl' },
       { id: 'tok', icon: 'key', label: 'tab.dm.tok', when: (a) => a.admin || a.can('dmTokens') },
     ],
     add: [
+      { id: 'tpl', icon: 'layers', label: 'add.dm.tpl', when: (a) => a.admin },
       { id: 'tok', icon: 'key', label: 'add.dm.tok', when: (a) => a.admin || a.can('dmTokens') },
       { id: 'ask', icon: 'send', label: 'add.dm.ask', when: (a) => !a.admin },
     ],

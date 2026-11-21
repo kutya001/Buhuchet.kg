@@ -149,14 +149,16 @@ export function outRunFailure(code: string, details: unknown): DmRunFailure {
   if (code === 'dm_bad_param') {
     const d = DmBadParam.safeParse(details);
     if (d.success) {
-      return { kind: 'param', param: d.data.param, problem: outServerProblem(d.data.param, d.data.why) };
+      return {
+        kind: 'param',
+        param: d.data.param,
+        problem: outServerProblem(d.data.param, d.data.why),
+      };
     }
   }
   if (code === 'dm_template_broken') {
     const error =
-      typeof details === 'object' && details !== null && 'error' in details
-        ? details.error
-        : null;
+      typeof details === 'object' && details !== null && 'error' in details ? details.error : null;
     return { kind: 'broken', error: typeof error === 'string' && error ? error : null };
   }
   return { kind: 'other' };
@@ -233,7 +235,10 @@ export function outParamsToSend(
 }
 
 /** Отказ сервера по параметру (`dm_bad_param`: `type`, `required`, `range`) — ошибка поля формы. */
-export function outServerProblem(param: string, why: 'type' | 'required' | 'range'): DmParamProblem {
+export function outServerProblem(
+  param: string,
+  why: 'type' | 'required' | 'range',
+): DmParamProblem {
   if (why !== 'range') return why;
   return param.startsWith('month') ? 'month_order' : 'date_order';
 }
