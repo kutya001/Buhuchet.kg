@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { E2E_SUBSCRIPTION, ownerPassword, platformAdmin, search, uniqueInn } from './admin';
-import { onPhone, phoneListMenu, uniqueLogin } from './helpers';
+import { cardTab, onPhone, openColumnFilter, phoneListMenu, uniqueLogin } from './helpers';
 
 // «Витрина данных» → «Шаблоны» и «Вывод» в Админке (доработки 20.11.2026: Витрина данных, блоки 3–4,
 // «Как проверить…» → «Шаблоны и защита», «Права и вывод»; общий план 20.11, этап 2, П6–П7; прототип
@@ -43,7 +43,11 @@ async function addMenu(page: Page, item: string) {
 }
 
 /** Организация теста со своим названием (владелец — только для учёта «Сотрудников»). */
-async function newOrg(api: APIRequestContext, origin: string, name: string) {
+async function newOrg(
+  api: APIRequestContext,
+  origin: string,
+  name: string,
+): Promise<{ id: string; slug: string }> {
   const created = await api.post('/api/admin/organizations', {
     headers: { origin },
     data: {
@@ -56,6 +60,7 @@ async function newOrg(api: APIRequestContext, origin: string, name: string) {
     },
   });
   expect(created.status(), await created.text()).toBe(201);
+  return ((await created.json()) as { organization: { id: string; slug: string } }).organization;
 }
 
 test.describe('Витрина данных: «Шаблоны» и «Вывод» Админки', () => {
@@ -91,6 +96,19 @@ test.describe('Витрина данных: «Шаблоны» и «Вывод»
     await expect(dialog).toContainText(texts['err.dm_sql_two_statements']!);
     await expect(dialog.locator('[data-dm-ed-result]')).toHaveCount(0);
     await expect(publish).toBeDisabled();
+    // UPDATE — тоже отказ с причиной; закрытая таблица сеансов не читается: ошибка базы под запросом.
+    await query.fill('UPDATE organizations SET name = name');
+    await dialog.locator('[data-dm-ed-check]').click();
+    await expect(dialog).toContainText(texts['err.dm_sql_not_select']!);
+    await expect(publish).toBeDisabled();
+    await query.fill('SELECT token_hash FROM sessions');
+    await dialog.locator('[data-dm-ed-check]').click();
+    // У поля запроса текст совпадает с запросом, поэтому «sessions» ищем после причины отказа.
+    await expect(dialog).toContainText(
+      new RegExp(`${textPattern(texts['err.dm_check_failed']!, { error: '' }).source}.*sessions`),
+    );
+    await expect(dialog.locator('[data-dm-ed-result]')).toHaveCount(0);
+    await expect(publish).toBeDisabled();
 
     // Один оператор: «Запрос выполнен: строк 1», столбец прочитан, «Опубликовать» доступна.
     await query.fill('SELECT 7 AS seven');
@@ -106,11 +124,21 @@ test.describe('Витрина данных: «Шаблоны» и «Вывод»
       page.getByRole('status').filter({ hasText: texts['dm.ed.published']! }),
     ).toBeVisible();
 
-    // В списке — «Опубликован».
+    // В списке — своя строка «Опубликован».
     await search(page, isMobile, name);
-    const list = page.locator('[data-dm-tpl-admin]');
-    await expect(list).toContainText(name);
-    await expect(list).toContainText(texts['dm.tpl.state.published']!);
+    const own = page.locator('[data-dm-tpl-admin] [data-grid] [data-id]').filter({ hasText: name });
+    await expect(own).toHaveCount(1);
+    await expect(own).toContainText(texts['dm.tpl.state.published']!);
+
+    // Строка колокольчика «Шаблон перестал работать» ведёт на `?tpl=<номер>`: окно этого шаблона,
+    // адрес — уже без `?tpl=`.
+    const id = await own.getAttribute('data-id');
+    await page.goto(`/app/dm/tpl?tpl=${id}`);
+    const card = page.getByRole('dialog', { name });
+    await expect(card.locator('[data-dm-ed-query]')).toHaveValue('SELECT 7 AS seven');
+    await expect(page).not.toHaveURL(/[?&]tpl=/);
+    await page.keyboard.press('Escape');
+    await expect(card).toHaveCount(0);
 
     // «Вывод»: шаблон в группе «Для администратора», «Показать» — его строка.
     await page.goto('/app/dm/out');
@@ -132,13 +160,16 @@ test.describe('Витрина данных: «Шаблоны» и «Вывод»
     baseURL,
     isMobile,
   }) => {
+    // Длинный сценарий: три организации, шаблон по всем организациям стенда, две сортировки, фильтр,
+    // «В Excel» (сервер выполняет шаблон заново) и выделение.
+    test.slow();
     const origin = new URL(baseURL!).origin;
     await platformAdmin(page.request, origin);
     const texts = await dictionary(page.request);
     // Три свои организации: по одному сотруднику (владелец) — у каждой «Сотрудников» 1.
     const word = uniqueWord('Витрина');
     const names = [1, 2, 3].map((i) => `ОсОО «${word} ${i}»`);
-    for (const n of names) await newOrg(page.request, origin, n);
+    await Promise.all(names.map((n) => newOrg(page.request, origin, n)));
 
     // Готовый шаблон Админки «Организации» (refDB.dmTemplates, код `orgs`): строки — все организации.
     await page.goto('/app/dm/out');
@@ -172,21 +203,75 @@ test.describe('Витрина данных: «Шаблоны» и «Вывод»
         .filter({ hasText: textPattern(texts['grid.exported.few']!, { n: '3' }) }),
     ).toBeVisible();
 
-    // Выделение и Ctrl+C — мышью и клавишами ПК (на телефоне нажатие ячейки открывает её значение).
-    if (isMobile) return;
-    await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin });
-    const staff = result.locator('tbody td[data-dx="2"]');
-    await expect(staff).toHaveText(['1', '1', '1']);
-    await staff.nth(0).click();
-    await staff.nth(2).click({ modifiers: ['Shift'] });
-    const stat = page.locator('[data-ex-stat]');
-    await expect(stat).toContainText(`${texts['kpi.ex.stat.selected']} 3`);
-    await expect(stat).toContainText(`${texts['kpi.ex.stat.sum']} 3`);
-    await expect(stat).toContainText(`${texts['kpi.ex.stat.avg']} 1`);
-    await page.evaluate(() => navigator.clipboard.writeText(''));
-    await page.keyboard.press('Control+c');
-    await expect
-      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
-      .toBe(['1', '1', '1'].join('\n'));
+    // Выделение и Ctrl+C — мышью и клавишами ПК (на телефоне их нет).
+    if (!isMobile) {
+      await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin });
+      const staff = result.locator('tbody td[data-dx="2"]');
+      await expect(staff).toHaveText(['1', '1', '1']);
+      await staff.nth(0).click();
+      await staff.nth(2).click({ modifiers: ['Shift'] });
+      const stat = page.locator('[data-ex-stat]');
+      await expect(stat).toContainText(`${texts['kpi.ex.stat.selected']} 3`);
+      await expect(stat).toContainText(`${texts['kpi.ex.stat.sum']} 3`);
+      await expect(stat).toContainText(`${texts['kpi.ex.stat.avg']} 1`);
+      await page.evaluate(() => navigator.clipboard.writeText(''));
+      await page.keyboard.press('Control+c');
+      await expect
+        .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+        .toBe(['1', '1', '1'].join('\n'));
+    }
+
+    // Фильтр столбца — тоже по всему результату: «Организация» содержит «<слово> 2» — одна строка.
+    // Подпись столбца — из шаблона `orgs` (refDB.dmTemplates), а не из словаря.
+    const filter = await openColumnFilter(page, 'Организация');
+    await filter.getByRole('textbox', { name: texts['grid.filter_contains'] }).fill(`${word} 2`);
+    await filter.getByRole('button', { name: texts['grid.apply'], exact: true }).click();
+    await expect(orgCells).toHaveText([names[1]!]);
+  });
+
+  test('(Витрина данных, «Админка», пункт 3; этап 2, П7) шаблон «Для организаций» в Админке — «глазами организации»: выбранная организация, «Показать», в «Истории» её карточки — «Открыт шаблон … глазами организации»', async ({
+    page,
+    baseURL,
+    isMobile,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    await platformAdmin(page.request, origin);
+    const texts = await dictionary(page.request);
+    const orgName = `ОсОО «${uniqueWord('Глазами')}»`;
+    const org = await newOrg(page.request, origin, orgName);
+
+    // Готовый шаблон организаций «Контрагенты» (refDB.dmTemplates, код `contractors`, без параметров).
+    await page.goto('/app/dm/out');
+    const tpl = page.locator('[data-dm-out-tpl]');
+    await tpl.selectOption('contractors');
+    const tplName = (await tpl.locator('option[value="contractors"]').textContent())!.trim();
+    await page.locator('[data-dm-out-org]').selectOption(org.id);
+    // Свой запуск — с выбранной организацией (автозапуск шаблона по умолчанию может ещё идти).
+    const run = page.waitForResponse(
+      (r) =>
+        new URL(r.url()).pathname === '/api/admin/dm/output/run' &&
+        r.request().method() === 'POST' &&
+        // 429 — ожидание очереди: «Показать» повторит запрос сам.
+        r.status() !== 429 &&
+        (r.request().postDataJSON() as { orgId?: string; code?: string }).code === 'contractors',
+    );
+    await page.locator('[data-dm-out-show]').click();
+    const res = await run;
+    expect(res.status(), await res.text()).toBe(200);
+    expect((res.request().postDataJSON() as { orgId?: string }).orgId).toBe(org.id);
+
+    // Карточка этой организации → «История»: запись об открытии шаблона глазами организации.
+    const loaded = page.waitForResponse(
+      (r) => r.url().includes(`/api/admin/organizations/${org.id}/card`) && r.ok(),
+    );
+    await page.goto(`/app/orgs#orgs/${org.slug}`);
+    await loaded;
+    const card = page.getByRole('dialog', { name: orgName });
+    await cardTab(page, card, isMobile, texts['orgs.card.tab.hist']!);
+    await expect(
+      card
+        .locator('[data-timeline-item]')
+        .filter({ hasText: texts['dm.out.history_porg']!.replace('{name}', tplName) }),
+    ).toHaveCount(1);
   });
 });

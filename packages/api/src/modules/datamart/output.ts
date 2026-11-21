@@ -375,6 +375,8 @@ export async function adminOutput(
   c: Context<AppEnv>,
   input: DmAdminRunInput,
   maxRows: number = DM_ROWS_MAX,
+  /** «В Excel»: в истории организации — «выгружен в Excel», а не «открыт» (этап 2, П6). */
+  exported = false,
 ): Promise<OutputRun> {
   const adminId = c.get('session')!.userId;
   const t = await serverTexts(deps);
@@ -404,7 +406,9 @@ export async function adminOutput(
         entity: 'organization',
         entityId: orgId,
         action: 'card_view',
-        reason: formatText(t('dm.out.history_porg'), { name: tpl.name }),
+        reason: formatText(t(exported ? 'dm.out.history_porg_export' : 'dm.out.history_porg'), {
+          name: tpl.name,
+        }),
       }),
     );
     who = { kind: 'org', orgId, userId: adminId };

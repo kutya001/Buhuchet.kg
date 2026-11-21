@@ -150,8 +150,18 @@ describe('страница «Вывода»: сортировка, фильтр�
       'Номер 2',
       'Ёлка',
     ]);
-    expect(names({ sort: { key: 'ok', dir: 'asc' } })).toEqual(['Номер 10', 'алма', 'Номер 2', 'Ёлка']);
-    expect(names({ sort: { key: 'at', dir: 'asc' } })).toEqual(['Номер 2', 'алма', 'Номер 10', 'Ёлка']);
+    expect(names({ sort: { key: 'ok', dir: 'asc' } })).toEqual([
+      'Номер 10',
+      'алма',
+      'Номер 2',
+      'Ёлка',
+    ]);
+    expect(names({ sort: { key: 'at', dir: 'asc' } })).toEqual([
+      'Номер 2',
+      'алма',
+      'Номер 10',
+      'Ёлка',
+    ]);
   });
 
   it('сортировка по неизвестному и служебному столбцу не меняет порядок', () => {
@@ -169,9 +179,9 @@ describe('страница «Вывода»: сортировка, фильтр�
       'алма',
     ]);
     expect(names({ filters: { due: { type: 'date', to: '2026-11-20' } } })).toEqual(['Номер 2']);
-    expect(names({ filters: { at: { type: 'date', from: '2026-11-21', to: '2026-11-21' } } })).toEqual(
-      ['Номер 10', 'алма'],
-    );
+    expect(
+      names({ filters: { at: { type: 'date', from: '2026-11-21', to: '2026-11-21' } } }),
+    ).toEqual(['Номер 10', 'алма']);
     expect(names({ filters: { month: { type: 'enum', vals: ['2026-10'] } } })).toEqual(['Номер 2']);
     expect(names({ filters: { ok: { type: 'enum', vals: [''] } } })).toEqual(['Ёлка']);
     expect(
@@ -222,7 +232,9 @@ describe('страница «Вывода»: сортировка, фильтр�
       ['', null, 1],
     ]);
     expect(page.groups![1]!.aggs).toEqual({ debt: 125050, n: 5 });
-    expect(page.groups![1]!.sub!.map((g) => [g.key, g.label, g.count])).toEqual([['true', 'Да', 2]]);
+    expect(page.groups![1]!.sub!.map((g) => [g.key, g.label, g.count])).toEqual([
+      ['true', 'Да', 2],
+    ]);
     expect(page.groups![2]!.aggs).toEqual({ debt: null, n: null });
     expect(page.rowGroups).toEqual([
       ['2026-10', 'false'],

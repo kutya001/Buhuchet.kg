@@ -71,8 +71,13 @@ test.describe('Витрина данных: API Токены', () => {
       const tab = page.locator('[data-dm-tokens="admin"]');
       await expect(tab).toContainText(texts['dm.tok.note_admin']!);
 
-      // «+ Добавить» с одним способом сразу открывает «Новый API-токен».
+      // «+ Добавить» Админки — меню «Шаблон» и «Токен» (прототип v155 `dmAdd`): «Токен» открывает
+      // «Новый API-токен».
       await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+      await page
+        .getByRole('menu', { name: 'Добавить' })
+        .getByRole('menuitem', { name: texts['add.dm.tok']! })
+        .click();
       const dialog = page.getByRole('dialog', { name: texts['dm.tok.new.title']! });
       await expect(dialog.locator('[data-dm-new]')).toBeVisible();
       await expect(

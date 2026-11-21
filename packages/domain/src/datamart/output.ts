@@ -122,7 +122,11 @@ export function dmValue(type: DmCellType, raw: unknown): DmValue {
       return Number.isNaN(at.getTime()) ? null : at.toISOString();
     }
     default:
-      return typeof raw === 'string' ? raw : typeof raw === 'object' ? JSON.stringify(raw) : String(raw);
+      return typeof raw === 'string'
+        ? raw
+        : typeof raw === 'object'
+          ? JSON.stringify(raw)
+          : String(raw);
   }
 }
 
@@ -279,14 +283,14 @@ function filtered(
     return s ? [{ s, f }] : [];
   });
   const search = query.search;
-  const searchCols = search?.q.trim()
-    ? search.keys.flatMap((k) => byCode.get(k) ?? [])
-    : [];
+  const searchCols = search?.q.trim() ? search.keys.flatMap((k) => byCode.get(k) ?? []) : [];
   return rows.filter(
     (r) =>
       filters.every(({ s, f }) => matchesFilter(s, r, f, texts)) &&
       (!search?.q.trim() ||
-        searchCols.some((s) => matchesSearch(dmText(s.col.type, r.v[s.index] ?? null, texts), search.q))),
+        searchCols.some((s) =>
+          matchesSearch(dmText(s.col.type, r.v[s.index] ?? null, texts), search.q),
+        )),
   );
 }
 
@@ -337,7 +341,13 @@ export function dmOutList(
   query: Pick<ListQuery, 'filters' | 'search' | 'sort' | 'group'>,
   texts: DmOutTexts,
 ): DmOutRow[] {
-  return sorted(filtered(rows, columns, query, texts), columns, query.sort ?? null, query.group ?? [], texts);
+  return sorted(
+    filtered(rows, columns, query, texts),
+    columns,
+    query.sort ?? null,
+    query.group ?? [],
+    texts,
+  );
 }
 
 function aggOf(how: GroupAgg, values: readonly number[]): number | null {
@@ -436,7 +446,10 @@ export function dmOutPage(
   const totals: Record<string, number> = {};
   for (const { col, index } of byCode.values()) {
     if (!col.total || (col.type !== 'num' && col.type !== 'money')) continue;
-    const sum = list.reduce((a, r) => a + (typeof r.v[index] === 'number' ? (r.v[index] as number) : 0), 0);
+    const sum = list.reduce(
+      (a, r) => a + (typeof r.v[index] === 'number' ? (r.v[index] as number) : 0),
+      0,
+    );
     totals[col.code] = col.type === 'money' ? sum : Math.round(sum * 100) / 100;
   }
   const out: DmOutPage = { items, total: list.length, page, totals };
@@ -461,7 +474,11 @@ export function dmOutValues(
   key: string,
   texts: DmOutTexts,
   q = '',
-): { items: { value: string; label: string | null; count: number }[]; total: number; more: boolean } {
+): {
+  items: { value: string; label: string | null; count: number }[];
+  total: number;
+  more: boolean;
+} {
   const s = shownByCode(columns).get(key);
   if (!s) return { items: [], total: 0, more: false };
   const counts = new Map<string, { label: string | null; count: number; v: DmValue }>();

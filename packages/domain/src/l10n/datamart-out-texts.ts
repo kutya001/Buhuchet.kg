@@ -43,6 +43,11 @@ export const DATAMART_OUT_TEXTS = {
     section: S,
   },
   'dm.out.ro': { ru: 'Значения в выводе не правятся', section: S },
+  // Запись в историю организации: администратор платформы выгрузил шаблон «глазами организации» в Excel.
+  'dm.out.history_porg_export': {
+    ru: 'Шаблон витрины данных «{name}» выгружен в Excel глазами организации',
+    section: S,
+  },
   'dm.out.empty_title': { ru: 'По этим параметрам данных нет', section: S },
   'dm.out.empty_text': { ru: 'Измените параметры и нажмите «Показать».', section: S },
   'dm.out.count.one': { ru: '{n} строка', section: S },

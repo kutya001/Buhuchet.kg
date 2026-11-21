@@ -91,6 +91,22 @@ function exportColumns(
   });
 }
 
+/**
+ * Сортировка, фильтры, поиск, группы и итоги — только по столбцам вывода, как `cols`: неизвестный ключ —
+ * 400, а не тихий пропуск (правило списков API).
+ */
+function checkListKeys(columns: readonly DmOutColumn[], query: ListQuery): void {
+  const known = new Set(dmShownColumns(columns).map((s) => s.col.code));
+  const keys = [
+    ...(query.sort ? [query.sort.key] : []),
+    ...Object.keys(query.filters),
+    ...(query.search?.keys ?? []),
+    ...(query.group ?? []),
+    ...Object.keys(query.agg ?? {}),
+  ];
+  if (keys.some((k) => !known.has(k))) apiFail(400, 'validation_failed', 'Неизвестный столбец');
+}
+
 /** Значение ячейки файла: деньги — тыйыны, число — числом, остальное — как на экране. */
 function cellOf(col: DmOutColumn, value: DmValue, texts: DmOutTexts): XlsxCell {
   if (value === null) return null;
@@ -116,6 +132,7 @@ function fileOf(
     total: col.total,
   }));
   const shown = exportColumns(columns, cols);
+  checkListKeys(columns, query);
   const texts: DmOutTexts = { yes: t('dm.out.yes'), no: t('dm.out.no') };
   const rows = dmOutList(dmOutRows(columns, out.rows), columns, query, texts);
   const kept = rows.slice(0, EXPORT_ROWS_LIMIT);
@@ -137,8 +154,9 @@ export function outputExportHandlers(deps: ApiDeps) {
     const query = listQueryOf(list);
     const userId = c.get('session')!.userId;
     const t = await serverTexts(deps);
-    return withExportSlot(deps, userId, () =>
-      withRunSlot(deps, userId, t, async () =>
+    // Сначала очередь запуска: пока идёт «Показать», выгрузка не тратит одну из 20 в час.
+    return withRunSlot(deps, userId, t, () =>
+      withExportSlot(deps, userId, async () =>
         fileOf(c, deps, await orgOutput(deps, c, input), query, list.cols, t),
       ),
     );
@@ -149,9 +167,9 @@ export function outputExportHandlers(deps: ApiDeps) {
     const query = listQueryOf(list);
     const userId = c.get('session')!.userId;
     const t = await serverTexts(deps);
-    return withExportSlot(deps, userId, () =>
-      withRunSlot(deps, userId, t, async () =>
-        fileOf(c, deps, await adminOutput(deps, c, input), query, list.cols, t),
+    return withRunSlot(deps, userId, t, () =>
+      withExportSlot(deps, userId, async () =>
+        fileOf(c, deps, await adminOutput(deps, c, input, undefined, true), query, list.cols, t),
       ),
     );
   };

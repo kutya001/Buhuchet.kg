@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { platformAdmin, search } from './admin';
 import { cardTab, DEMO_PASSWORD, newOrgOwner, signIn } from './helpers';
@@ -347,7 +348,13 @@ test.describe('Доработки 20.11, пакет 2. Админка → «Фа
     await page.goto('/app/cps/all');
     const rows = page.locator('[data-grid] [data-id]');
     await expect(rows.first()).toBeVisible();
+    // Ответ поиска — до нажатия в строке (docs/typical-mistakes.md № 27).
+    const searched = page.waitForResponse((r) => {
+      const url = new URL(r.url());
+      return url.pathname === '/api/contractors' && url.searchParams.get('q') === tag;
+    });
     await search(page, isMobile, tag);
+    expect((await searched).status()).toBe(200);
     await expect(rows).toHaveCount(1);
     await rows.first().getByText(cpName, { exact: true }).click();
     const card = page.getByRole('dialog', { name: cpName });
@@ -363,6 +370,118 @@ test.describe('Доработки 20.11, пакет 2. Админка → «Фа
       .filter({ hasText: texts['afiles.hist.restored']!.replace('{name}', name) });
     await expect(item).toHaveCount(1);
     await expect(item).toContainText(texts['accounts.card.hist.admin']!);
+  });
+
+  test('(блок 3, пункт 5; этап 2, П5) «Скачать» непринятого файла от контрагента — сначала предупреждение «не проверен фирмой»; «Отмена» ничего не скачивает, «Скачать» отдаёт файл', async ({
+    page,
+    browser,
+    playwright,
+    baseURL,
+    isMobile,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    const tag = uniqueTag();
+    const name = `прислано-${tag}.txt`;
+    const body = Buffer.from(`Прислал контрагент ${tag}\n`, 'utf8');
+    // Свой контрагент демо-организации со страницей; файл присылает клиент со страницы (начать → PUT →
+    // закончить) — файл «Новый», фирма его не принимала.
+    const staff = await browser.newContext({ baseURL });
+    try {
+      await signIn(staff.request, origin, 'erkin', DEMO_PASSWORD);
+      const me = (await (await staff.request.get('/api/auth/me')).json()) as {
+        organization: { slug: string };
+        employee: { id: string };
+      };
+      const inn = freshInn();
+      const created = await staff.request.post('/api/contractors', {
+        headers: { origin },
+        data: {
+          name: `ОсОО «Прислал ${tag}»`,
+          inn,
+          phone: '+996505890076',
+          kind: 'regular',
+          formCode: 'ФС-01',
+          regimeCode: 'РЕЖ-01',
+          gked: '46.34.0',
+          startDate: '2026-10-01',
+          responsibleEmployeeId: me.employee.id,
+          tariff: { amount: 0, period: 'M' },
+        },
+      });
+      expect(created.status(), await created.text()).toBe(201);
+      const { id } = (await created.json()) as { id: string };
+      const on = await staff.request.post(`/api/contractors/${id}/page/enable`, {
+        headers: { origin },
+      });
+      expect(on.status(), await on.text()).toBe(200);
+      const { code } = (await on.json()) as { code: string };
+
+      const part = () => Math.floor(Math.random() * 256);
+      const client = await playwright.request.newContext({
+        baseURL,
+        extraHTTPHeaders: { 'x-forwarded-for': `198.18.${part()}.${part()}` },
+      });
+      try {
+        const path = `/${me.organization.slug}/inn/${inn}`;
+        const opened = await client.post(`/api/page/${me.organization.slug}/${inn}/code`, {
+          headers: { origin },
+          data: { code },
+        });
+        expect(opened.status(), await opened.text()).toBe(200);
+        const begun = await client.post(`${path}/sent`, {
+          headers: { origin },
+          data: { files: [{ name, size: body.length }] },
+        });
+        expect(begun.status(), await begun.text()).toBe(201);
+        const [item] = (
+          (await begun.json()) as {
+            items: { id: string; upload: { url: string; headers: Record<string, string> } }[];
+          }
+        ).items;
+        const put = await client.put(item!.upload.url, {
+          headers: item!.upload.headers,
+          data: body,
+        });
+        expect(put.status(), await put.text()).toBe(200);
+        const done = await client.post(`${path}/sent/complete`, {
+          headers: { origin },
+          data: { ids: [item!.id] },
+        });
+        expect(done.status(), await done.text()).toBe(200);
+      } finally {
+        await client.dispose();
+      }
+    } finally {
+      await staff.close();
+    }
+
+    await platformAdmin(page.request, origin);
+    const texts = await dictionary(page.request);
+    await page.goto('/app/afiles/all');
+    await allFilesWithTag(page, isMobile, tag);
+    const row = page.locator('[data-afiles-all] [data-grid] [data-id]');
+    await row.getByText(name, { exact: true }).click();
+    const win = page.getByRole('dialog', { name });
+    await expect(win.locator('[data-fv="text"]')).toContainText(`Прислал контрагент ${tag}`);
+
+    // «Скачать» в окне файла: предупреждение, «Отмена» — без скачивания.
+    let downloads = 0;
+    page.on('download', () => {
+      downloads += 1;
+    });
+    await win.locator('[data-fv-download]').click();
+    const warn = page.getByRole('dialog', { name: texts['afiles.dl.title'] });
+    await expect(warn).toContainText(texts['afiles.dl.text']!);
+    await warn.getByRole('button', { name: texts['btn.cancel'], exact: true }).click();
+    await expect(warn).toHaveCount(0);
+    expect(downloads).toBe(0);
+
+    // Ещё раз — «Скачать» в предупреждении отдаёт файл.
+    await win.locator('[data-fv-download]').click();
+    const file = page.waitForEvent('download');
+    await warn.getByRole('button', { name: texts['afiles.act.download'], exact: true }).click();
+    // Имя вложения ставит хранилище (`filename*`), браузер теста его не разбирает: сверяем содержимое.
+    expect(await readFile((await (await file).path())!, 'utf8')).toBe(body.toString('utf8'));
   });
 
   test('(блок 3, пункт 7) модуль только администратору платформы: сотрудник получает отказ на методы «Файлов» Админки', async ({

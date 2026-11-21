@@ -1,9 +1,10 @@
-import { schema } from '@buhuchet/db';
+import { releaseRateLimit, schema, takeRateLimit } from '@buhuchet/db';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { readSheetRows } from '../../lists/xlsx-read';
 import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../testing';
+import { DM_RUN_RATE_LIMIT } from './output';
 
 /*
  * «Витрина данных» → «Вывод» → «В Excel» (доработки 20.11.2026: Витрина данных, блок 4, пункт 5; общий
@@ -13,7 +14,7 @@ import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../tes
  */
 
 type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
-const { auditLog, contractors, dmRequests, dmTemplates, dmTemplateSql } = schema;
+const { auditLog, contractors, dmRequests, dmTemplates, dmTemplateSql, rateLimits } = schema;
 
 const col = (code: string, type = 'text', extra: Record<string, unknown> = {}) => ({
   code,
@@ -114,8 +115,13 @@ describe.skipIf(!databaseAvailable())('Витрина данных: «Вывод
     expect((await exportOrg(null, { code: 'xl-cps' })).status).toBe(401);
     expect((await exportOrg('platform-admin', { code: 'xl-cps' })).status).toBe(403);
     expect(
-      (await call('owner-a', '/api/admin/dm/output/export', { code: 'xl-cps', params: {}, list: list() }))
-        .status,
+      (
+        await call('owner-a', '/api/admin/dm/output/export', {
+          code: 'xl-cps',
+          params: {},
+          list: list(),
+        })
+      ).status,
     ).toBe(403);
   });
 
@@ -182,8 +188,12 @@ describe.skipIf(!databaseAvailable())('Витрина данных: «Вывод
 
   it('отказы: неизвестный или служебный столбец и неверный запрос списка — 400, параметр — `dm_bad_param`, сломанный — 409, чужой код — 404', async () => {
     expect(
-      (await fail(await exportOrg('owner-a', { code: 'xl-cps', list: list({ cols: 'name,x' }) }), 400))
-        .code,
+      (
+        await fail(
+          await exportOrg('owner-a', { code: 'xl-cps', list: list({ cols: 'name,x' }) }),
+          400,
+        )
+      ).code,
     ).toBe('validation_failed');
     expect(
       (
@@ -194,9 +204,26 @@ describe.skipIf(!databaseAvailable())('Витрина данных: «Вывод
       ).code,
     ).toBe('validation_failed');
     expect(
-      (await fail(await exportOrg('owner-a', { code: 'xl-cps', list: list({ filters: '{' }) }), 400))
-        .code,
+      (
+        await fail(
+          await exportOrg('owner-a', { code: 'xl-cps', list: list({ filters: '{' }) }),
+          400,
+        )
+      ).code,
     ).toBe('validation_failed');
+    // Сортировка, фильтр, поиск и группа — только по столбцам вывода (служебный «Контрагент» — тоже нет).
+    const unknown: Record<string, string>[] = [
+      { sort: 'x.asc' },
+      { filters: JSON.stringify({ x: { type: 'text', q: 'а' } }) },
+      { q: 'а', qcols: 'name,contractor_id' },
+      { group: 'x' },
+    ];
+    for (const over of unknown) {
+      expect(
+        (await fail(await exportOrg('owner-a', { code: 'xl-cps', list: list(over) }), 400)).code,
+        JSON.stringify(over),
+      ).toBe('validation_failed');
+    }
     const bad = await fail(
       await exportOrg('owner-a', {
         code: 'xl-month',
@@ -218,6 +245,29 @@ describe.skipIf(!databaseAvailable())('Витрина данных: «Вывод
     );
   });
 
+  it('идёт «Показать» того же человека — 429 «Предыдущий запрос ещё выполняется», выгрузка из 20 в час не тратится', async () => {
+    const exportsOf = async () =>
+      (
+        await f.t.admin.db
+          .select({ n: sql<number>`count(*)::int` })
+          .from(rateLimits)
+          .where(and(eq(rateLimits.kind, 'export'), eq(rateLimits.subject, f.a.ownerUserId)))
+      )[0]!.n;
+    const before = await exportsOf();
+    const slot = await takeRateLimit(f.t.app.db, DM_RUN_RATE_LIMIT, f.a.ownerUserId);
+    if (!slot.ok) throw new Error('место запуска свободно');
+    try {
+      expect((await fail(await exportOrg('owner-a', { code: 'xl-cps' }), 429)).code).toBe(
+        'dm_busy',
+      );
+      expect(await exportsOf()).toBe(before);
+    } finally {
+      await releaseRateLimit(f.t.app.db, DM_RUN_RATE_LIMIT, f.a.ownerUserId, slot.ticket);
+    }
+    await sheet(await exportOrg('owner-a', { code: 'xl-cps' }));
+    expect(await exportsOf()).toBe(before + 1);
+  });
+
   it('Админка: шаблон организаций — только «глазами организации», открытие — в её историю', async () => {
     expect((await fail(await exportAdmin({ code: 'xl-cps' }), 400)).code).toBe('dm_org_required');
     const views = () =>
@@ -234,6 +284,23 @@ describe.skipIf(!databaseAvailable())('Витрина данных: «Вывод
     const before = (await views()).length;
     const rows = await sheet(await exportAdmin({ code: 'xl-cps', orgId: f.b.orgId }));
     expect(rows.slice(1).map((r) => r[0])).toEqual(['Гамма']);
-    expect((await views()).length).toBe(before + 1);
+    const after = await views();
+    expect(after.length).toBe(before + 1);
+    // Организация видит, что её данные выгрузили в файл, а не только открыли.
+    const [last] = await f.t.admin.db
+      .select({ reason: auditLog.reason })
+      .from(auditLog)
+      .where(
+        and(
+          eq(auditLog.orgId, f.b.orgId),
+          eq(auditLog.entity, 'organization'),
+          eq(auditLog.action, 'card_view'),
+        ),
+      )
+      .orderBy(desc(auditLog.at))
+      .limit(1);
+    expect(last?.reason).toBe(
+      'Шаблон витрины данных «Шаблон xl-cps» выгружен в Excel глазами организации',
+    );
   });
 });

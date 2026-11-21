@@ -328,7 +328,8 @@ export const createDictRequestRoute = createRoute({
     },
     ...access,
     403: {
-      description: 'Не сотрудник организации; «Попросить шаблон» без права «Смотреть витрину данных»',
+      description:
+        'Не сотрудник организации; «Попросить шаблон» без права «Смотреть витрину данных»',
       content: error,
     },
   },
@@ -395,6 +396,9 @@ export function listDictRequestsHandler(
 ): RouteHandler<typeof listDictRequestsRoute, AppEnv> {
   return async (c) => {
     const items = await withOrgContext(deps.db, orgContextOf(c), (tx) => listDictRequests(tx));
-    return c.json({ items: items.map(requestBody) }, 200);
+    // Запросы «Попросить шаблон» (комментарий может назвать контрагента) — только с правом «Смотреть
+    // витрину данных», как и само «Попросить шаблон» (этап 2, П7).
+    const dm = hasPermission(c.get('access')!.subject, 'dmView');
+    return c.json({ items: items.filter((r) => dm || r.dict !== 'dm').map(requestBody) }, 200);
   };
 }
