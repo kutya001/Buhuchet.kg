@@ -145,10 +145,11 @@ test.describe('Витрина данных: API Токены', () => {
       // (прототип v163) Токен в файле — открытым текстом: предупреждение у Excel, Power BI и 1С; у Google
       // Таблиц оно в самом скрипте, у «Других сервисов» его нет.
       await expect(how.locator('[data-dm-how-plain]')).toHaveCount(4);
+      // В каждом из четырёх блоков оно первое в теле блока, перед шагами.
       for (const app of ['pq', 'vba', 'pbi', '1c'])
-        await expect(how.locator(`[data-dm-how-app="${app}"] [data-dm-how-plain]`)).toHaveText(
-          texts['dm.how.token_plain']!,
-        );
+        await expect(
+          how.locator(`[data-dm-how-app="${app}"] > div > [data-dm-how-plain]:first-child`),
+        ).toHaveText(texts['dm.how.token_plain']!);
       await expect(how.locator('[data-dm-how-app="pq"] [data-dm-how-plain]')).toBeVisible();
       const pq = how.locator('[data-dm-how-code="pq"]');
       await expect(pq).toBeVisible();
@@ -323,6 +324,9 @@ test.describe('Витрина данных: API Токены', () => {
       await expect(card.locator('[data-dm-how-code="pq"]')).toContainText(
         `Token = "${texts['dm.how.placeholder']}"`,
       );
+      // (прототип v163) Предупреждение о токене в файле — и в окне уже выпущенного токена.
+      await expect(card.locator('[data-dm-how-plain]')).toHaveCount(4);
+      await expect(card.locator('[data-dm-how-app="pq"] [data-dm-how-plain]')).toBeVisible();
       await expect(page.locator('body')).not.toContainText(issued.token);
 
       // С `?format=csv` — таблица с названиями столбцов (метка UTF-8 впереди).

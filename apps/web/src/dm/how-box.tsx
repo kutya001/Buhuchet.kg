@@ -247,7 +247,7 @@ export function HowBox({ how, token }: { how: DmTokenHow; token: string | null }
     />
   );
   // Токен в коде и в запросе — открытым текстом: предупреждение первой строкой блоков Excel, Power BI и
-  // 1С (ТЗ, доработки 21.11.2026, п. 9; прототип v163 `.dm-tkw`); у Google Таблиц оно в самом скрипте.
+  // 1С (прототип v163 `.dm-tkw`; ТЗ в `spec/` о нём молчит — п. О-2); у Google Таблиц оно в самом скрипте.
   const tokenPlain = (
     <p
       data-dm-how-plain=""
