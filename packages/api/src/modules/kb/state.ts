@@ -5,12 +5,12 @@ import {
   kbFeatureOnDates,
   kbMarkDone,
   kbMarksOf,
+  kbOrgSettings,
   kbReachedOf,
   kbReadArticles,
   kbRecordLevels,
   kbReplaceHand,
   kbScreenUi,
-  orgMenuSettings,
   type KbReachedLevel,
   type Tx,
 } from '@buhuchet/db';
@@ -95,11 +95,11 @@ export function asLearner<T>(
     if (!session.orgId || !access) {
       return fn(tx, { userId: session.userId, orgId: null, access: kbAdminAccess() });
     }
-    const { features, reportConfirm } = await orgMenuSettings(tx, session.orgId);
+    const { features, policy } = await kbOrgSettings(tx, session.orgId);
     return fn(tx, {
       userId: session.userId,
       orgId: session.orgId,
-      access: kbBusinessAccess(access.subject, features, { reportConfirm }),
+      access: kbBusinessAccess(access.subject, features, policy),
     });
   });
 }

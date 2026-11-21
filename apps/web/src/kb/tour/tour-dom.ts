@@ -792,10 +792,14 @@ export class TourDom {
     if (!root) return [];
     const { t, ui } = this.env;
     const P: TourPoint[] = [];
-    // Форма полей: окно — по заголовку без названия записи, форма на странице — по экрану.
+    // Форма полей: окно — по своей метке или заголовку без названия записи, на странице — по экрану.
+    const win = where === 'window' ? topWindow() : null;
     const form = fieldForm(
       where === 'window'
-        ? { title: clean(topWindow()?.querySelector('[data-window-head] h2')?.textContent) }
+        ? {
+            title: clean(win?.querySelector('[data-window-head] h2')?.textContent),
+            has: (sel) => !!win?.querySelector(sel),
+          }
         : { screen: this.env.screen() },
       t,
     );

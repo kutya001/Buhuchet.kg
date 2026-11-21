@@ -50,9 +50,19 @@ export const KB_EVENT_STEPS = {
   'k.xls': 'kxls',
   'k.check': 'kchk',
   'f.upload': 'upload',
+  'dm.tok': 'dmtok',
 } as const;
 
 export type KbHistoryEvent = keyof typeof KB_EVENT_STEPS;
+
+/**
+ * Первое использование, у которого имя функции не совпадает с кодом шага (поле `hit` шага refDB,
+ * прототип ckHit): по нему экран находит шаг в программе пользователя, прежде чем отправить отметку.
+ */
+export const KB_HIT_STEPS: Readonly<Record<string, string>> = {
+  pdload: 'a-xls',
+  'dm.run': 'dmshow',
+};
 
 /**
  * Условия без события истории: `open` — «Перейти» и 3 секунды на экране шага, показ до конца или

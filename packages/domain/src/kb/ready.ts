@@ -69,8 +69,12 @@ export interface KbStepRule {
   policy?: KbPolicySetting;
 }
 
-/** Настройки учётной политики, от которых зависят шаги (не функции из «Функций»). */
-export type KbPolicySetting = 'reportConfirm';
+/**
+ * Настройки учётной политики и признаки организации, от которых зависят шаги (не функции из
+ * «Функций»): `reportConfirm` — «Сдача отчётов требует подтверждения», `notDemo` — организация не
+ * демо (прототип `feat: () => !dmDemo()`: в демо API-токены не выпускаются).
+ */
+export type KbPolicySetting = 'reportConfirm' | 'notDemo';
 
 const orgSettings = (...anyField: string[]): KbDoneRule => ({
   kind: 'history',
@@ -282,6 +286,18 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
     done: { kind: 'history', entity: 'file', actions: ['file_attach'] },
   },
   ffind: { module: 'files' },
+  // Витрина данных (общий план 20.11, этап 3, П3; прототип v157): «Показать отчёт» — первое
+  // использование «Показать» во вкладке «Вывод» (`dm.run`), таблица и каталог — «Посмотреть»,
+  // «Выпустить API-токен» — запись истории выпуска или перевыпуска токена (прототип `KB_EV['dm.tok']`);
+  // в демо токены не выпускаются — шага нет. Права шагов — в справочнике (`perm`).
+  dmshow: { module: 'dm' },
+  dmxl: { module: 'dm' },
+  dmcat: { module: 'dm' },
+  dmtok: {
+    module: 'dm',
+    policy: 'notDemo',
+    done: { kind: 'history', entity: 'dm_token', actions: ['create', 'dm_reissue'] },
+  },
   // 13. Главная и аналитика (задача 2.34): оба шага — «Посмотреть»; «Аналитика выручки» — с правом и
   // функцией «Плата за обслуживание» (справочник шагов: `perm`, `featk`).
   today: { module: 'home' },
@@ -303,6 +319,8 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
   'a-tpl': { module: 'pdicts' },
   'a-l10n': { module: 'l10n' },
   'a-org': { module: 'orgs', done: { kind: 'org_created' } },
+  // Шаблоны «Витрины данных» (этап 3, П3): «Перейти» и 3 секунды на вкладке «Шаблоны».
+  'a-dm': { module: 'dm' },
 };
 
 /**
@@ -339,4 +357,6 @@ export const KB_READY_MODULES: ReadonlySet<string> = new Set<MenuModuleId>([
   'tdocs',
   // «Запуски» (прототип v132).
   'runs',
+  // «Витрина данных» (общий план 20.11): у организаций и в Админке.
+  'dm',
 ]);

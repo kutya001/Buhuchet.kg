@@ -14,6 +14,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState, type ReactNode } from 'react';
 import { ApiFailure } from '../api-client';
+import { useKb } from '../kb/kb-provider';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { useShell } from '../shell/context';
@@ -63,7 +64,8 @@ export function OutTab({ side }: { side: DmSide }) {
       </Note>
     );
   }
-  if (!catalog.data) return null;
+  // Пока каталог грузится — заглушка `aria-busy`: «Показать как» ждёт её, а не пустой экран.
+  if (!catalog.data) return <div className="min-h-[200px]" aria-busy="true" data-dm-loading="" />;
   const { items, canExport } = catalog.data;
   if (!items.length) {
     return (
@@ -91,6 +93,7 @@ function OutBody({
 }) {
   const t = useT();
   const errorText = useErrorText();
+  const kb = useKb();
   const { userId } = useShell();
   const choice = useOutChoice();
   const admin = side === 'admin';
@@ -143,6 +146,8 @@ function OutBody({
       ...(orgSel && orgId ? { org: orgId } : {}),
       shown: { tpl: tpl.code, params: values, org: orgId, n: (choice.shown?.n ?? 0) + 1 },
     });
+    // Урок «Витрина данных»: «Показать отчёт» — первым «Показать» рабочего шаблона (прототип ckHit).
+    if (tpl.state !== 'broken') kb.hit('dm.run');
   };
 
   // Сломанный шаблон: «Шаблон временно не работает»; Админка после «Показать» видит и ошибку базы.
@@ -273,7 +278,8 @@ function OutBody({
           </span>
         ) : null}
       </section>
-      {below}
+      {/* Место результата (прототип `#dm-res`): его подсвечивает «Перейти» урока «Изучить результат». */}
+      {below ? <div data-dm-res="">{below}</div> : null}
     </div>
   );
 }

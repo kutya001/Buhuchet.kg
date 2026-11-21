@@ -34,6 +34,44 @@ describe('«Показать как»: элементы прототипа на 
     );
   });
 
+  it('урок «Витрина данных»: элементы показов и «Обзора экрана» есть в продукте', () => {
+    // Обозначения показов sh-dmshow, sh-dmxl, sh-dmcat, sh-dmtok и kbUi.els экранов dm (прототип v157).
+    const proto = [
+      '#dm-t',
+      '#mbody .dm-pars',
+      '#dm-go',
+      '#mbody .dm-meta',
+      '#dm-g .gscroll',
+      '#dm-st',
+      '#mbody .gt thead .th-f',
+      '#mbody [data-a=xls]',
+      '#dm-ask',
+      '#mbody .dm-card',
+      '#mbody [data-dm-show]',
+      '#mbody [data-dm-tok]',
+      '#mbody .note.red',
+    ];
+    for (const p of proto) expect(productTarget(p), p).not.toBeNull();
+    expect(productTarget('#dm-go')).toBe('main [data-dm-out-show]');
+    expect(productTarget('#mbody .note.red')).toBe('main [data-dm-api-off]');
+    // Поля «Вывода» и окон витрины — по кодам полей прототипа.
+    expect(fieldForm({ screen: 'dm.out' }, t)).toBe('dm|dmp');
+    expect(fieldForm({ title: 'Новый API-токен' }, t)).toBe('dk');
+    // Открытый шаблон в Админке: в заголовке — его название, форма — по метке редактора в окне.
+    const editor = (sel: string) => sel === '[data-dm-editor]';
+    expect(fieldForm({ title: 'Отчёты к сдаче', has: editor }, t)).toBe('de');
+    expect(fieldForm({ title: 'Отчёты к сдаче', has: () => false }, t)).toBeUndefined();
+    expect(fieldForm({ title: 'Новый шаблон', has: editor }, t)).toBe('de');
+    const dm = {
+      'dm-t': { n: 'Шаблон', x: 'Какой отчёт показать.' },
+      'dk-t': { n: 'Шаблон', x: 'Шаблон токена.' },
+      'dmp-month': { n: 'Месяц', x: 'Месяц отчёта.' },
+    };
+    expect(fieldText(dm, 'Шаблон', 'dm|dmp')).toBe('Какой отчёт показать.');
+    expect(fieldText(dm, 'Шаблон', 'dk')).toBe('Шаблон токена.');
+    expect(fieldText(dm, 'Месяц', 'dm|dmp')).toBe('Месяц отчёта.');
+  });
+
   it('«подняться до» пункта меню и строки карточки — элементы продукта', () => {
     expect(productUp('.mi')).toBe('[role=menuitem]');
     expect(productUp('.kv > div')).toBe('dl > div');

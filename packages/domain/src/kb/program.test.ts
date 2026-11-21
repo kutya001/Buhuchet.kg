@@ -86,6 +86,7 @@ function access(o: {
   modules?: string[];
   admin?: boolean;
   reportConfirm?: boolean;
+  demo?: boolean;
 }): KbAccess {
   const perms = new Set(o.perms ?? []);
   const features = new Set(o.features ?? []);
@@ -94,7 +95,7 @@ function access(o: {
     isOwner: o.owner ?? false,
     can: (p) => o.owner === true || perms.has(p),
     feature: (f) => features.has(f),
-    policy: (s) => s === 'reportConfirm' && (o.reportConfirm ?? true),
+    policy: (s) => (s === 'reportConfirm' ? (o.reportConfirm ?? true) : !(o.demo ?? false)),
     modules: new Set(o.modules ?? ['home', 'cps', 'kpi', 'org', 'kb']),
   };
 }
@@ -165,6 +166,37 @@ describe('программа обучения', () => {
       reportConfirm: false,
     });
     expect(kbStepVisible(submit, accountant, { submit: KB_STEP_RULES.submit! })).toBe(true);
+  });
+
+  it('«Витрина данных»: шаги — по правам справочника, «Выпустить API-токен» — не в демо (прототип `feat: () => !dmDemo()`)', () => {
+    const dm = (id: string, ord: number, perm: string) => step(id, 'dm', ord, { perm });
+    const rules = {
+      dmshow: KB_STEP_RULES.dmshow!,
+      dmcat: KB_STEP_RULES.dmcat!,
+      dmtok: KB_STEP_RULES.dmtok!,
+    };
+    const show = dm('dmshow', 77, 'dmView');
+    const cat = dm('dmcat', 79, 'dmView');
+    const tok = dm('dmtok', 80, 'dmTokens');
+    const viewer = access({ perms: ['dmView'], modules: ['dm'] });
+    expect(kbStepVisible(show, viewer, rules)).toBe(true);
+    expect(kbStepVisible(cat, viewer, rules)).toBe(true);
+    // Без права «API-токены» шага выпуска нет.
+    expect(kbStepVisible(tok, viewer, rules)).toBe(false);
+    const issuer = (demo: boolean) =>
+      access({ perms: ['dmView', 'dmTokens'], modules: ['dm'], demo });
+    expect(kbStepVisible(tok, issuer(false), rules)).toBe(true);
+    // В демо-организации токены не выпускаются — шаг скрыт, остальные шаги модуля остаются.
+    expect(kbStepVisible(tok, issuer(true), rules)).toBe(false);
+    expect(kbStepVisible(show, issuer(true), rules)).toBe(true);
+    // Модуля нет в меню (нет права смотреть «Витрину данных») — шагов нет.
+    expect(kbStepVisible(show, access({ perms: ['dmView'], modules: [] }), rules)).toBe(false);
+    // Выпуск и перевыпуск токена — события истории самого пользователя.
+    expect(KB_STEP_RULES.dmtok!.done).toEqual({
+      kind: 'history',
+      entity: 'dm_token',
+      actions: ['create', 'dm_reissue'],
+    });
   });
 
   it('шаги модулей, которых ещё нет, и выключенные администратором шаги скрыты', () => {
@@ -430,5 +462,13 @@ describe('урок, экран шага, первое использование
     };
     expect(kbHitMark(profile, 'profile')).toBe('action');
     expect(kbHitMark(profile, 'settings')).toBeNull();
+    // «Показать отчёт во вкладке «Вывод»» — нажатием «Показать» (`dm.run`), не «Посмотреть» модуля.
+    const dmshow = {
+      ...remind,
+      def: { ...remind.def, id: 'dmshow', g: 'dm', hit: 'dm.run' },
+      rule: KB_STEP_RULES.dmshow!,
+    };
+    expect(kbHitMark(dmshow, 'dm.run')).toBe('use');
+    expect(kbHitMark(dmshow, 'dmshow')).toBeNull();
   });
 });

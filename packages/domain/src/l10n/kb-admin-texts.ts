@@ -236,6 +236,7 @@ export const KB_ADMIN_TEXTS = {
   'kbadm.ev.k.xls': { ru: 'показатели загружены из Excel', section: S },
   'kbadm.ev.k.check': { ru: 'месяц показателей проверен', section: S },
   'kbadm.ev.f.upload': { ru: 'загружен файл вручную', section: S },
+  'kbadm.ev.dm.tok': { ru: 'выпущен API-токен', section: S },
   'kbadm.ev.open': {
     ru: '«Перейти» и 3 секунды на экране шага, показ «Показать как» до конца или статья шага (Посмотреть)',
     section: S,

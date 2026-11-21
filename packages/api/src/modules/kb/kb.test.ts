@@ -79,10 +79,23 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
       'reports',
       'tasks',
       'files',
+      // «Витрина данных» (общий план 20.11, этап 3, П3): 4 шага, «Выпустить API-токен» — не в демо.
+      'dm',
       'home',
       'lists',
     ]);
-    expect(own.progress).toMatchObject({ total: 42, done: 0, pct: 0, level: 0, next: 1, need: 11 });
+    expect(own.progress).toMatchObject({ total: 46, done: 0, pct: 0, level: 0, next: 1, need: 12 });
+    expect(own.lessons.find((l) => l.id === 'dm')!.steps.map((x) => x.id)).toEqual([
+      'dmshow',
+      'dmxl',
+      'dmcat',
+      'dmtok',
+    ]);
+    expect(step(own, 'dmxl')).toMatchObject({
+      learn: true,
+      screens: ['dm.out'],
+      articleId: 'a_dm',
+    });
     expect(own.progress.levels.map((l) => l.name)).toEqual([
       'Новичок',
       'Ученик',
@@ -159,6 +172,36 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     expect((await call('GET', '/api/kb/me')).status).toBe(401);
   });
 
+  it('«Выпустить API-токен» — не в демо-организации, остальные шаги «Витрины данных» остаются', async () => {
+    const ids = async () => steps(await state(ownerB)).map((x) => x.id);
+    expect(await ids()).toEqual(expect.arrayContaining(['dmshow', 'dmxl', 'dmcat', 'dmtok']));
+    // Та же настройка — у «Уровней сотрудников»: шагов владельца в демо на один меньше.
+    const params = new URLSearchParams(
+      listQueryParams({ sort: undefined, page: 1, size: 25, filters: {} }),
+    );
+    const ownerTotal = async () =>
+      KbTeamList.parse(await ok(await call('GET', `/api/kb/team?${params}`, ownerB))).items.find(
+        (r) => r.fullName === 'Владелец owner-b',
+      )?.total;
+    const before = await ownerTotal();
+    expect(before).toBeGreaterThan(0);
+    const demo = (isDemo: boolean) =>
+      f.t.admin.db
+        .update(schema.organizations)
+        .set({ isDemo })
+        .where(eq(schema.organizations.id, f.b.orgId));
+    await demo(true);
+    try {
+      const inDemo = await ids();
+      expect(inDemo).not.toContain('dmtok');
+      expect(inDemo).toEqual(expect.arrayContaining(['dmshow', 'dmxl', 'dmcat']));
+      expect(await ownerTotal()).toBe(before! - 1);
+    } finally {
+      await demo(false);
+    }
+    expect(await ownerTotal()).toBe(before);
+  });
+
   it('администратор платформы — своя программа: шаги сделанных модулей Админки', async () => {
     const s = await state(admin);
     expect(s).toMatchObject({ admin: true, offers: [], featureLessons: {} });
@@ -172,6 +215,8 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
       ['a-tpl', 'pdicts', true],
       ['a-l10n', 'l10n', true],
       ['a-org', 'orgs', false],
+      // Шаблоны «Витрины данных» (общий план 20.11, этап 3, П3).
+      ['a-dm', 'dm', true],
     ]);
     expect(step(s, 'a-dicts')!.screens).toContain('pdicts.regimes');
     expect(step(s, 'a-cal')!.screens).toEqual(['pdicts.calendar']);
@@ -179,7 +224,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     // — ещё нет).
     const arts = KbArticleList.parse(await ok(await call('GET', '/api/kb/articles', admin)));
     const ids = arts.items.map((a) => a.id);
-    expect(ids).toEqual(expect.arrayContaining(['a19_1', 'a19_2', 'a19_3', 'a19_4']));
+    expect(ids).toEqual(expect.arrayContaining(['a19_1', 'a19_2', 'a19_3', 'a19_4', 'a19_6']));
     expect(ids).not.toContain('a19_5');
 
     // «Проверить справочники платформы» — 3 секунды на экране шага (docs/deviations.md п. Д-7).
@@ -242,7 +287,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     const notMine = KbMarkResult.parse(await ok(await call('POST', '/api/kb/hits/profile', acc)));
     expect(notMine.fresh).toEqual([]);
 
-    // Ещё 10 шагов — 11 из 41 (26 %): уровень «Ученик». «Добавить первого контрагента» (задача 2.09) —
+    // Ещё 12 шагов — 13 из 46 (28 %): уровень «Ученик». «Добавить первого контрагента» (задача 2.09) —
     // по истории создания контрагента, «Закрепить ответственных» (задача 2.10) — ответственный в той же
     // записи, «Загрузка из Excel» (задача 2.16) — запись о загрузке, «Создать уточнённый отчёт»
     // (задача 2.14) — у прежней версии
@@ -291,11 +336,19 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     expect(hit.fresh.map((x) => [x.id, x.how])).toEqual([['search', 'use']]);
     const cols = KbMarkResult.parse(await ok(await call('POST', '/api/kb/hits/cols', owner)));
     expect(cols.fresh.map((x) => [x.id, x.how])).toEqual([['cols', 'use']]);
+    // «Показать отчёт во вкладке «Вывод»» — нажатием «Показать» (прототип `ckHit('dm.run')`),
+    // «Выпустить API-токен» — записью истории выпуска токена (прототип `KB_EV['dm.tok']`).
+    const run = KbMarkResult.parse(await ok(await call('POST', '/api/kb/hits/dm.run', owner)));
+    expect(run.fresh.map((x) => [x.id, x.how])).toEqual([['dmshow', 'use']]);
+    await withOrgContext(f.t.app.db, { orgId: f.a.orgId, userId: f.a.ownerUserId }, (tx) =>
+      writeHistory(tx, { entity: 'dm_token', entityId: crypto.randomUUID(), action: 'create' }),
+    );
     const second = KbMarkResult.parse(
       await ok(await call('POST', '/api/kb/sync', owner, { reason: 'saved' })),
     );
     expect(second.fresh.map((x) => x.id).sort()).toEqual([
       'cp1',
+      'dmtok',
       'import',
       'profile',
       'remind',
@@ -305,7 +358,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
       'ver',
     ]);
     expect(second.congrats).toBe('Ученик');
-    expect(second.state.progress).toMatchObject({ done: 11, pct: 26, level: 1 });
+    expect(second.state.progress).toMatchObject({ done: 13, pct: 28, level: 1 });
     // Повтор ничего не меняет.
     const again = KbMarkResult.parse(
       await ok(await call('POST', '/api/kb/sync', owner, { reason: 'open' })),
@@ -423,8 +476,8 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
       level: 1,
       levelName: 'Ученик',
       of: 5,
-      done: 12,
-      total: 42,
+      done: 14,
+      total: 46,
       levelAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
     });
     const accRow = team.items.find((r) => r.fullName === 'Сотрудник acc-a');
@@ -480,7 +533,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     expect(own.items.find((e) => e.login === 'owner-a')?.kb).toEqual({
       level: 1,
       name: 'Ученик',
-      pct: 28,
+      pct: 30,
       of: 5,
     });
     const sorted = await staff(

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import refDB from '../../../../spec/data/refDB.json';
 import { UI_TEXTS } from '../l10n/texts';
 import type { KbStepDef } from './catalog';
-import { KB_EVENT_STEPS, KB_EVENTS, kbEventWorks, kbStepRule } from './events';
+import { KB_EVENT_STEPS, KB_EVENTS, KB_HIT_STEPS, kbEventWorks, kbStepRule } from './events';
 import { KB_STEP_RULES } from './ready';
 
 const steps = refDB.kbSteps as KbStepDef[];
@@ -10,9 +10,17 @@ const steps = refDB.kbSteps as KbStepDef[];
 describe('условие отметки шага (прототип KB_EV, KB_MAP)', () => {
   it('у каждого условия есть подпись в словаре, события истории — по шагам прототипа', () => {
     for (const ev of KB_EVENTS) expect(UI_TEXTS, ev).toHaveProperty(`kbadm.ev.${ev}`);
-    expect(KB_EVENTS).toHaveLength(41);
+    expect(KB_EVENTS).toHaveLength(42);
+    expect(KB_EVENT_STEPS['dm.tok']).toBe('dmtok');
     expect(KB_EVENT_STEPS['cp.new']).toBe('cp1');
     expect(KB_EVENT_STEPS['r.sub']).toBe('submit');
+  });
+
+  it('первое использование под другим именем ведёт к своему шагу refDB (поле hit)', () => {
+    // Шаги «Посмотреть» вне «Работы со списками» первым использованием не отмечаются (kbHitMark).
+    const named = steps.filter((s) => s.hit && s.hit !== s.id && (!s.learn || s.g === 'lists'));
+    expect(Object.fromEntries(named.map((s) => [s.hit, s.id]))).toEqual(KB_HIT_STEPS);
+    expect(KB_HIT_STEPS['dm.run']).toBe('dmshow');
   });
 
   it('без правок администратора правило каждого шага refDB — как в KB_STEP_RULES', () => {
