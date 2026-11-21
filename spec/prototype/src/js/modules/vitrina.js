@@ -274,7 +274,19 @@ function dmRand(A,n){let s='';while(s.length<n)for(const v of crypto.getRandomVa
 function dmIssue(x,prev){const adm=isAdmin(),A='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789',tok='bk_'+dmRand(A,43);
   const k={id:'tk'+Date.now().toString(36),org:adm?'adm':ORG.id,tpl:x.tpl,name:x.name,by:S.me,at:nowStamp(),till:addDays(TODAY,x.term),term:x.term,pre:tok.slice(3,9),revoked:null,prev:prev?prev.id:null,next:null,last:null};
   DM_TOK.push(k);if(prev)prev.next=k.id;const t=dmTpl(x.tpl),what=`${prev?'Перевыпущен':'Выпущен'} API-токен «${k.name}» к шаблону «${t?t.name:x.tpl}» на ${x.term} ${plural(x.term,'день','дня','дней')}`;
-  if(adm)pdLog('Витрина данных: '+what,'dm');else log('org','api',what);renderPage();dmShowTok(k,tok)}
+  if(adm)pdLog('Витрина данных: '+what,'dm');else{log('org','api',what);dmTell(k,'tgDmTokNew','API-токен создан',{кто:dmWho(k)},'dmTokNew:'+k.id)}renderPage();dmShowTok(k,tok)}
+// Владельцам организации токена — Telegram и колокольчик (блок 5, пункт 10): создан (и перевыпущен), отозван, до конца срока 7 дней;
+// строка колокольчика открывает окно токена. Токен Админки — без сообщений: владельцев у него нет
+function dmTell(k,tplKey,kind,vars,key){if(k.org==='adm'||typeof subOwners!=='function')return '';const t=dmTpl(k.tpl),org=dmOrgN(k.org);
+  const txt=subTpl(tplKey,Object.assign({организация:org,название:k.name,шаблон:t?t.name:k.tpl,дата:fmtD(k.till.slice(0,10))},vars));
+  subOwners(k.org).forEach(u=>{if(typeof tgSvc==='function')tgSvc(tgOf(u),kind,{org});if(typeof bellPut==='function'&&EMP.includes(u))bellPut(u.id,{kind:'other',ev:'dm_token',open:{k:'dm_token',id:k.id},text:txt,key})});return txt}
+// Задача «Витрина: срок API-токенов» — каждый день в 09:00; в макете — при чтении колокольчика, как subDaily. За 7 дней до конца
+// срока — владельцам один раз; токен на 7 дней (срок есть в «создан»), перевыпущенный, отозванный и истёкший — без напоминания
+function dmDaily(){let n=0;DM_TOK.forEach(k=>{if(k.org==='adm'||k.soon||k.next)return;const term=k.term||diffDays(k.till.slice(0,10),k.at.slice(0,10));if(term<=7)return;
+  const[s]=dmTokSt(k);if(s==='Отозван'||s==='Истёк')return;const d=diffDays(k.till.slice(0,10),TODAY);if(d<1||d>7)return;
+  k.soon=TODAY;n++;dmTell(k,'tgDmTokSoon','API-токен истекает',{дней:d},'dmTokSoon:'+k.id)});if(n)dbSoon()}
+// Строка колокольчика «API-токен …»: вкладка «API Токены» и окно токена
+function dmBellGo(o){const k=DM_TOK.find(x=>x.id===o.id);if(!k)return toast('Запись удалена или больше вам не доступна','alert');go('dm','tok');dmTokDlg(k)}
 function dmShowTok(k,tok){const t=dmTpl(k.tpl);openModal({sticky:true,noMax:true,size:'wide',render:()=>({title:'Скопируйте токен. Больше он не покажется',sub:`${esc(k.name)} · ${esc(t?t.name:k.tpl)} · действует до ${fmtD(k.till.slice(0,10))}`,
   body:`<div class="dm-tok"><code class="mono" id="dt-v">${esc(tok)}</code><button type="button" class="btn cta" id="dt-copy">${ic('copy','sm')}Скопировать</button></div><span class="hint">В системе остаются только первые знаки: bk_${esc(k.pre)}… Потеряли токен — перевыпустите его.</span>${dmHow(t,tok)}`,
   foot:'<button class="btn cta" data-close>Готово, токен сохранён</button>',mount(el){$('#dt-copy',el).onclick=()=>copyText(tok,'Токен скопирован')}})})}
@@ -302,7 +314,8 @@ function dmTokDlg(k){const t=dmTpl(k.tpl),adm=isAdmin(),mine=adm?k.org==='adm':k
     foot:`<button class="btn ghost" data-close>Закрыть</button>${mine&&live&&!k.next?`<button class="btn" id="dt-re">${ic('refresh','sm')}Перевыпустить</button>`:''}${live?`<button class="btn danger" id="dt-rv">${ic('ban','sm')}Отозвать</button>`:''}`,
     mount(el){const a=$('#dt-re',el),b=$('#dt-rv',el);if(a)a.onclick=()=>{m.close();dmReissue(k)};if(b)b.onclick=()=>{m.close();dmRevoke(k)}}}}})}
 function dmRevoke(k){const oth=isAdmin()&&k.org!=='adm';confirmDlg({title:'Отозвать токен?',text:`Токен «${esc(k.name)}» перестанет работать сразу${oth?`; организация «${esc(dmOrgN(k.org))}» увидит, что его отозвал администратор платформы`:''}. Вернуть его нельзя: понадобится — выпустите новый.`,ok:'Отозвать',danger:true,
-  run:()=>{k.revoked={at:nowStamp(),by:S.me};const what=`Отозван API-токен «${k.name}»`;if(isAdmin())pdLog(`Витрина данных: ${what}${oth?` организации «${dmOrgN(k.org)}»`:''}`,'dm');else log('org','api',what);renderPage();toast('Токен отозван','ban')}})}
+  run:()=>{k.revoked={at:nowStamp(),by:S.me};const what=`Отозван API-токен «${k.name}»`;if(isAdmin())pdLog(`Витрина данных: ${what}${oth?` организации «${dmOrgN(k.org)}»`:''}`,'dm');else log('org','api',what);
+    dmTell(k,'tgDmTokRevoked','API-токен отозван',{кто:isAdmin()?'Администратор платформы':dmWho({org:k.org,by:S.me})},'dmTokRev:'+k.id);renderPage();toast('Токен отозван','ban')}})}
 // «Перевыпустить»: новый токен с теми же настройками, старый работает ещё 24 часа (блок 5, пункт 6)
 function dmReissue(k){confirmDlg({title:'Перевыпустить токен?',text:`Новый токен — с тем же шаблоном, названием и сроком. Старый bk_${esc(k.pre)}… проработает ещё 24 часа, чтобы вы успели заменить его в программе.`,ok:'Перевыпустить',
   run:()=>{const term=k.term||Math.min(180,Math.max(7,diffDays(k.till.slice(0,10),k.at.slice(0,10))));const d=new Date(Date.parse(nowStamp().replace(' ','T')+':00Z')+864e5).toISOString();k.till=d.slice(0,10)+' '+d.slice(11,16);dmIssue({tpl:k.tpl,name:k.name,term},k)}})}

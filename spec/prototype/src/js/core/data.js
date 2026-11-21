@@ -465,6 +465,9 @@ const t=(e.indicators||[]).find(x=>x.name==='ФОТ');
   // Подписки (v151, доработки 20.11.2026, блок 4, пункт 3; блок 6, пункт 3; поток Т): сообщения владельцам об оплате и памяти, администраторам — о чеках
   if(!db.meta.tgS1){db.meta.tgS1=1;const a=db.ref.messageTemplates,n=db.ref.templateNotes,rm=r.messageTemplates||{},rn=r.templateNotes||{},ks=['tgSubSoon','tgSubOver','tgSubPaid','tgSubRejected','tgSubMem80','tgSubMemFull','tgSubCheckNew','tgSubCheckWait'];
     if(a)ks.forEach(k=>{if(a[k]==null&&rm[k]!=null)a[k]=rm[k]});if(n)ks.forEach(k=>{if(n[k]==null&&rn[k]!=null)n[k]=rn[k]})}
+  // Витрина данных (v158, доработки 20.11.2026: Витрина данных, блок 5, пункт 10; поток Т): владельцам — API-токен создан, отозван, истекает
+  if(!db.meta.tgD1){db.meta.tgD1=1;const a=db.ref.messageTemplates,n=db.ref.templateNotes,rm=r.messageTemplates||{},rn=r.templateNotes||{},ks=['tgDmTokNew','tgDmTokRevoked','tgDmTokSoon'];
+    if(a)ks.forEach(k=>{if(a[k]==null&&rm[k]!=null)a[k]=rm[k]});if(n)ks.forEach(k=>{if(n[k]==null&&rn[k]!=null)n[k]=rn[k]})}
   if(!db.meta.tgL1){db.meta.tgL1=1;const a=db.ref.messageTemplates,n=db.ref.templateNotes,rm=r.messageTemplates||{},rn=r.templateNotes||{},ks=['tgLeadGot','tgLeadLinkBad','tgLeadNo','tgLeadDone','tgSetPassNew','tgBtnSetPass'];
     if(a)ks.forEach(k=>{if(a[k]==null&&rm[k]!=null)a[k]=rm[k]});if(n)ks.forEach(k=>{if(n[k]==null&&rn[k]!=null)n[k]=rn[k]})}
   // v120 (поток К, доработки 15.11.2026): подсказки и обучение на странице контрагента — тексты в справочнике текстов элементов экрана kbUi.cpHelp

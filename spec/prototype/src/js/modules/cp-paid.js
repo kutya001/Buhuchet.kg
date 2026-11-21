@@ -108,6 +108,8 @@ function pubForgot(c){const to=pubOrgClosed()?[]:pgCodeTo(c);if(!to.length)retur
   return no==='limit'?{t:`Код уже присылали ${PG_CODE_TG} раза за сутки. Спросите код у вашего бухгалтера`}:no==='closed'?{t:'Страница закрыта. Попросите новый код у вашего бухгалтера'}:{t:'Код отправлен вам в Telegram',ok:true,to}}
 // Команда бота: коды всех включённых страниц контрагентов, к которым подключён этот Telegram, — по сообщению на страницу, с названием
 function pgCodeCmd(name){const at=bishkekNow().hm,ls=pgTgAllLinks(name).filter(l=>pgTgOn(l.c));if(!ls.length)return [{t:tplFill('tgCpCodeNone',{}),at}];
+  // Доступ организации закрыт по подписке: код не уходит, в истории записи нет (пакет 20.11, этап 3, П4)
+  if(pubOrgClosed())return ls.map(({c})=>({t:`Код от страницы «${c.name}» сейчас не прислать: доступ организации закрыт. Спросите код у вашего бухгалтера.`,at}));
   return ls.map(({c,x})=>{const no=pgCodeSend(c,[x],'cmd');return no==='closed'?{t:tplFill('tgCpCodeClosed',{контрагент:c.name}),at}:no==='limit'?{t:tplFill('tgCpCodeLimit',{контрагент:c.name,лимит:PG_CODE_TG}),at}:pgCodeMsg(c)})}
 // Прототип: как сообщение с кодом выглядит в Telegram клиента
 function pgCodeDemo(c,x){const CA={who:`Чат клиента · ${x.name}`,list:[{day:'Сегодня'},pgCodeMsg(c)]};
