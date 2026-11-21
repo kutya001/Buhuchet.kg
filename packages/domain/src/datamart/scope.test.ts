@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AccessSubject } from '../roles/access';
 import type { PermissionId, Scope, ScopeGroupId } from '../roles/permissions';
-import { dmContractorColumn, dmOwnScope, dmScopeQuery } from './scope';
+import { DM_ALSO_SCOPED, dmContractorColumn, dmOwnScope, dmScopeQuery } from './scope';
 
 // Область «Свои контрагенты» в «Выводе» — прототип v155 `dmRun` (блок 2, пункт 6; этап 2, П4).
 
@@ -53,6 +53,34 @@ describe('dmOwnScope', () => {
     expect(dmOwnScope('staff', subject(['cpView', 'staffView'], { cps: 'all' }), cp)).toBe(false);
     expect(dmOwnScope('staff', subject(['staffView', 'viewAll'], { cps: 'own' }), cp)).toBe(false);
     expect(dmOwnScope('staff', subject([], {}, true), cp)).toBe(false);
+  });
+
+  it('«Выручка по контрагентам» (п. К-28): «Свои» в «Проектах контрагентов» — тоже отбор, у другого шаблона модуля — нет', () => {
+    const cp = [{ code: 'contractor_id', type: 'cp' }];
+    const projOwn = subject(['cpView', 'fee', 'projView'], { cps: 'all', projects: 'own' });
+    expect(DM_ALSO_SCOPED.revenue).toEqual(['projects']);
+    expect(dmOwnScope('cps', projOwn, cp, 'revenue')).toBe(true);
+    expect(dmOwnScope('cps', projOwn, cp, 'debtors')).toBe(false);
+    expect(dmOwnScope('cps', projOwn, cp)).toBe(false);
+    // Обе группы «Все», владелец и «Видеть всех контрагентов» — без отбора.
+    const all = subject(['cpView', 'fee'], { cps: 'all', projects: 'all' });
+    expect(dmOwnScope('cps', all, cp, 'revenue')).toBe(false);
+    expect(dmOwnScope('cps', subject([], {}, true), cp, 'revenue')).toBe(false);
+    const viewAll = subject(['cpView', 'fee', 'viewAll'], { cps: 'own', projects: 'own' });
+    expect(dmOwnScope('cps', viewAll, cp, 'revenue')).toBe(false);
+    // Без столбца «Контрагент» отбирать нечем — такой шаблон при «Свои» в «Проектах» не виден
+    // (`dmTemplateSeen`, access.test.ts).
+    expect(dmOwnScope('cps', projOwn, [{ code: 'n', type: 'num' }], 'revenue')).toBe(false);
+  });
+
+  it('«Проекты и разовые услуги» (п. К-28): «Свои» в «Финансовых операциях» — тоже отбор (разовые услуги — по их области)', () => {
+    const cp = [{ code: 'contractor_id', type: 'cp' }];
+    const finOwn = subject(['projView'], { projects: 'all', fin: 'own' });
+    expect(DM_ALSO_SCOPED['projects-services']).toEqual(['fin']);
+    expect(dmOwnScope('projects', finOwn, cp, 'projects-services')).toBe(true);
+    expect(dmOwnScope('projects', finOwn, cp)).toBe(false);
+    const all = subject(['projView'], { projects: 'all', fin: 'all' });
+    expect(dmOwnScope('projects', all, cp, 'projects-services')).toBe(false);
   });
 });
 

@@ -186,6 +186,7 @@ const seen = (
       module: isModule(tpl.module) ? tpl.module : null,
       needPermission: tpl.needPermission,
       columns: tpl.columns,
+      code: tpl.code,
     },
     subject,
     features,
@@ -321,7 +322,7 @@ async function orgRunFacts(
   const query = await dmTemplateQuery(tx, tpl.id);
   if (query === null) return null;
   const module = isModule(tpl.module) ? tpl.module : null;
-  const own = dmOwnScope(module, subject, tpl.columns)
+  const own = dmOwnScope(module, subject, tpl.columns, tpl.code)
     ? await dmOwnContractorIds(tx, subject.employeeId)
     : null;
   return { tpl, query, own };

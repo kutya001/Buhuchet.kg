@@ -39,7 +39,7 @@ import type { ApiDeps } from '../../deps';
 import { subscriptionToday } from '../../subscription-access';
 import type { AppEnv } from '../../env';
 import { apiFail } from '../../errors';
-import { pageAccess } from '../contractor-page/org-closed';
+import { orgAccessClosed, pageAccess } from '../contractor-page/org-closed';
 import { clientIpHash, pageTokenHash } from '../contractor-page/public';
 import { bellContractor } from '../telegram/bell';
 import { error } from './files';
@@ -380,7 +380,12 @@ export function pageSentCompleteHandler(
     const written = await storePageUploads(deps, rows);
     // Строка не «Новая» после ошибки — незаконченная: её файлы удалит задача по расписанию (её не
     // встретит «закончить»: `SENT_COMPLETE_MINUTES`); закончила другая такая же отправка — файл её.
+    const today = subscriptionToday(deps);
     const done = await withOrgContext(deps.db, ctx, async (tx) => {
+      // Доступ организации могли закрыть, пока файл загружался: проверка — и в транзакции записи,
+      // ответ — тот же «Страница недоступна» (п. К-24).
+      // ОТКЛОНЕНИЕ: docs/deviations.md#К-24
+      if (await orgAccessClosed(tx, today)) return 'closed' as const;
       // Галочку могли выключить, пока файл загружался: тогда отправка не принимается.
       const state = await sentUploadState(tx, page.contractorId);
       if (!state || !sentUploadOn(state)) return false;
@@ -401,6 +406,10 @@ export function pageSentCompleteHandler(
       await dropUnfinished(deps, ctx, rows, written);
       throw e;
     });
+    if (done === 'closed') {
+      await dropUnfinished(deps, ctx, rows, written);
+      return unavailable();
+    }
     if (!done) {
       await dropUnfinished(deps, ctx, rows, written);
       refuse(409, { code: 'sent_off' });
