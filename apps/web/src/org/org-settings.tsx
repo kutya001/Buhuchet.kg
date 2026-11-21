@@ -54,7 +54,9 @@ export function OrgSettingsTab() {
   const roles = useQuery({ ...roleOptionsQuery, enabled: canEdit });
   const [drafts, setDrafts] = useState<Drafts | null>(null);
   if (policy.isError || roles.isError) return <Note tone="bad">{t('org.load_error')}</Note>;
-  if (!policy.data || (canEdit && !roles.data)) return null;
+  // Заглушка `aria-busy`: «Показать как» ждёт её, а не пустой экран (docs/typical-mistakes.md № 81).
+  if (!policy.data || (canEdit && !roles.data))
+    return <div className="min-h-[200px]" aria-busy="true" data-org-loading="" />;
   const p = policy.data;
   const shown: RoleOption[] =
     roles.data ?? (p.defaultRoleId ? [{ id: p.defaultRoleId, name: p.defaultRoleName ?? '' }] : []);

@@ -81,7 +81,11 @@ export function OrgAccountsBox({
   if (accounts.isError || banks.isError || codes.isError) {
     return <Note tone="bad">{t('money.load_error')}</Note>;
   }
-  if (!accounts.data || !banks.data || !codes.data) return null;
+  // Заглушка `aria-busy`: «Показать как» ждёт блок счетов, а не собирает облачка без него
+  // (docs/typical-mistakes.md № 81).
+  if (!accounts.data || !banks.data || !codes.data) {
+    return <div className="min-h-10" aria-busy="true" data-org-loading="" />;
+  }
   const list = accounts.data;
   const bankList = banks.data;
 

@@ -1,4 +1,4 @@
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page, type Route } from '@playwright/test';
 import { newOrgOwner, stillElement, uniqueLogin } from './helpers';
 import { connectAllTypes } from './orgs';
 import { manualReport } from './reports';
@@ -337,8 +337,36 @@ test.describe('Этап 2: База знаний — «Показать как»
     baseURL,
   }) => {
     await newOrgOwner(page.request, new URL(baseURL!).origin);
-    await showStep(page, 'profile');
-    await toEnd(page, ['Сделать сейчас']);
+    // Профиль отвечает медленно (так бывает на загруженной машине CI): пока его нет, на экране —
+    // заглушка загрузки, и показ ждёт её, а не собирает облачка по пустому экрану (типовая ошибка
+    // № 81). Ответ держится, пока тест не увидел заглушку, и не меньше 600 мс: показ без ожидания
+    // собрал бы облачка через ~0,4 с после смены экрана.
+    let release = () => {};
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const slowProfile = async (route: Route) => {
+      await Promise.all([held, new Promise<void>((resolve) => void setTimeout(resolve, 600))]);
+      await route.continue();
+    };
+    const profileUrl = '**/api/org';
+    await page.route(profileUrl, slowProfile);
+    let profile: Awaited<ReturnType<typeof toEnd>>;
+    try {
+      await showStep(page, 'profile');
+      await expect(page.locator('main [data-org-loading][aria-busy="true"]')).toBeVisible({
+        timeout: 10_000,
+      });
+      await expect(page.locator('[data-tour-count]')).toHaveCount(0);
+      release();
+      // Первое облачко — после двух запросов показа, смены экрана и ответа профиля.
+      await expect(nextButton(page)).toBeEnabled({ timeout: 15_000 });
+      profile = await toEnd(page, ['Сделать сейчас']);
+    } finally {
+      release();
+      await page.unroute(profileUrl, slowProfile);
+    }
+    expect(profile.titles).toEqual(
+      expect.arrayContaining(['Профиль организации', 'Кнопка «Сохранить»']),
+    );
     await endShow(page);
     await expect(bubble(page)).toHaveCount(0);
     // Показ профиля пройден: его элементы стали знакомыми на сервере.

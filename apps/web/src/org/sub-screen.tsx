@@ -476,6 +476,7 @@ export function OrgSubTab() {
       </Note>
     );
   }
-  if (!query.data) return null;
+  // Заглушка `aria-busy`: «Обзор экрана» ждёт её, а не пустой экран (docs/typical-mistakes.md № 81).
+  if (!query.data) return <div className="min-h-[200px]" aria-busy="true" data-org-loading="" />;
   return <SubScreen view={query.data} />;
 }
