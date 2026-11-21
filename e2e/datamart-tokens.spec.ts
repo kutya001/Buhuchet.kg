@@ -5,7 +5,7 @@ import { DEMO_PASSWORD, signIn } from './helpers';
 // «Витрина данных» → «API Токены» в Админке (доработки 20.11.2026: Витрина данных, блок 5; общий план
 // 20.11, этап 1, П14; прототип v155 `renderDmTok`, `dmNewTok`, `dmShowTok`): администратор выпускает
 // токен шаблона «Для администратора», токен целиком показан один раз, в списке — только начало;
-// перевыпуск и отзыв.
+// перевыпуск и отзыв. Внешний адрес по токену, «Журнал запросов» и «Как подключить» (этап 2, П11–П12).
 // Токены Админки общие для всех администраторов (предел — 20 действующих): тест отзывает свои токены в
 // конце (и при падении), а ищет и проверяет только их — по своему названию.
 
@@ -103,10 +103,17 @@ test.describe('Витрина данных: API Токены', () => {
       expect(issued.item.state).toBe('active');
       expect(issued.item.tplName).toBe(tpl.name);
 
-      // Токен целиком — только в окне «Скопируйте токен».
+      // Токен целиком — только в окне «Скопируйте токен»; там же «Как подключить» с этим токеном в
+      // заголовке (этап 2, П12).
       const shown = page.getByRole('dialog', { name: texts['dm.tok.show.title']! });
       await expect(shown.locator('[data-dm-token-value]')).toHaveText(issued.token);
       await expect(shown.locator('[data-dm-token-copy]')).toBeVisible();
+      const how = shown.locator('[data-dm-how]');
+      await expect(how).toContainText(texts['dm.how.title']!);
+      await expect(how.locator('[data-dm-how-url]')).toContainText(`/api/ext/v1/${ADMIN_TEMPLATE}`);
+      await expect(how.locator('[data-dm-how-header]')).toHaveText(
+        `Authorization: Bearer ${issued.token}`,
+      );
       await shown.getByRole('button', { name: texts['dm.tok.show.done']! }).click();
       await expect(shown).toBeHidden();
 
@@ -171,6 +178,83 @@ test.describe('Витрина данных: API Токены', () => {
       await expect(row.locator('[data-dm-note]')).toContainText(texts['dm.tok.who_admin']!);
     } finally {
       // Отозванный отвечает 409 — это тоже «больше не действует».
+      for (const id of mine) {
+        const res = await page.request.post(`/api/admin/dm/tokens/${id}/revoke`, {
+          headers: { origin },
+          maxRetries: 2,
+        });
+        expect([200, 409]).toContain(res.status());
+      }
+    }
+  });
+
+  test('(доработки 20.11.2026, Витрина данных) внешний адрес по токену: токен только в заголовке, ответ JSON; запрос — в «Журнале запросов» Админки, строка открывает окно токена с «Как подключить»', async ({
+    page,
+    baseURL,
+    isMobile,
+    playwright,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    await platformAdmin(page.request, origin);
+    const texts = await dictionary(page.request);
+    const form = await tokenForm(page.request, '/api/admin/dm/tokens');
+    const tpl = form.templates.find((x) => x.code === ADMIN_TEMPLATE)!;
+    expect(tpl, `готовый шаблон Админки «${ADMIN_TEMPLATE}»`).toBeTruthy();
+    const name = uniqueWord('Журнал');
+    // Внешняя программа — без cookie входа.
+    const ext = await playwright.request.newContext({ baseURL });
+    const mine: string[] = [];
+    try {
+      const res = await page.request.post('/api/admin/dm/tokens', {
+        headers: { origin },
+        data: { templateId: tpl.id, name, term: form.defaultTerm },
+      });
+      expect(res.status(), await res.text()).toBe(201);
+      const issued = (await res.json()) as Issued;
+      mine.push(issued.item.id);
+
+      // Токен в адресе не принимается: адрес попадает в журналы и историю браузера.
+      const inUrl = await ext.get(`/api/ext/v1/${ADMIN_TEMPLATE}?token=${issued.token}`);
+      expect(inUrl.status()).toBe(400);
+      expect(((await inUrl.json()) as { error: { code: string } }).error.code).toBe(
+        'dm_ext_token_in_url',
+      );
+      // Токен в заголовке — JSON: столбцы, строки, всего.
+      const answer = await ext.get(`/api/ext/v1/${ADMIN_TEMPLATE}`, {
+        headers: { authorization: `Bearer ${issued.token}` },
+      });
+      expect(answer.status(), await answer.text()).toBe(200);
+      const body = (await answer.json()) as { columns: unknown[]; rows: unknown[]; total: number };
+      expect(body.columns.length).toBeGreaterThan(0);
+      expect(body.total).toBe(body.rows.length);
+
+      // «Журнал запросов»: строка этого запроса — по названию токена.
+      await page.goto('/app/dm/log');
+      await expect(page.locator('[data-dm-log]')).toBeVisible();
+      const listed = page.waitForResponse(
+        (r) =>
+          new URL(r.url()).pathname === '/api/admin/dm/requests' &&
+          new URL(r.url()).searchParams.get('q') === name &&
+          r.request().method() === 'GET',
+      );
+      await search(page, isMobile, name);
+      expect((await listed).status()).toBe(200);
+      const row = page.locator('[data-grid] [data-id]').filter({ hasText: name });
+      await expect(row).toHaveCount(1);
+      await expect(row).toContainText(texts['dm.res.ok']!);
+      await expect(row).toContainText(`${issued.item.prefix}…`);
+      await expect(row).toContainText(tpl.name);
+
+      // Строка открывает окно токена; «Как подключить» там — с началом токена, не с токеном.
+      await row.getByText(tpl.name, { exact: true }).first().click();
+      const card = page.locator('[data-dm-card]');
+      await expect(card).toBeVisible();
+      await expect(card.locator('[data-dm-how-header]')).toHaveText(
+        `Authorization: Bearer ${issued.item.prefix}…`,
+      );
+      await expect(page.locator('body')).not.toContainText(issued.token);
+    } finally {
+      await ext.dispose();
       for (const id of mine) {
         const res = await page.request.post(`/api/admin/dm/tokens/${id}/revoke`, {
           headers: { origin },
