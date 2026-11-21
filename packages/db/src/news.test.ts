@@ -766,6 +766,37 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
     expect(aud('adm')()[0]?.audience).toBe('adm');
   });
 
+  it('наполнение: момент «Опубликовано» из будущего в истории прототипа — момент наполнения', () => {
+    const now = new Date('2026-11-21T06:50:00Z');
+    const item = (id: string, at: string) => ({
+      id,
+      t: `Версия ${id}`,
+      type: 'Обновление',
+      date: '2026-11-21',
+      status: 'Опубликовано',
+      aud: 'all',
+      hist: [{ at, to: 'Опубликовано' }],
+    });
+    const rows = newsSeedRows(
+      [
+        item('x1', '2026-11-21 12:55'),
+        item('x2', '2026-11-21 12:45'),
+        { ...item('x3', ''), hist: [] },
+      ],
+      now,
+    );
+    // 12:55 по Бишкеку — 06:55 UTC, позже наполнения: иначе новость «не прочитана» у созданного после.
+    expect(rows.find((r) => r.id === 'x1')).toMatchObject({ publishedAt: now, createdAt: now });
+    expect(rows.find((r) => r.id === 'x2')?.publishedAt).toEqual(new Date('2026-11-21T06:45:00Z'));
+    // Без истории — дата в 09:00 по Бишкеку (03:00 UTC), она раньше наполнения.
+    expect(rows.find((r) => r.id === 'x3')?.publishedAt).toEqual(new Date('2026-11-21T03:00:00Z'));
+    expect(
+      // Без истории дата в 09:00 по Бишкеку тоже не позже наполнения.
+      newsSeedRows([{ ...item('x4', ''), hist: [] }], new Date('2026-11-21T00:00:00Z'))[0]
+        ?.publishedAt,
+    ).toEqual(new Date('2026-11-21T00:00:00Z'));
+  });
+
   it('наполнение с --update меняет «Для кого», модули и второй текст: разбор выпущенных новостей (доработки 16.11.2026, блок 4, пункт 5); поправленную администратором — нет', async () => {
     type Extra = { aud: 'all' | 'adm'; mods?: string[]; admMd?: string };
     const item = (id: string, x: Extra) => ({

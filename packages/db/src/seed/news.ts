@@ -48,12 +48,19 @@ const seedItems = (section: unknown) =>
     (n) => n.status === 'Опубликовано' && !NEWS_NOT_YET.has(n.id),
   );
 
-/** Момент «Опубликовано» из истории прототипа («2026-10-12 09:00» по Бишкеку) или дата в 09:00. */
-function publishedAt(item: z.infer<typeof NewsSection>[number]): Date {
+/**
+ * Момент «Опубликовано» из истории прототипа («2026-10-12 09:00» по Бишкеку) или дата в 09:00 — но не
+ * позже момента наполнения `now`: время в истории прототипа бывает впереди (новость v159 «опубликована»
+ * в 12:55 по Бишкеку, а CI сборки с ней наполнял базу несколькими минутами раньше), и новость из будущего
+ * «не прочитана» даже у того, кто создан после наполнения (прочитано — опубликовано не позже создания человека, `packages/db/src/news.ts`).
+ */
+function publishedAt(item: z.infer<typeof NewsSection>[number], now: Date): Date {
   const at = (item.hist ?? []).filter((h) => h.to === 'Опубликовано').pop()?.at;
   const m = at ? /^(\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2})$/.exec(at) : null;
-  if (!m) return newsShowMoment(item.date);
-  return new Date(Date.parse(`${m[1]}T${m[2]}:${m[3]}:00+06:00`));
+  const moment = m
+    ? new Date(Date.parse(`${m[1]}T${m[2]}:${m[3]}:00+06:00`))
+    : newsShowMoment(item.date);
+  return moment.getTime() > now.getTime() ? now : moment;
 }
 
 /**
@@ -148,7 +155,7 @@ export const newsSeedMd = (md: string, id?: string) => {
  * заливаются, их файлов нет (docs/deviations.md п. О-53).
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#О-53
-export function newsSeedRows(section: unknown) {
+export function newsSeedRows(section: unknown, now: Date = new Date()) {
   return seedItems(section).map((n) => {
     const type = NEWS_TYPE_BY_NAME[n.type];
     if (!type) throw new Error(`Новость ${n.id}: неизвестный тип «${n.type}»`);
@@ -172,10 +179,10 @@ export function newsSeedRows(section: unknown) {
       modules: newsModulesOrdered(modules),
       status: 'published',
       off: n.off ?? false,
-      publishedAt: publishedAt(n),
+      publishedAt: publishedAt(n, now),
       // История версий: «Создано» — момент публикации (список Админки — от новых к старым по «Создано»).
-      createdAt: publishedAt(n),
-      updatedAt: publishedAt(n),
+      createdAt: publishedAt(n, now),
+      updatedAt: publishedAt(n, now),
     };
   });
 }
