@@ -55,6 +55,7 @@
 .dm-app[open]>summary{border-bottom:1px solid var(--border)}
 .dm-app-b{padding:8px 14px 14px;min-width:0}
 .dm-app-b h4{margin:10px 0 2px;font-size:13px}
+.dm-tkw{display:flex;align-items:flex-start;gap:6px;margin:4px 0 6px;color:var(--orange)}.dm-tkw .ic{flex:none;margin-top:2px}
 .dm-steps{margin:4px 0 8px;padding-left:20px;font-size:13px;line-height:1.6}.dm-steps li{margin:4px 0}
 .dm-code{position:relative;margin-top:6px}.dm-code .dm-pre{cursor:copy;margin:0}.dm-code+.dm-code{margin-top:8px}
 .dm-code-b{position:absolute;top:6px;right:18px}
