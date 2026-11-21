@@ -485,10 +485,10 @@ describe.skipIf(!databaseAvailable())('Витрина данных: внешни
     expect(left).toHaveLength(0);
   });
 
-  it('места запусков «Витрины» всего сайта заняты «Выводом» — «Слишком часто» с Retry-After и строкой журнала', async () => {
-    const a = await issue('owner-a', 'ext-proj', 'Сайт занят');
+  it('запуск по токену не берёт места «Показать» с экрана: они заняты — адрес отвечает', async () => {
+    const a = await issue('owner-a', 'ext-proj', 'Экран занят');
     const db = f.t.admin.db;
-    // Оба места сайта (`withDmPoolSlot`, `dm_run_all`) заняты чужими запусками.
+    // Оба места запусков с экрана (`withDmPoolSlot`, `dm_run_all`) заняты: внешнему адресу это не мешает.
     const busy = await db
       .insert(rateLimits)
       .values(
@@ -500,17 +500,10 @@ describe.skipIf(!databaseAvailable())('Витрина данных: внешни
       )
       .returning({ id: rateLimits.id });
     try {
-      const res = await ext('ext-proj', { token: a.token });
-      await expectErr(res, 429, 'dm_ext_rate');
-      expect(res.headers.get('retry-after')).toBe('1');
-      expect((await logOf(a.item.id)).map((r) => r.outcome)).toEqual(['rate']);
+      expect((await ext('ext-proj', { token: a.token })).status).toBe(200);
     } finally {
       for (const r of busy) await db.delete(rateLimits).where(eq(rateLimits.id, r.id));
     }
-    expect((await ext('ext-proj', { token: a.token })).status).toBe(200);
-    // Своё место очереди внешнего адреса отпущено и после отказа сайта.
-    const left = await db.select().from(rateLimits).where(eq(rateLimits.kind, 'dm_ext_run'));
-    expect(left).toHaveLength(0);
   });
 
   it(`известный токен: ${DM_EXT_TRY_PER_MINUTE + 1}-е обращение за минуту — «Слишком часто» и без отказа; в журнале — ${DM_EXT_REFUSAL_LOGS_PER_MINUTE} отказов`, async () => {
