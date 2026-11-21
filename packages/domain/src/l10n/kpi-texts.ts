@@ -130,6 +130,7 @@ export const KPI_TEXTS = {
   'kpi.ex.menu.clear': { ru: 'Очистить', section: S },
   'kpi.ex.menu.undo': { ru: 'Отменить', section: S },
   'kpi.ex.menu.undo_reason': { ru: 'Изменений ещё не было', section: S },
+  'kpi.ex.menu.copy_ro': { ru: 'Ctrl+C — для вставки в Excel', section: S },
   'kpi.ex.menu.entry': { ru: 'Комментарий, файл и история', section: S },
   'kpi.ex.hint.phone': {
     ru: 'Нажмите на ячейку, чтобы внести значение; «Далее» на клавиатуре — сохранить и перейти ниже',

@@ -88,6 +88,12 @@ describe('куда ведёт строка — как bellGo прототипа'
       kind: 'href',
       href: '/app/afiles/check',
     });
+    // «Шаблон перестал работать» — окно шаблона в «Шаблонах» Админки (Витрина данных, этап 2, П7).
+    expect(bellGoOf({ kind: 'dm_template', id: ID }, ctx)).toEqual({
+      kind: 'href',
+      href: `/app/dm/tpl?tpl=${ID}`,
+    });
+    expect(bellGoOf({ kind: 'dm_template', id: 'x' }, ctx)).toBeNull();
     expect(bellGoOf({ kind: 'news', id: 'v123' }, ctx)).toEqual({
       kind: 'href',
       href: '/app/kb/news?news=v123',

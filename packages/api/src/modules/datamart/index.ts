@@ -3,6 +3,7 @@ import { createModuleApp } from '../../module';
 import { EXT_ROUTE, extHandler } from './ext';
 import { OUTPUT_ROUTES, outputHandlers } from './output';
 import { REQUEST_ROUTES, requestHandlers } from './requests';
+import { OUTPUT_EXPORT_ROUTES, outputExportHandlers } from './output-export';
 import { TEMPLATE_ADMIN_ROUTES, templateAdminHandlers } from './templates-admin';
 import { ADMIN_TOKEN_ROUTES, ORG_TOKEN_ROUTES, tokenHandlers } from './tokens';
 
@@ -23,6 +24,7 @@ export function datamartModule(deps: ApiDeps) {
   const adm = tokenHandlers(deps, 'admin');
   const out = outputHandlers(deps);
   const log = requestHandlers(deps);
+  const outXlsx = outputExportHandlers(deps);
   const tpl = templateAdminHandlers(deps);
   const T = TEMPLATE_ADMIN_ROUTES;
   return (
@@ -31,6 +33,8 @@ export function datamartModule(deps: ApiDeps) {
       .openapi(OUTPUT_ROUTES.run, out.run)
       .openapi(OUTPUT_ROUTES.adminCatalog, out.adminCatalog)
       .openapi(OUTPUT_ROUTES.adminRun, out.adminRun)
+      .openapi(OUTPUT_EXPORT_ROUTES.export, outXlsx.exportOrg)
+      .openapi(OUTPUT_EXPORT_ROUTES.adminExport, outXlsx.exportAdmin)
       // Пути без номера — раньше `{id}`.
       .openapi(T.list, tpl.list)
       .openapi(T.values, tpl.values)

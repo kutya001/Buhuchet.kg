@@ -149,8 +149,8 @@ export function ModuleScreen({
     return tabId === 'leads' ? <LeadsList /> : <OrgsList />;
   }
   if (moduleId === 'afiles') return <AdminFilesScreen tab={tabId ?? 'store'} />;
-  // Админка → «Витрина данных»: «API Токены» (поток Т, П14) и «Журнал запросов» (поток Т, этап 2, П11).
-  if (moduleId === 'dm') return <DmScreen tab={tabId ?? 'tok'} admin />;
+  // «Витрина данных»: «Вывод», «Шаблоны», «API Токены», у Админки ещё «Журнал запросов» (по входу).
+  if (moduleId === 'dm') return <DmScreen tab={tabId ?? 'out'} />;
   if (moduleId === 'pdicts') return <PlatformDictsAdmin tabId={tabId ?? 'types'} />;
   if (moduleId === 'l10n') return <L10nList />;
   if (moduleId === 'tdocs') return <TechDocsScreen tab={tabId ?? 'db'} />;
