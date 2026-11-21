@@ -70,6 +70,7 @@ export function exTexts(t: Translate): ExTexts {
       clear: t('kpi.ex.menu.clear'),
       undo: t('kpi.ex.menu.undo'),
       undoReason: t('kpi.ex.menu.undo_reason'),
+      copyRo: t('kpi.ex.menu.copy_ro'),
     },
   };
 }
@@ -102,9 +103,18 @@ type ExSize = { rows: number; cols: number };
 /**
  * Подключить таблицу как в Excel: `wrapRef` — на элемент с ячейками, `layer` — внутрь него (или рядом,
  * в общий блок с position: relative), `stat` — над таблицей. `setup` — каждый раз свежий: размер и
- * данные текущей перерисовки. `enabled: false` — без таблицы (вид «Карточки» списка).
+ * данные текущей перерисовки. `enabled: false` — без таблицы (вид «Карточки» списка); `ro` — только
+ * просмотр (вывод «Витрины данных»), `hint` — своя подсказка строки состояния без выделения.
  */
-export function useExTable(setup: ExSetup, options: { enabled?: boolean; stat?: boolean } = {}) {
+export function useExTable(
+  setup: ExSetup,
+  options: {
+    enabled?: boolean;
+    stat?: boolean;
+    ro?: boolean;
+    hint?: readonly ExHintItem[];
+  } = {},
+) {
   const t = useT();
   const toast = useToast();
   const phone = useMediaQuery(PHONE_QUERY);
@@ -133,7 +143,8 @@ export function useExTable(setup: ExSetup, options: { enabled?: boolean; stat?: 
         : { rows: 0, cols: 0 }
       : { rows: setup.rows, cols: setup.cols }),
     stat: statRef.current,
-    hint: exHint(t, phone),
+    ro: options.ro,
+    hint: options.hint ?? exHint(t, phone),
     toast: (text, o) => toast(text, o),
     openMenu: (place, items) => setMenu({ place, items }),
     texts: exTexts(t),
