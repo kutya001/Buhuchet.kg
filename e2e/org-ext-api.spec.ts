@@ -38,7 +38,7 @@ const policySaved = (page: Page) =>
   );
 
 test.describe('Витрина данных: «Внешний доступ по API» и модуль в меню организации', () => {
-  test('(Витрина данных, «Токены и внешний адрес») «Внешний доступ по API» выключен — выпуск токенов недоступен; владелец включает его в «Моя организация» — выпуск доступен; выключение при действующем токене — с вопросом, токен остановлен; после включения снова отвечает', async ({
+  test('(Витрина данных, «Токены и внешний адрес») «Внешний доступ по API» выключен — выпуск токенов недоступен; владелец включает его в «Моя организация» — выпуск доступен; выключение при действующем токене — с вопросом, токен остановлен; после включения снова отвечает; строка колокольчика «Создан API-токен» открывает окно токена', async ({
     page,
     baseURL,
     playwright,
@@ -87,9 +87,10 @@ test.describe('Витрина данных: «Внешний доступ по A
     // Готовый шаблон «Контрагенты» — без параметров и функций учётной политики.
     const template = form.templates.find((x) => x.code === 'contractors')!;
     expect(template, 'готовый шаблон «contractors»').toBeTruthy();
+    const tokenName = uniqueWord('Токен');
     const issued = await page.request.post('/api/dm/tokens', {
       headers: { origin },
-      data: { templateId: template.id, name: uniqueWord('Токен'), term: 30 },
+      data: { templateId: template.id, name: tokenName, term: 30 },
     });
     expect(issued.status(), await issued.text()).toBe(201);
     const { token, item } = (await issued.json()) as { token: string; item: { id: string } };
@@ -171,6 +172,26 @@ test.describe('Витрина данных: «Внешний доступ по A
       expect(await tokenState()).toMatchObject({ state: 'active', stop: null });
       const back = await askExt();
       expect(back.status(), await back.text()).toBe(200);
+
+      // Строка колокольчика владельца «Создан API-токен» (этап 3, П5) — окно этого токена на вкладке
+      // «API Токены»: модуль «Витрина данных» теперь в меню организации (этап 3, П2).
+      const seen = page.waitForResponse(
+        (r) => new URL(r.url()).pathname === '/api/bell/seen' && r.request().method() === 'POST',
+      );
+      await page.locator('[data-bell]').click();
+      const panel = page.locator('[data-bell-panel]');
+      await expect(panel).toBeVisible();
+      expect((await seen).status()).toBe(200);
+      const row = panel.locator('[data-bell-row]').filter({ hasText: tokenName });
+      await expect(row).toHaveCount(1);
+      // На телефоне панель въезжает шторкой (№ 34).
+      await stillElement(row);
+      await row.click();
+      await expect(panel).toBeHidden();
+      await expect(page).toHaveURL(/\/app\/dm\/tok/);
+      const card = page.getByRole('dialog', { name: tokenName });
+      await expect(card.locator('[data-dm-card]')).toBeVisible();
+      await expect(page).not.toHaveURL(/[?&]tok=/);
     } finally {
       await ext.dispose();
     }
