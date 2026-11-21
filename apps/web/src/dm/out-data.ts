@@ -1,6 +1,6 @@
 import { AdminOrganizationList, DmCatalog, DmRunResult, type DmRunInput } from '@buhuchet/shared';
 import { queryOptions } from '@tanstack/react-query';
-import { api, apiFailure } from '../api-client';
+import { api, ApiFailure, apiFailure } from '../api-client';
 import type { DmSide } from './tokens-data';
 
 /*
@@ -27,10 +27,15 @@ export interface DmRunRequest extends DmRunInput {
   n: number;
 }
 
+/** Сколько раз переспросить при `dm_busy`: 40 × 0,5 с — дольше предела запроса в 15 с. */
+const BUSY_RETRIES = 40;
+
 /**
  * «Показать»: результат целиком (до 50 000 строк); повтор того же нажатия берётся из памяти. Ключ — не
  * под `['dm', side]`: его перечитывают окна токенов, а каждый запуск — строка журнала, у Админки по
- * шаблону организации — ещё и запись в её историю.
+ * шаблону организации — ещё и запись в её историю. Человек выполняет один запрос одновременно (блок 8,
+ * пункт 5): пока идёт прежний (сам запуск при открытии вкладки, второе нажатие «Показать», запуск
+ * прежнего шаблона), сервер отвечает 429 `dm_busy` — новый запрос ждёт очереди, а не показывает ошибку.
  */
 export const runOutQuery = (side: DmSide, run: DmRunRequest) =>
   queryOptions({
@@ -48,7 +53,10 @@ export const runOutQuery = (side: DmSide, run: DmRunRequest) =>
     },
     staleTime: Infinity,
     gcTime: 60_000,
-    retry: false,
+    // Прежний запрос идёт не дольше 15 с: ждём его, переспрашивая раз в полсекунды (этап 2, П6).
+    retry: (count, error) =>
+      count < BUSY_RETRIES && error instanceof ApiFailure && error.error.code === 'dm_busy',
+    retryDelay: 500,
   });
 
 /** Админка: организации для «Глазами организации» — сначала демо, затем по названию. */
