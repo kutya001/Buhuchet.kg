@@ -36,9 +36,20 @@ const isScopeGroup = (m: string): m is ScopeGroupId =>
 /**
  * Нужен ли отбор «Свои» (прототип: не администратор, шаблон «Для организаций» с модулем с областью и
  * область группы — не «Все»). Владельцу и праву «Видеть всех контрагентов» — нет (`scopeOf`).
+ *
+ * Строже прототипа (ТЗ «Витрина данных», блок 8, пункт 8: сотрудник со «Свои» не видит строк чужих
+ * контрагентов ни в одном готовом шаблоне): у модуля без области («Сотрудники») шаблон со столбцом
+ * «Контрагент» отбирается по области группы «Контрагенты» — как задачи: кто видит контрагента, видит и
+ * его записи. Шаблон модуля без области и без такого столбца — без отбора (итоги по сотрудникам).
  */
-export function dmOwnScope(module: DmModule | null, subject: AccessSubject): boolean {
-  return !!module && isScopeGroup(module) && scopeOf(subject, module) === 'own';
+export function dmOwnScope(
+  module: DmModule | null,
+  subject: AccessSubject,
+  columns: unknown,
+): boolean {
+  if (!module) return false;
+  if (isScopeGroup(module)) return scopeOf(subject, module) === 'own';
+  return dmContractorColumn(columns) !== null && scopeOf(subject, 'cps') === 'own';
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
