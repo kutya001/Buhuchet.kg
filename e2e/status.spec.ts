@@ -14,6 +14,9 @@ async function openCard(page: Page, id: string, title: string): Promise<Locator>
   await page.locator(`[data-sample="${id}"]`).click();
   const card = page.getByRole('dialog', { name: title });
   await expect(card.locator(`[data-sample-card="${id}"]`)).toBeVisible();
+  // На телефоне окно въезжает шторкой: размеры частей окна меряются разными запросами — пока окно
+  // едет, вторая часть оказывается «выше» первой (№ 34).
+  await stillElement(card);
   return card;
 }
 
