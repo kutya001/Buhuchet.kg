@@ -128,14 +128,23 @@ export function OutTable({
     { ro: true, hint: [[t(phone ? 'dm.out.hint_phone' : 'dm.out.hint')]] },
   );
 
-  const meta = result.orgName
-    ? t('dm.out.meta_org', { n: formatCount(rows.length), ms: result.ms, org: result.orgName })
-    : t('dm.out.meta', { n: formatCount(rows.length), ms: result.ms });
+  // «Строк: N» — число жирным (прототип `dmDraw`): текст словаря делится по месту числа.
+  const MARK = '\u0001';
+  const meta = (
+    result.orgName
+      ? t('dm.out.meta_org', { n: MARK, ms: result.ms, org: result.orgName })
+      : t('dm.out.meta', { n: MARK, ms: result.ms })
+  ).split(MARK);
 
   return (
     <div className="flex flex-col gap-2" data-dm-out-result="">
-      <div className="text-[12.5px] text-muted" data-dm-out-meta="">
-        {meta}
+      <div className="text-[12px] leading-[1.4] text-muted" data-dm-out-meta="">
+        {meta.map((part, i) => (
+          <span key={i}>
+            {i > 0 ? <b className="font-semibold text-ink">{formatCount(rows.length)}</b> : null}
+            {part}
+          </span>
+        ))}
       </div>
       {result.more ? (
         <Note tone="warn" icon="alert">
