@@ -1,6 +1,7 @@
 import type { ApiDeps } from '../../deps';
 import { createModuleApp } from '../../module';
 import { OUTPUT_ROUTES, outputHandlers } from './output';
+import { OUTPUT_EXPORT_ROUTES, outputExportHandlers } from './output-export';
 import { ADMIN_TOKEN_ROUTES, ORG_TOKEN_ROUTES, tokenHandlers } from './tokens';
 
 /**
@@ -17,11 +18,14 @@ export function datamartModule(deps: ApiDeps) {
   const org = tokenHandlers(deps, 'org');
   const adm = tokenHandlers(deps, 'admin');
   const out = outputHandlers(deps);
+  const outXlsx = outputExportHandlers(deps);
   return createModuleApp()
     .openapi(OUTPUT_ROUTES.catalog, out.catalog)
     .openapi(OUTPUT_ROUTES.run, out.run)
     .openapi(OUTPUT_ROUTES.adminCatalog, out.adminCatalog)
     .openapi(OUTPUT_ROUTES.adminRun, out.adminRun)
+    .openapi(OUTPUT_EXPORT_ROUTES.export, outXlsx.exportOrg)
+    .openapi(OUTPUT_EXPORT_ROUTES.adminExport, outXlsx.exportAdmin)
     .openapi(ORG_TOKEN_ROUTES.list, org.list)
     .openapi(ORG_TOKEN_ROUTES.values, org.values)
     .openapi(ORG_TOKEN_ROUTES.export, org.exportList)

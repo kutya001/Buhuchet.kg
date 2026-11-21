@@ -155,4 +155,18 @@ describe.skipIf(!databaseAvailable())('Справочники → «Справо
     };
     expect(summary.requests).toBe(1);
   });
+
+  it('«Попросить шаблон» «Витрины данных» — только с правом «Смотреть витрину данных» (прототип v155 dmAskDlg)', async () => {
+    const body = { dict: 'dm', what: 'Отчёты, сданные с опозданием', comment: 'Контрагент, срок' };
+    const denied = await apiRequest(f.app, 'POST', '/api/dict-requests', acc, body);
+    expect([denied.status, await errorCode(denied)]).toEqual([403, 'forbidden']);
+    const res = await apiRequest(f.app, 'POST', '/api/dict-requests', owner, body);
+    expect(res.status).toBe(201);
+    expect(DictRequest.parse(await res.json())).toMatchObject({
+      dict: 'dm',
+      what: 'Отчёты, сданные с опозданием',
+      comment: 'Контрагент, срок',
+      status: 'new',
+    });
+  });
 });

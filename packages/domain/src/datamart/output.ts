@@ -23,20 +23,11 @@ import {
   type ListSort,
 } from '../common/list';
 import { formatSom } from '../common/money';
+import type { DM_COLUMN_TYPES } from './datamart';
 import { isYearMonth, monthLabel } from '../common/months';
 
-/** Типы столбцов шаблона (блок 2, пункт 5); `cp` — служебный номер контрагента для области «Свои». */
-export const DM_CELL_TYPES = [
-  'text',
-  'num',
-  'money',
-  'date',
-  'datetime',
-  'month',
-  'bool',
-  'cp',
-] as const;
-export type DmCellType = (typeof DM_CELL_TYPES)[number];
+/** Тип столбца шаблона (`DM_COLUMN_TYPES`); `cp` — служебный номер контрагента для области «Свои». */
+export type DmCellType = (typeof DM_COLUMN_TYPES)[number];
 
 /** Столбец шаблона: код (ключ в результате), русское название, тип, нужен ли итог. */
 export interface DmOutColumn {

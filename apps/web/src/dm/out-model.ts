@@ -6,7 +6,6 @@ import {
   dmOutPage,
   dmOutRows,
   dmOutValues,
-  dmParamDefault,
   dmParamValue,
   dmShownColumns,
   dmStatNumber,
@@ -16,11 +15,17 @@ import {
   type DmOutColumn,
   type DmOutRow,
   type DmOutTexts,
-  type DmParamType,
   type IsoDate,
   type ListQuery,
 } from '@buhuchet/domain';
-import { ListQueryParams, parseListQuery } from '@buhuchet/shared';
+import {
+  DmBadParam,
+  ListQueryParams,
+  parseListQuery,
+  type DmParam,
+  type DmRunResult,
+  type DmTemplateCard,
+} from '@buhuchet/shared';
 import type { GridColumn, GridPage, GridValues } from '@buhuchet/ui';
 import type { ExCell } from '../kpi/ex-table';
 
@@ -32,57 +37,45 @@ import type { ExCell } from '../kpi/ex-table';
  * домена `datamart/output.ts`), ячейки таблицы «как в Excel» только для просмотра.
  */
 
-/** Параметр шаблона, как его отдаёт каталог (`dm_templates.params`). */
-export interface DmOutParam {
-  code: string;
-  name: string;
-  type: DmParamType;
-  required: boolean;
-  default: string | null;
-}
-
-/** Шаблон «Вывода» и каталога: текста запроса здесь нет (его видит только Админка в окне шаблона). */
-export interface DmOutTemplate {
-  id: string;
-  code: string;
-  name: string;
-  description: string;
-  audience: 'org' | 'admin';
-  module: DmModule | null;
-  state: 'published' | 'broken';
-  /** Текст ошибки сломанного шаблона — только администратору платформы. */
-  error: string | null;
-  /** Ещё одно право шаблона (прототип `perm`: «Видеть плату за обслуживание»). */
-  needPermission: string | null;
-  params: DmOutParam[];
-  columns: DmOutColumn[];
-}
-
-/** Ответ запуска (исполнитель `runDmOrg` / `runDmAdmin`): деньги — тыйыны, строка — массив значений. */
-export interface DmRunAnswer {
-  columns: string[];
-  rows: unknown[][];
-  /** Строк больше предела: показаны первые 50 000. */
-  more: boolean;
-  ms: number;
-}
-
-/** Результат на экране: строки по столбцам шаблона. */
+/** Результат на экране: столбцы и строки ответа (деньги — тыйыны), сколько показано и время. */
 export interface DmOutResult {
+  columns: DmOutColumn[];
   rows: DmOutRow[];
+  /** Строк больше предела: показаны первые `max`. */
   more: boolean;
+  max: number;
   ms: number;
+  /** У Админки «глазами организации» — её название. */
+  orgName: string | null;
 }
+
+/** Ответ «Показать» в строки таблицы: строка — значения по порядку столбцов ответа. */
+export function outResult(answer: DmRunResult): DmOutResult {
+  return {
+    columns: answer.columns,
+    rows: dmOutRows(answer.columns, answer.rows),
+    more: answer.more,
+    max: answer.max,
+    ms: answer.ms,
+    orgName: answer.orgName,
+  };
+}
+
+const resultIds = new WeakMap<object, number>();
+let lastResultId = 0;
 
 /**
- * Строки ответа по столбцам шаблона: столбец ответа находится по коду (порядок запроса может быть
- * другим), столбца нет — пустые ячейки.
+ * Номер ответа «Показать» для ключа страницы таблицы: новый ответ — новый номер, тот же ответ (и его
+ * показ, пока грузится следующий) — тот же, поэтому страница таблицы не смешивает строки двух ответов.
  */
-export function outResult(columns: readonly DmOutColumn[], answer: DmRunAnswer): DmOutResult {
-  const at = new Map(answer.columns.map((name, i) => [name, i]));
-  const order = columns.map((c) => at.get(c.code) ?? -1);
-  const rows = answer.rows.map((row) => order.map((i) => (i < 0 ? null : row[i])));
-  return { rows: dmOutRows(columns, rows), more: answer.more, ms: answer.ms };
+export function outResultKey(answer: object): string {
+  let id = resultIds.get(answer);
+  if (id === undefined) {
+    lastResultId += 1;
+    id = lastResultId;
+    resultIds.set(answer, id);
+  }
+  return String(id);
 }
 
 /** Группа выбора шаблона (прототип `dmOptHtml`): у Админки «Для администратора» и «Для организаций · …». */
@@ -90,12 +83,12 @@ export interface DmTemplateGroup {
   key: string;
   /** Ключ словаря подписи группы и модуль для подстановки. */
   label: { admin: true } | { module: DmModule | null; prefix: boolean };
-  items: DmOutTemplate[];
+  items: DmTemplateCard[];
 }
 
 /** Шаблоны по группам в порядке списка (прототип `dmOptHtml`: группа — по первому шаблону). */
 export function outTemplateGroups(
-  list: readonly DmOutTemplate[],
+  list: readonly DmTemplateCard[],
   admin: boolean,
 ): DmTemplateGroup[] {
   const out: DmTemplateGroup[] = [];
@@ -117,8 +110,8 @@ export function outTemplateGroups(
 
 /** Каталог организации по модулям в порядке `DM_MODULES` (прототип `renderDmTpl`). */
 export function catalogGroups(
-  list: readonly DmOutTemplate[],
-): { module: DmModule; items: DmOutTemplate[] }[] {
+  list: readonly DmTemplateCard[],
+): { module: DmModule; items: DmTemplateCard[] }[] {
   return DM_MODULES.map((module) => ({
     module,
     items: list.filter((t) => t.audience === 'org' && t.module === module),
@@ -130,19 +123,64 @@ export type DmParamValues = Record<string, string>;
 
 /**
  * Параметры шаблона для формы (прототип `dmPar`): запомненное значение пользователя, иначе значение по
- * умолчанию на «сегодня» по Бишкеку.
+ * умолчанию на «сегодня» по Бишкеку (его считает сервер — `value` параметра). Пустое запомненное — тоже
+ * значение по умолчанию: прототип запоминает пустое поле как `null` (`dmParRead`).
  */
 export function outParamsOf(
-  params: readonly DmOutParam[],
+  params: readonly DmParam[],
   saved: Readonly<Record<string, unknown>> | null,
-  today: IsoDate,
 ): DmParamValues {
   const out: DmParamValues = {};
   for (const p of params) {
     const v = saved?.[p.code];
-    out[p.code] = typeof v === 'string' ? v : (dmParamDefault(p.default, today) ?? '');
+    out[p.code] = typeof v === 'string' && v !== '' ? v : (p.value ?? '');
   }
   return out;
+}
+
+/** Ошибка «Показать» для экрана: неверный параметр — у поля, сломанный шаблон — состояние, иначе — текстом. */
+export type DmRunFailure =
+  | { kind: 'param'; param: string; problem: DmParamProblem }
+  | { kind: 'broken'; error: string | null }
+  | { kind: 'other' };
+
+/** Разбор отказа «Показать» (`DM_RUN_ERRORS`): `details` — `{ param, why }` или `{ error }` у Админки. */
+export function outRunFailure(code: string, details: unknown): DmRunFailure {
+  if (code === 'dm_bad_param') {
+    const d = DmBadParam.safeParse(details);
+    if (d.success) {
+      return { kind: 'param', param: d.data.param, problem: outServerProblem(d.data.param, d.data.why) };
+    }
+  }
+  if (code === 'dm_template_broken') {
+    const error =
+      typeof details === 'object' && details !== null && 'error' in details
+        ? details.error
+        : null;
+    return { kind: 'broken', error: typeof error === 'string' && error ? error : null };
+  }
+  return { kind: 'other' };
+}
+
+/**
+ * Запускать ли шаблон сразу при открытии (прототип `renderDmOut` рисует результат сразу): только
+ * опубликованный, с верными параметрами и не «глазами организации» — запуск Админки по шаблону
+ * организации пишется в её историю, поэтому он — только по «Показать» (docs/deviations.md п. И-16).
+ */
+export function outAutoRun(
+  tpl: Pick<DmTemplateCard, 'state' | 'params' | 'audience'>,
+  values: Readonly<DmParamValues>,
+  admin: boolean,
+): boolean {
+  if (tpl.state !== 'published') return false;
+  if (admin && tpl.audience === 'org') return false;
+  return Object.keys(outParamProblems(tpl.params, values)).length === 0;
+}
+
+/** Выбор «Год»: текущий и четыре прошлых, запомненный год вне них — тоже в списке, первым. */
+export function outYearOptions(today: IsoDate, value: string): string[] {
+  const years = outYears(today);
+  return value && !years.includes(value) ? [value, ...years] : years;
 }
 
 /** Почему параметр не принят (ключи словаря `dm.par.err.*`). */
@@ -154,7 +192,7 @@ export type DmParamProblem = 'required' | 'type' | 'date_order' | 'month_order';
  * у второго поля. Ответ — ошибки по кодам параметров; пусто — можно запускать.
  */
 export function outParamProblems(
-  params: readonly DmOutParam[],
+  params: readonly DmParam[],
   values: Readonly<DmParamValues>,
 ): Record<string, DmParamProblem> {
   const out: Record<string, DmParamProblem> = {};
@@ -178,9 +216,26 @@ export function outParamProblems(
   return out;
 }
 
-/** Только заданные параметры — то, что уходит в запуск и запоминается. */
-export function outParamsToSend(values: Readonly<DmParamValues>): DmParamValues {
-  return Object.fromEntries(Object.entries(values).filter(([, v]) => v.trim() !== ''));
+/**
+ * Параметры для «Показать» (прототип `dmParRead`: `v || null`): пустое поле уходит пустым — у
+ * необязательного параметра это «все», а не значение по умолчанию.
+ */
+export function outParamsToSend(
+  params: readonly DmParam[],
+  values: Readonly<DmParamValues>,
+): Record<string, string | null> {
+  return Object.fromEntries(
+    params.map((p) => {
+      const v = (values[p.code] ?? '').trim();
+      return [p.code, v === '' ? null : v];
+    }),
+  );
+}
+
+/** Отказ сервера по параметру (`dm_bad_param`: `type`, `required`, `range`) — ошибка поля формы. */
+export function outServerProblem(param: string, why: 'type' | 'required' | 'range'): DmParamProblem {
+  if (why !== 'range') return why;
+  return param.startsWith('month') ? 'month_order' : 'date_order';
 }
 
 /** Годы выбора параметра «Год» (прототип `dmParHtml`): текущий и четыре прошлых. */

@@ -16,7 +16,7 @@ import {
   takeRateLimit,
   type RateLimit,
 } from '@buhuchet/db';
-import { bishkekDate, DICT_REQUEST_HOURLY_LIMIT } from '@buhuchet/domain';
+import { bishkekDate, DICT_REQUEST_HOURLY_LIMIT, hasPermission } from '@buhuchet/domain';
 import {
   ApiError,
   DictRequest,
@@ -327,6 +327,10 @@ export const createDictRequestRoute = createRoute({
       content: error,
     },
     ...access,
+    403: {
+      description: 'Не сотрудник организации; «Попросить шаблон» без права «Смотреть витрину данных»',
+      content: error,
+    },
   },
 });
 
@@ -351,6 +355,10 @@ export function createDictRequestHandler(
   return async (c) => {
     const body = c.req.valid('json');
     const ctx = orgContextOf(c);
+    // «Попросить шаблон» — из модуля «Витрина данных»: только с правом его смотреть (прототип `dmAdd`).
+    if (body.dict === 'dm' && !hasPermission(c.get('access')!.subject, 'dmView')) {
+      apiFail(403, 'forbidden', 'Нет права на это действие');
+    }
     const take = await takeRateLimit(deps.db, DICT_REQUEST_RATE_LIMIT, ctx.orgId);
     if (!take.ok) {
       apiFail(

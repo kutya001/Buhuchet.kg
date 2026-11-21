@@ -431,15 +431,23 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
       { id: 'check', icon: 'alert', label: 'tab.afiles.check' },
     ],
   },
-  // «Витрина данных» (доработки 20.11.2026: Витрина данных; прототип v155 dmTabs, dmAdd): в Админке на
-  // этапе 1 — только «API Токены» (поток Т); «Вывод», «Шаблоны» и «Журнал запросов» — этап 2.
+  // «Витрина данных» (доработки 20.11.2026: Витрина данных; прототип v155 dmTabs, dmAdd): «Вывод»,
+  // «Шаблоны» (у Админки — список шаблонов треда сборки, у организации — каталог), «API Токены»
+  // (Админка или право «Управлять API-токенами»); «Журнал запросов» — этап 2 треда сборки.
   dm: {
     icon: 'table',
     title: 'nav.dm',
     short: 'nav.short.dm',
     desc: 'nav.desc.dm',
-    tabs: [{ id: 'tok', icon: 'key', label: 'tab.dm.tok' }],
-    add: [{ id: 'tok', icon: 'key', label: 'add.dm.tok' }],
+    tabs: [
+      { id: 'out', icon: 'table', label: 'tab.dm.out' },
+      { id: 'tpl', icon: 'layers', label: 'tab.dm.tpl', when: (a) => !a.admin },
+      { id: 'tok', icon: 'key', label: 'tab.dm.tok', when: (a) => a.admin || a.can('dmTokens') },
+    ],
+    add: [
+      { id: 'tok', icon: 'key', label: 'add.dm.tok', when: (a) => a.admin || a.can('dmTokens') },
+      { id: 'ask', icon: 'send', label: 'add.dm.ask', when: (a) => !a.admin },
+    ],
   },
   // Способы добавления содержимого «Базы знаний» зависят от вкладки — придут с его экраном (поток Д).
   pdicts: {

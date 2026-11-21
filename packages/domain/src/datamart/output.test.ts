@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ListQuery } from '../common/list';
+import { DM_COLUMN_TYPES } from './datamart';
 import {
   dmCopyText,
   dmListType,
@@ -12,7 +13,6 @@ import {
   dmStatNumber,
   dmText,
   dmValue,
-  DM_CELL_TYPES,
   DM_VALUES_LIMIT,
   type DmOutColumn,
 } from './output';
@@ -59,7 +59,7 @@ describe('столбцы и значения «Вывода»', () => {
   });
 
   it('тип столбца списка — как DM_GT прототипа', () => {
-    expect(DM_CELL_TYPES.map(dmListType)).toEqual([
+    expect(DM_COLUMN_TYPES.map(dmListType)).toEqual([
       'text',
       'int',
       'money',

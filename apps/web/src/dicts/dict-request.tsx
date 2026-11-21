@@ -3,7 +3,7 @@
 import {
   bishkekDate,
   DICT_REQUEST_COMMENT_MAX,
-  DICT_REQUEST_DICTS,
+  DICT_REQUEST_PICK,
   DICT_REQUEST_WHAT_MAX,
   formatDateRu,
   type DictRequestDict,
@@ -119,7 +119,7 @@ function DictRequestDialog({
               value={dict}
               onChange={(e) => setDict(e.target.value as DictRequestDict)}
             >
-              {DICT_REQUEST_DICTS.map((d) => (
+              {DICT_REQUEST_PICK.map((d) => (
                 <option key={d} value={d}>
                   {dictTitle(t, d)}
                 </option>

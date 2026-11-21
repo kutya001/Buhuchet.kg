@@ -372,6 +372,8 @@ export const DICTS_TEXTS = {
   'dicts.platform.dict.reasons': { ru: 'Причины изменения срока', section: S },
   'dicts.platform.dict.ugns': { ru: 'Налоговые органы (УГНС)', section: S },
   'dicts.platform.dict.bases': { ru: 'Основания для отчётов', section: S },
+  // «Попросить шаблон» «Витрины данных» в «Моих запросах» и «Запросах» Админки (прототип `dmAskDlg`).
+  'dicts.platform.dict.dm': { ru: 'Витрина данных', section: S },
   'dicts.platform.dict.phones': { ru: 'Коды стран телефонов', section: S },
   'dicts.platform.dict.calendar': { ru: 'Производственный календарь', section: S },
   'dicts.value.sub': { ru: '{tab} · справочник платформы', section: S },

@@ -119,7 +119,8 @@ export const regimeAccountantNote = (note: string) => note.replace(/^Для бу
 /**
  * В какой справочник просят добавить значение — как в окне прототипа: «Виды отчётов» и справочники
  * раздела `dictionaries` (режимы, формы, органы, льготы, банки, категории задач, причины изменения
- * срока, УГНС, основания).
+ * срока, УГНС, основания); `dm` — «Попросить шаблон» «Витрины данных» (прототип v155 `dmAskDlg`:
+ * `dict: 'Витрина данных'`), его нет в окне «Попросить добавить» справочников.
  */
 export const DICT_REQUEST_DICTS = [
   'types',
@@ -132,8 +133,14 @@ export const DICT_REQUEST_DICTS = [
   'reasons',
   'ugns',
   'bases',
+  'dm',
 ] as const;
 export type DictRequestDict = (typeof DICT_REQUEST_DICTS)[number];
+
+/** Справочники окна «Попросить добавить» «Справочников»: без шаблона «Витрины данных». */
+export const DICT_REQUEST_PICK = DICT_REQUEST_DICTS.filter(
+  (d): d is Exclude<DictRequestDict, 'dm'> => d !== 'dm',
+);
 
 /** Статус запроса: «Новый», «Добавлено», «Отклонено» (рассматривает администратор платформы). */
 export const DICT_REQUEST_STATUSES = ['new', 'added', 'rejected'] as const;
