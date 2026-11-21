@@ -94,6 +94,13 @@ describe('dmTemplateTokenable', () => {
   it('модуль без области и невидимый шаблон', () => {
     const staff = tpl({ module: 'staff', columns: [] });
     expect(dmTemplateTokenable(staff, subject(['staffView']), ALL_ON)).toBe(true);
+    // «Сотрудники» со столбцом «Контрагент» (готовый «Задачи»): «Вывод» отбирает «Свои» по группе
+    // «Контрагенты» (`dmOwnScope`, этап 2, П4) — токен только при «Все» там.
+    const tasks = tpl({ module: 'staff', columns: [{ code: 'contractor_id', type: 'cp' }] });
+    expect(dmTemplateSeen(tasks, subject(['staffView']), ALL_ON)).toBe(true);
+    expect(dmTemplateTokenable(tasks, subject(['staffView']), ALL_ON)).toBe(false);
+    expect(dmTemplateTokenable(tasks, subject(['staffView'], { cps: 'all' }), ALL_ON)).toBe(true);
+    expect(dmTemplateTokenable(tasks, subject([], {}, true), ALL_ON)).toBe(true);
     expect(dmTemplateTokenable(tpl(), subject(['dmView']), ALL_ON)).toBe(false);
     expect(dmTemplateTokenable(tpl({ state: 'off' }), subject([], {}, true), ALL_ON)).toBe(false);
   });

@@ -8,6 +8,7 @@ import {
   type ScopeGroupId,
 } from '../roles/permissions';
 import type { DM_MODULES, DM_TEMPLATE_STATES } from './datamart';
+import { dmOwnScope } from './scope';
 
 /*
  * Кому из сотрудников организации виден шаблон «Витрины данных» (доработки 20.11.2026: Витрина данных,
@@ -83,9 +84,10 @@ export function dmTemplateSeen(
 /**
  * Можно ли выпустить или перевыпустить токен к шаблону (строже прототипа `dmNewDlg`): токен отдаёт
  * строки всей организации, как владельцу, — область «Свои контрагенты» по токену не действует
- * (организация не сотрудник). Поэтому шаблон должен быть виден сотруднику (`dmTemplateSeen`), а у
- * модуля с областью — ещё и «Все контрагенты» в группе прав модуля (владельцу — всегда): иначе
- * сотрудник с областью «Свои» вынес бы через токен строки чужих контрагентов.
+ * (организация не сотрудник). Поэтому шаблон должен быть виден сотруднику (`dmTemplateSeen`) и «Вывод»
+ * не отбирал бы ему строки по «Свои» (`dmOwnScope` — то же правило, что у «Показать»: у модуля с
+ * областью — группа прав модуля, у «Сотрудников» со столбцом «Контрагент» — группа «Контрагенты»):
+ * иначе сотрудник с областью «Свои» вынес бы через токен строки чужих контрагентов.
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#Т-26
 export function dmTemplateTokenable(
@@ -93,6 +95,5 @@ export function dmTemplateTokenable(
   subject: AccessSubject,
   features: Readonly<Partial<Record<Feature, boolean>>>,
 ): boolean {
-  if (!dmTemplateSeen(t, subject, features)) return false;
-  return !t.module || !isScopeGroup(t.module) || scopeOf(subject, t.module) === 'all';
+  return dmTemplateSeen(t, subject, features) && !dmOwnScope(t.module, subject, t.columns);
 }

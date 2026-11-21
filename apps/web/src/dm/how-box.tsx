@@ -71,7 +71,7 @@ export function HowBox({ how, token }: { how: DmTokenHow; token: string }) {
             {x.sample}
           </pre>
         </details>
-        <ul className="my-1 pl-[18px] text-[13px] leading-[1.6]">
+        <ul className="my-1 list-disc pl-[18px] text-[13px] leading-[1.6]">
           {TIPS.map((key) => (
             <li key={key}>{markedText(t(key))}</li>
           ))}
