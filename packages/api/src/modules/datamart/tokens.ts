@@ -188,7 +188,8 @@ function tellCreated(tx: Tx, nc: DmTokenNoticeContext | null, v: TokenView) {
  * уходит в журнал ошибок.
  */
 async function tellRevoked(
-  deps: ApiDeps,
+  // Из транзакции отзыва — только журнал и сбор ошибок, не пул (п. О-46).
+  deps: Pick<ApiDeps, 'logger' | 'errors'>,
   tx: Tx,
   nc: DmTokenNoticeContext,
   orgId: string,
