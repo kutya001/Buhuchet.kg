@@ -171,6 +171,25 @@ const DM_HINT_ADM=[['organizations','name, status, is_demo'],['sessions','user_i
 const dmSqlPars=sql=>[...new Set([...String(sql).replace(/--[^\n]*/g,'').matchAll(/(?<![:\w]):([a-z_][a-z0-9_]*)/gi)].map(m=>m[1]))];
 const dmSqlCols=sql=>[...new Set([...String(sql).replace(/--[^\n]*/g,'').matchAll(/\bAS\s+([a-z_][a-z0-9_]*)\b(?!\s*\()/gi)].map(m=>m[1]))];
 // Проверка текста в прототипе — по словам; в продукте — разборщиком SQL и отдельной ролью базы только для чтения (блок 8, пункты 2–3)
+// Подсветка синтаксиса SQL в редакторе шаблона (Кутман 21.11.2026): ключевые слова, таблицы базы, параметры :имя, строки, числа и комментарии —
+// своим цветом, слева номера строк. Поле ввода остаётся обычным textarea: его текст прозрачный, под ним — подсвеченная копия того же текста.
+// Проверка, сохранение и защита запроса (dmSqlErr) не меняются
+const DM_KW=new Set(('select from where and or not in is null as on join left right inner outer full cross group by order having limit offset distinct case when then else end '+
+  'with recursive union all exists between like ilike asc desc nulls first last over partition filter cast true false interval lateral using any some array '+
+  'sum count avg min max coalesce nullif greatest least extract date_trunc to_char round abs floor ceil now current_date row_number rank dense_rank lag lead string_agg array_agg '+
+  'date numeric int integer bigint text boolean varchar timestamp').split(' '));
+function dmHl(s){const tb=new Set([...DM_HINT,...DM_HINT_ADM].map(x=>String(x[0]).toLowerCase()));
+  return String(s).replace(/(--[^\n]*|\/\*[\s\S]*?(?:\*\/|$))|('(?:[^']|'')*'?)|(::?[a-z_][a-z0-9_]*)|(\b\d+(?:\.\d+)?\b)|([a-z_][a-z0-9_]*)|([&<>"])/gi,(m,c,q,p,n,w,h)=>{
+    if(c)return `<span class="sq-c">${esc(c)}</span>`;if(q)return `<span class="sq-s">${esc(q)}</span>`;if(p)return `<span class="${p[1]===':'?'sq-k':'sq-p'}">${esc(p)}</span>`;if(n)return `<span class="sq-n">${n}</span>`;
+    if(w){const l=w.toLowerCase();return DM_KW.has(l)?`<span class="sq-k">${w}</span>`:tb.has(l)?`<span class="sq-t">${w}</span>`:w}return esc(h)})+'\n'}
+const dmLn=s=>Array.from({length:String(s).split('\n').length},(_,i)=>i+1).join('\n');
+// Подключение подсветки к полю: те же отступы и шрифт, что у поля; прокрутка — вместе
+function dmHlBind(ta){const w=ta&&ta.closest('.dm-sqlb');if(!w)return;const pre=$('.dm-hl',w),g=$('.dm-sqlg',w),cs=getComputedStyle(ta);
+  ['paddingTop','paddingRight','paddingBottom','paddingLeft','borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth','fontFamily','fontSize','lineHeight','letterSpacing','tabSize'].forEach(k=>{pre.style[k]=cs[k]});
+  g.style.paddingTop=cs.paddingTop;g.style.fontSize=cs.fontSize;g.style.lineHeight=cs.lineHeight;g.style.fontFamily=cs.fontFamily;
+  const sync=()=>{pre.scrollTop=ta.scrollTop;pre.scrollLeft=ta.scrollLeft;g.firstChild.style.transform=`translateY(${-ta.scrollTop}px)`};
+  const draw=()=>{pre.innerHTML=dmHl(ta.value);g.firstChild.textContent=dmLn(ta.value);sync()};
+  ta.addEventListener('input',draw);ta.addEventListener('scroll',sync);if(window.ResizeObserver)new ResizeObserver(sync).observe(ta);draw()}
 function dmSqlErr(sql){const s=String(sql).replace(/--[^\n]*/g,'').trim();if(!s)return 'Введите запрос';if(!/^(select|with)\b/i.test(s))return 'Запрос начинается с SELECT или WITH: разрешено только чтение';
   if(/;\s*\S/.test(s))return 'Разрешён один оператор: уберите всё после «;»';
   const bad=s.match(/\b(insert|update|delete|merge|drop|alter|create|truncate|grant|revoke|copy|call|vacuum|lock|set_config|pg_sleep|pg_read_file|pg_ls_dir|dblink|pg_catalog|information_schema)\b/i);
@@ -194,7 +213,7 @@ function dmEdit(t0){const sys=!!t0&&t0.src==='system',pub=!!t0&&t0.state!=='Че
         ${fld('Вид',sel('de-k',[['org','Для организаций'],['adm','Для администратора']],st.kind,dis||(pub?'disabled':'')),{id:'de-k'})}
         ${st.kind==='org'?fld('Модуль',sel('de-m',Object.entries(DM_MODS),st.mod,dis),{id:'de-m',hint:'Шаблон виден, если есть просмотр модуля; «Свои контрагенты» — из его группы прав'})+fld('Ещё одно право',sel('de-p',[['','Не нужно'],['fee','Видеть плату за обслуживание']],st.perm,dis),{id:'de-p'})
           +fld('Доступ',sel('de-a',[['all','Все организации'],['sel','Выбранные организации']],acc,dis),{id:'de-a'})+(acc==='sel'?`<div class="fld full dm-orgs">${ORGS.map(o=>`<label class="check-row"><input type="checkbox" data-dm-org="${o.id}" ${Array.isArray(st.access)&&st.access.includes(o.id)?'checked':''} ${dis}><span>${esc(o.name)}</span></label>`).join('')}</div>`:''):''}</div>
-      ${fld('Запрос',`<textarea class="inp mono dm-sql" id="de-s" spellcheck="false" ${dis}>${esc(st.sql)}</textarea>`,{req:true,full:true,id:'de-s',hint:'Один оператор SELECT. Условие «моя организация» писать не нужно: строки чужих организаций база не отдаёт. Деньги в базе — в тыйынах: столбец типа «Деньги» переводит их в сомы'})}
+      ${fld('Запрос',`<div class="dm-sqlb"><div class="dm-sqlg" aria-hidden="true"><div>${dmLn(st.sql)}</div></div><pre class="dm-hl mono" aria-hidden="true">${dmHl(st.sql)}</pre><textarea class="inp mono dm-sql" id="de-s" spellcheck="false" autocapitalize="off" autocomplete="off" ${dis}>${esc(st.sql)}</textarea></div>`,{req:true,full:true,id:'de-s',hint:'Один оператор SELECT. Условие «моя организация» писать не нужно: строки чужих организаций база не отдаёт. Деньги в базе — в тыйынах: столбец типа «Деньги» переводит их в сомы'})}
       <div class="row dm-chkbar">${fld('Проверить на организации',sel('de-o',ORGS.slice().sort((a,b)=>(b.id===ORG.id)-(a.id===ORG.id)).map(o=>[o.id,o.name+(o.id===ORG.id?' (демо)':'')]),st.org),{id:'de-o'})}<button type="button" class="btn" id="de-chk">${ic('play','sm')}Проверить</button></div><div id="de-res">${chk}</div></div>
       <div class="dm-ed-r"><div class="box"><h3>Параметры · ${st.params.length}</h3>${st.params.length?`<div class="tbl-wrap"><table class="mini dm-pt"><thead><tr><th>В запросе</th><th>Название</th><th>Тип</th><th>Обяз.</th><th>По умолчанию</th></tr></thead><tbody>${st.params.map((x,i)=>`<tr><td class="mono">:${esc(x.k)}</td><td>${inp('dpl-'+i,x.label,dis)}</td><td>${sel('dpt-'+i,Object.entries(DM_PT),x.type,dis)}</td><td><input type="checkbox" id="dpr-${i}" ${x.req?'checked':''} ${dis} aria-label="Обязательный"></td><td>${sel('dpd-'+i,[['','—'],...Object.entries(DM_DEF)],x.def||'',dis)}</td></tr>`).join('')}</tbody></table></div>`:'<span class="faint">В запросе нет параметров</span>'}<span class="hint">Берутся из запроса при «Проверить»: :month, :date_from. Значение уходит в базу как данные и в текст запроса не вклеивается.</span></div>
         <div class="box"><h3>Столбцы · ${st.cols.length}</h3><div class="tbl-wrap"><table class="mini dm-pt"><thead><tr><th>Код</th><th>Название</th><th>Тип</th><th>Итог</th></tr></thead><tbody>${st.cols.map((x,i)=>`<tr><td class="mono">${esc(x.k)}</td><td>${inp('dcl-'+i,x.label,dis)}</td><td>${sel('dct-'+i,Object.entries(DM_CT),x.type,dis)}</td><td><input type="checkbox" id="dcs-${i}" ${x.total?'checked':''} ${dis} aria-label="Итог по столбцу"></td></tr>`).join('')}</tbody></table></div><span class="hint">Столбцы читаются после «Проверить». Тип «Контрагент (для области)» — код контрагента: сотруднику с «Свои контрагенты» остаются строки его контрагентов; шаблон без такого столбца видят владелец и «Все контрагенты».${pub?' Код столбца после публикации не меняется, столбцы можно только добавлять.':''}</span></div>
@@ -204,7 +223,7 @@ function dmEdit(t0){const sys=!!t0&&t0.src==='system',pub=!!t0&&t0.state!=='Че
       :`<button class="btn ghost" data-close>Отмена</button><button class="btn" id="de-save">${pub?'Сохранить':'Сохранить черновик'}</button>${t0&&t0.state==='Опубликован'?'':`<button class="btn cta" id="de-pub" ${ok()?'':'disabled title="Сначала нажмите «Проверить»"'}>${ic('check','sm')}Опубликовать</button>`}`,
     mount(el){const q=s=>$(s,el);
       ['#de-k','#de-a'].forEach(s=>{const x=q(s);if(x)x.onchange=()=>{rd(el);m.draw()}});
-      const sq=q('#de-s');if(sq&&!sys){sq.oninput=()=>{st.sql=sq.value;const b=q('#de-pub');if(b)b.disabled=!ok()};sq.onchange=()=>{st.sql=sq.value}}
+      const sq=q('#de-s');dmHlBind(sq);if(sq&&!sys){sq.oninput=()=>{st.sql=sq.value;const b=q('#de-pub');if(b)b.disabled=!ok()};sq.onchange=()=>{st.sql=sq.value}}
       q('#de-o').onchange=e=>st.org=e.target.value;q('#de-td').onclick=()=>{m.close(true);go('tdocs')};
       if(q('#de-copy'))q('#de-copy').onclick=()=>{m.close();dmCopy(t0)};
       q('#de-chk').onclick=()=>{rd(el);const e=dmSqlErr(st.sql);if(!setErr(el,'de-s',e))return;syncPars();
@@ -290,19 +309,144 @@ function dmBellGo(o){const k=DM_TOK.find(x=>x.id===o.id);if(!k)return toast('З�
 function dmShowTok(k,tok){const t=dmTpl(k.tpl);openModal({sticky:true,noMax:true,size:'wide',render:()=>({title:'Скопируйте токен. Больше он не покажется',sub:`${esc(k.name)} · ${esc(t?t.name:k.tpl)} · действует до ${fmtD(k.till.slice(0,10))}`,
   body:`<div class="dm-tok"><code class="mono" id="dt-v">${esc(tok)}</code><button type="button" class="btn cta" id="dt-copy">${ic('copy','sm')}Скопировать</button></div><span class="hint">В системе остаются только первые знаки: bk_${esc(k.pre)}… Потеряли токен — перевыпустите его.</span>${dmHow(t,tok)}`,
   foot:'<button class="btn cta" data-close>Готово, токен сохранён</button>',mount(el){$('#dt-copy',el).onclick=()=>copyText(tok,'Токен скопирован')}})})}
-// «Как подключить»: адрес, заголовок, пример запроса и ответа, Excel, Power BI, 1С и скрипт для Google Таблиц (блок 6)
-function dmHow(t,tok){if(!t)return '';const p={};t.params.forEach(x=>{p[x.k]=dmDef(x.def)});const qs=t.params.filter(x=>p[x.k]).map(x=>`${x.k}=${p[x.k]}`).join('&'),url=`https://buhuchet.kg/api/ext/v1/${t.code}${qs?'?'+qs:''}`;
+// «Как подключить» (Кутман 21.11.2026): общее — ссылка CSV, адрес, заголовок и параметры по отдельности; ниже мини-блок на каждую программу
+// (Excel Power Query, Excel VBA, Google Таблицы, Power BI, 1С, другие сервисы) с шагами и тем, что куда вставить. Любой адрес, параметр,
+// заголовок и код копируется нажатием (data-dmcp). В окне уже выпущенного токена он показан не целиком — в коде вместо него «bk_ВАШ_ТОКЕН»
+const DM_HOST='https://buhuchet.kg';
+const dmCp=(v,t)=>`<button type="button" class="dm-c mono" data-dmcp="${esc(v)}" title="Нажмите, чтобы скопировать">${esc(t??v)}${ic('copy','sm')}</button>`;
+const dmCode=code=>`<div class="dm-code"><pre class="mono dm-pre" data-dmcp="${esc(code)}" title="Нажмите, чтобы скопировать код">${esc(code)}</pre><button type="button" class="btn sm dm-code-b" data-dmcp="${esc(code)}">${ic('copy','sm')}Скопировать код</button></div>`;
+const dmFmt=x=>x.type==='date'?'ГГГГ-ММ-ДД':x.type==='month'?'ГГГГ-ММ':x.type==='year'?'ГГГГ':'';
+document.addEventListener('click',e=>{const x=e.target.closest('[data-dmcp]');if(!x)return;if(x.tagName==='PRE'&&String(getSelection()||''))return;copyText(x.dataset.dmcp,x.tagName==='PRE'||x.classList.contains('dm-code-b')?'Код скопирован':'Скопировано')});
+function dmHow(t,tok){if(!t)return '';const full=!/…$/.test(tok),T=full?tok:'bk_ВАШ_ТОКЕН',B='Bearer '+T,p={};t.params.forEach(x=>{p[x.k]=dmDef(x.def)});
+  const ps=t.params.filter(x=>p[x.k]),qs=ps.map(x=>`${x.k}=${p[x.k]}`).join('&'),base=`${DM_HOST}/api/ext/v1/${t.code}`,url=base+(qs?'?'+qs:''),csv=`${base}?format=csv${qs?'&'+qs:''}`;
   const r=dmRun(t,p,t.kind==='adm'?null:ORG.id),cs=t.cols.filter(c=>c.type!=='cp');
   const ex=r?r.rows.slice(0,2).map(x=>Object.fromEntries(cs.map(c=>[c.k,c.type==='money'?Math.round((x[c.k]||0)*100)/100:x[c.k]??null]))):[];
   const js=JSON.stringify({columns:cs.map(c=>({key:c.k,title:c.label,type:c.type})),rows:ex,total:r?r.rows.length:0,next:r&&r.rows.length>1000?url+(qs?'&':'?')+'page=2':null},null,2);
-  const gs=`function load() {\n  const r = UrlFetchApp.fetch('${url}${qs?'&':'?'}format=csv', {\n    headers: { Authorization: 'Bearer ${tok}' }\n  });\n  const rows = Utilities.parseCsv(r.getContentText());\n  const sh = SpreadsheetApp.getActiveSheet();\n  sh.clearContents();\n  sh.getRange(1, 1, rows.length, rows[0].length).setValues(rows);\n}`;
-  return `<div class="box dm-how"><h3>Как подключить</h3><div class="dm-kv"><span class="hint">Адрес</span><code class="mono">GET ${esc(url)}</code><span class="hint">Заголовок</span><code class="mono">Authorization: Bearer ${esc(tok)}</code></div>
-    <details><summary>Пример запроса</summary><pre class="mono dm-pre">curl -H "Authorization: Bearer ${esc(tok)}" \\\n  "${esc(url)}"</pre></details>
-    <details><summary>Пример ответа</summary><pre class="mono dm-pre">${esc(js)}</pre></details>
-    <ul class="dm-ul"><li>С <span class="mono">format=csv</span> — таблица для Excel; страница — 1 000 строк, до 5 000 с <span class="mono">limit=5000</span>. Деньги — числом в сомах.</li><li>Пределы на токен: 1 запрос одновременно, 30 в минуту, 5 000 в сутки. Токен в адресе не принимается — только в заголовке.</li>
-      <li><b>Excel</b>: «Данные» → «Из Интернета» → «Дополнительно»: адрес и заголовок Authorization. <b>Power BI</b>: «Получить данные» → «Интернет» → «Дополнительно». <b>1С</b>: HTTPСоединение с заголовком Authorization.</li>
-      <li><b>Google Таблицы</b> по адресу с заголовком не загружают: «Расширения» → «Apps Script», вставьте скрипт ниже и запустите load.</li></ul>
-    <details><summary>Скрипт для Google Таблиц</summary><pre class="mono dm-pre">${esc(gs)}</pre></details>
+  const mq=s=>`"${String(s).replace(/"/g,'""')}"`;
+  // Power Query (Excel и Power BI): параметры — отдельными строками в начале, адрес без параметров, заголовок отдельно
+  const pq=`let
+    // 1. Токен (полностью, вместе с bk_)
+    Token = ${mq(T)},
+${ps.length?`    // 2. Параметры: меняйте значения здесь, затем «Обновить»
+${ps.map(x=>`    #"${x.label}" = ${mq(p[x.k])},   // ${x.k}, ${dmFmt(x)}`).join('\n')}
+`:''}    // 3. Запрос — менять не нужно
+    Source = Web.Contents(${mq(base)}, [
+        Query = [format = "csv"${ps.map(x=>`, ${x.k} = #"${x.label}"`).join('')}],
+        Headers = [Authorization = "Bearer " & Token]
+    ]),
+    Csv = Csv.Document(Source, [Delimiter = ",", Encoding = 65001, QuoteStyle = QuoteStyle.Csv]),
+    Result = Table.PromoteHeaders(Csv, [PromoteAllScalars = true])
+in
+    Result`;
+  const cell=x=>x.type==='date'?`Date.ToText(Date.From(Excel.CurrentWorkbook(){[Name="${x.k}"]}[Content]{0}[Column1]), "yyyy-MM-dd")`:x.type==='month'?`Date.ToText(Date.From(Excel.CurrentWorkbook(){[Name="${x.k}"]}[Content]{0}[Column1]), "yyyy-MM")`:`Text.From(Excel.CurrentWorkbook(){[Name="${x.k}"]}[Content]{0}[Column1])`;
+  const vb=`Sub LoadBuhuchet()
+    ' 1. Токен (полностью, вместе с bk_)
+    Const TOKEN As String = "${T}"
+${ps.length?`    ' 2. Параметры: впишите значения или берите из ячеек, например Range("B1").Text
+${ps.map((x,i)=>`    Dim p${i + 1} As String: p${i + 1} = "${p[x.k]}"   ' ${x.label}, ${x.k}, ${dmFmt(x)}`).join('\n')}
+`:''}    ' 3. Запрос — менять не нужно
+    Dim url As String
+    url = "${base}?format=csv"${ps.map((x,i)=>` & "&${x.k}=" & p${i + 1}`).join('')}
+    Dim http As Object: Set http = CreateObject("MSXML2.XMLHTTP.6.0")
+    http.Open "GET", url, False
+    http.setRequestHeader "Authorization", "Bearer " & TOKEN
+    http.send
+    If http.Status <> 200 Then MsgBox "Ошибка " & http.Status & ": " & http.responseText: Exit Sub
+    Dim txt As String
+    With CreateObject("ADODB.Stream")
+        .Type = 1: .Open: .Write http.responseBody
+        .Position = 0: .Type = 2: .Charset = "utf-8": txt = .ReadText
+    End With
+    Dim lines, i As Long, ws As Worksheet: Set ws = ActiveSheet
+    ws.Cells.Clear
+    lines = Split(Replace(txt, vbCr, ""), vbLf)
+    For i = 0 To UBound(lines)
+        If Len(lines(i)) > 0 Then ws.Cells(i + 1, 1).Value = lines(i)
+    Next
+    ws.Columns(1).TextToColumns DataType:=xlDelimited, TextQualifier:=xlDoubleQuote, Comma:=True
+End Sub`;
+  const gs=`// 1. Токен (полностью, вместе с bk_). Его видят все редакторы таблицы
+const TOKEN = '${T}';
+${ps.length?`// 2. Параметры: меняйте значения здесь
+const PARAMS = {
+${ps.map(x=>`  ${x.k}: '${p[x.k]}',   // ${x.label}, ${dmFmt(x)}`).join('\n')}
+};
+`:'const PARAMS = {};\n'}// 3. Загрузка — менять не нужно
+function load() {
+  const q = Object.keys(PARAMS).map(k => k + '=' + encodeURIComponent(PARAMS[k])).join('&');
+  const r = UrlFetchApp.fetch('${base}?format=csv' + (q ? '&' + q : ''), {
+    headers: { Authorization: 'Bearer ' + TOKEN }
+  });
+  const rows = Utilities.parseCsv(r.getContentText('UTF-8'));
+  const sh = SpreadsheetApp.getActiveSheet();
+  sh.clearContents();
+  if (rows.length) sh.getRange(1, 1, rows.length, rows[0].length).setValues(rows);
+}`;
+  const c1=`// 1. Токен (полностью, вместе с bk_)
+Токен = "${T}";
+${ps.length?`// 2. Параметры: меняйте значения здесь
+${ps.map(x=>`Параметры_${x.k} = "${p[x.k]}"; // ${x.label}, ${dmFmt(x)}`).join('\n')}
+`:''}// 3. Запрос — менять не нужно
+Адрес = "/api/ext/v1/${t.code}"${ps.length?` + "?${ps.map((x,i)=>`${i?'&':''}${x.k}=" + Параметры_${x.k}`).join(' + "')}`:''};
+Соединение = Новый HTTPСоединение("buhuchet.kg", 443, , , , 60, Новый ЗащищенноеСоединениеOpenSSL);
+Заголовки = Новый Соответствие;
+Заголовки.Вставить("Authorization", "Bearer " + Токен);
+Ответ = Соединение.Получить(Новый HTTPЗапрос(Адрес, Заголовки));
+Если Ответ.КодСостояния <> 200 Тогда
+    ВызватьИсключение "Ошибка " + Ответ.КодСостояния + ": " + Ответ.ПолучитьТелоКакСтроку("UTF-8");
+КонецЕсли;
+Чтение = Новый ЧтениеJSON;
+Чтение.УстановитьСтроку(Ответ.ПолучитьТелоКакСтроку("UTF-8"));
+Данные = ПрочитатьJSON(Чтение);
+// Данные.columns — столбцы, Данные.rows — строки, Данные.next — адрес следующей страницы (Неопределено, если её нет)
+Для Каждого Строка Из Данные.rows Цикл
+    // Строка.<код столбца>, например Строка.${(cs[0]||{k:'name'}).k}
+КонецЦикла;`;
+  const curl=`curl -H "Authorization: ${B}" \\\n  "${csv}"`;
+  const py=`import requests
+
+TOKEN = "${T}"
+PARAMS = {${ps.map(x=>`"${x.k}": "${p[x.k]}"`).join(', ')}}
+
+r = requests.get("${base}", params=PARAMS,
+                 headers={"Authorization": "Bearer " + TOKEN}, timeout=60)
+r.raise_for_status()
+data = r.json()   # columns, rows, total, next
+print(len(data["rows"]), "строк")`;
+  const parts=[`${base}?format=csv`,...ps.map(x=>`&${x.k}=${p[x.k]}`)];
+  const hdr=`<li>«Параметры заголовка HTTP-запроса»: слева ${dmCp('Authorization')}, справа ${dmCp(B)}</li>`;
+  const urlParts=`<li>В «Части URL-адреса» вставьте по одной строке, для каждой следующей — «Добавить часть»:<div class="dm-cps">${parts.map(v=>dmCp(v)).join('')}</div></li>`;
+  const app=(k,icon,title,sub,body,open)=>`<details class="dm-app" data-dm-app="${k}"${open?' open':''}><summary><span class="dm-app-i">${ic(icon)}</span><span class="dm-app-t"><b>${title}</b><span class="hint">${sub}</span></span><span class="dm-app-ch">${ic('right','sm')}</span></summary><div class="dm-app-b">${body}</div></details>`;
+  const apps=[
+    app('pq','table','Excel · Power Query','Таблица обновляется кнопкой «Обновить всё»',`
+      <h4>Способ 1. «Из Интернета» — быстро</h4><ol class="dm-steps"><li>Excel: «Данные» → «Из Интернета» → «Дополнительно».</li>${urlParts}${hdr}
+        <li>«ОК». Если Excel спросит, как входить, — «Анонимно» → «Подключение». В окне просмотра — «Загрузить».</li>
+        <li>Поменять даты: «Данные» → «Запросы и подключения» → запрос → «Изменить» → шестерёнка у шага «Источник»: части адреса стоят отдельно.</li></ol>
+      <h4>Способ 2. Параметры отдельно — удобно менять</h4><ol class="dm-steps"><li>«Данные» → «Получить данные» → «Из других источников» → «Пустой запрос».</li>
+        <li>«Главная» → «Расширенный редактор»: замените весь текст кодом ниже → «Готово» → «Закрыть и загрузить».</li>${ps.length?`
+        <li>Параметры — отдельными строками в начале кода: поменяйте значение и нажмите «Обновить всё».</li>
+        <li>Брать значение из ячейки: дайте ячейке имя (поле слева от строки формул), например ${dmCp(ps[0].k)}, и вместо значения в кавычках вставьте:<div class="dm-cps">${dmCp(cell(ps[0]))}</div>Если Excel спросит об уровнях конфиденциальности — «Организационный» для обоих источников.</li>`:''}</ol>${dmCode(pq)}`,true),
+    app('vba','list','Excel · VBA','Макрос загружает таблицу на текущий лист',`
+      <ol class="dm-steps"><li>Alt+F11 → «Insert» → «Module», вставьте код.</li>${ps.length?`<li>Параметры — в начале кода; значение можно брать из ячейки: ${dmCp('Range("B1").Text')}</li>`:''}
+        <li>Alt+F8 → ${dmCp('LoadBuhuchet')} → «Выполнить». Сохраните книгу как «Книга Excel с поддержкой макросов» (.xlsm).</li></ol>${dmCode(vb)}`),
+    app('gs','board','Google Таблицы','Через Apps Script: по адресу с заголовком Таблицы не загружают',`
+      <ol class="dm-steps"><li>Таблица: «Расширения» → «Apps Script». Замените текст кодом ниже, сохраните.</li><li>Выберите функцию ${dmCp('load')} → «Выполнить», разрешите доступ.</li>
+        <li>Обновлять само: «Триггеры» (будильник слева) → «Добавить триггер» → функция load → «По времени».</li>${ps.length?'<li>Параметры — в начале кода, в PARAMS.</li>':''}</ol>${dmCode(gs)}`),
+    app('pbi','chart','Power BI','Отчёт обновляется по расписанию в службе Power BI',`
+      <ol class="dm-steps"><li>«Получить данные» → «Интернет» → «Дополнительно».</li>${urlParts}${hdr}<li>«ОК» → «Анонимно» → «Подключение» → «Загрузить».</li></ol>
+      <h4>Параметры отдельно</h4><ol class="dm-steps"><li>«Получить данные» → «Пустой запрос» → «Расширенный редактор»: вставьте код ниже. Так работает и обновление по расписанию.</li>${ps.length?`<li>Менять без кода: «Преобразовать данные» → «Управление параметрами» → «Создать параметр» с тем же именем, например ${dmCp(ps[0].label)}, и уберите его строку из кода.</li>`:''}</ol>${dmCode(pq)}`),
+    app('1c','building','1С','HTTPСоединение, ответ в JSON',`
+      <ol class="dm-steps"><li>В обработке или общем модуле (на сервере) вставьте код.</li>${ps.length?'<li>Параметры — в начале кода.</li>':''}<li>Строки — в Данные.rows; если Данные.next заполнен, запросите следующую страницу с ${dmCp('page=2')}.</li></ol>${dmCode(c1)}`),
+    app('oth','link','Другие сервисы','Любая программа, которая умеет GET-запрос с заголовком',`
+      <ol class="dm-steps"><li>Адрес: ${dmCp(base)}, параметры — после «?»${ps.length?`: ${ps.map(x=>dmCp(`${x.k}=${p[x.k]}`)).join(' ')}`:''}.</li><li>Заголовок: ${dmCp('Authorization')} со значением ${dmCp(B)}. В адресе токен не принимается.</li>
+        <li>Таблица CSV — с ${dmCp('format=csv')}, без него — JSON. Страница — 1 000 строк, больше — ${dmCp('limit=5000')}, следующая — ${dmCp('page=2')}.</li></ol>${dmCode(curl)}${dmCode(py)}`)].join('');
+  return `<div class="box dm-how"><h3>Как подключить</h3><span class="hint">Нажмите на адрес, параметр или код — он скопируется.</span>
+    ${full?'':`<div class="note warn">${ic('alert')}<span>Здесь токен показан не целиком. Вместо ${dmCp('bk_ВАШ_ТОКЕН')} вставьте полный токен, сохранённый при выпуске; потеряли — перевыпустите.</span></div>`}
+    <div class="dm-kv"><span class="hint">Ссылка CSV</span><span>${dmCp(csv)}</span><span class="hint">Адрес</span><span>${dmCp(base)}</span><span class="hint">Заголовок</span><span class="dm-cps">${dmCp('Authorization')}${dmCp(B)}</span></div>
+    ${t.params.length?`<div class="tbl-wrap"><table class="mini dm-pt"><thead><tr><th>Параметр</th><th>Значение</th><th>Что это</th></tr></thead><tbody>${t.params.map(x=>`<tr><td>${dmCp(x.k)}</td><td>${p[x.k]?dmCp(p[x.k]):'<span class="faint">—</span>'}</td><td>${esc(x.label)}${dmFmt(x)?`, <span class="mono">${dmFmt(x)}</span>`:''}${x.req?'':' · <span class="faint">необязательный</span>'}</td></tr>`).join('')}</tbody></table></div>`:''}
+    <div class="dm-apps">${apps}</div>
+    <details><summary>Пример ответа JSON</summary><pre class="mono dm-pre">${esc(js)}</pre></details>
+    <ul class="dm-ul"><li>Деньги — числом в сомах. Пределы на токен: 1 запрос одновременно, 30 в минуту, 5 000 в сутки; сверх них — ответ 429, повторите через время из Retry-After.</li></ul>
     <span class="hint">Данные уходят за пределы системы: за то, куда они попадут дальше, отвечает организация, выпустившая токен.</span></div>`}
 function dmTokDlg(k){const t=dmTpl(k.tpl),adm=isAdmin(),mine=adm?k.org==='adm':k.org===ORG.id;
   openModal({size:'wide',render:m=>{const[s,w]=dmTokSt(k),live=s!=='Отозван'&&s!=='Истёк',L=DM_LOG.filter(x=>x.tok===k.id).sort((a,b)=>a.at<b.at?1:-1);
