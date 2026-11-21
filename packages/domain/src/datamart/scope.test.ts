@@ -33,16 +33,26 @@ describe('dmContractorColumn', () => {
 describe('dmOwnScope', () => {
   it('нужен отбор, только когда в группе прав модуля шаблона — «Свои»', () => {
     const own = subject(['cpView', 'repView'], { cps: 'own', reports: 'all' });
-    expect(dmOwnScope('cps', own)).toBe(true);
-    expect(dmOwnScope('reports', own)).toBe(false);
+    const cp = [{ code: 'contractor_id', type: 'cp' }];
+    expect(dmOwnScope('cps', own, cp)).toBe(true);
+    expect(dmOwnScope('reports', own, cp)).toBe(false);
     // Без области в роли — «Свои» (как у списков).
-    expect(dmOwnScope('fin', own)).toBe(true);
-    // Группа без области («Сотрудники») и шаблон Админки — без отбора.
-    expect(dmOwnScope('staff', own)).toBe(false);
-    expect(dmOwnScope(null, own)).toBe(false);
+    expect(dmOwnScope('fin', own, cp)).toBe(true);
+    // Шаблон Админки — без отбора.
+    expect(dmOwnScope(null, own, cp)).toBe(false);
     // Владелец и «Видеть всех контрагентов» — без отбора.
-    expect(dmOwnScope('cps', subject([], {}, true))).toBe(false);
-    expect(dmOwnScope('cps', subject(['cpView', 'viewAll'], { cps: 'own' }))).toBe(false);
+    expect(dmOwnScope('cps', subject([], {}, true), cp)).toBe(false);
+    expect(dmOwnScope('cps', subject(['cpView', 'viewAll'], { cps: 'own' }), cp)).toBe(false);
+  });
+
+  it('модуль без области («Сотрудники»): со столбцом «Контрагент» — по области «Контрагентов», без него — без отбора', () => {
+    const cp = [{ code: 'contractor_id', type: 'cp' }];
+    const own = subject(['cpView', 'staffView'], { cps: 'own' });
+    expect(dmOwnScope('staff', own, cp)).toBe(true);
+    expect(dmOwnScope('staff', own, [{ code: 'emp', type: 'text' }])).toBe(false);
+    expect(dmOwnScope('staff', subject(['cpView', 'staffView'], { cps: 'all' }), cp)).toBe(false);
+    expect(dmOwnScope('staff', subject(['staffView', 'viewAll'], { cps: 'own' }), cp)).toBe(false);
+    expect(dmOwnScope('staff', subject([], {}, true), cp)).toBe(false);
   });
 });
 

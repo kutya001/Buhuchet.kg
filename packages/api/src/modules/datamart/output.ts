@@ -314,7 +314,9 @@ async function orgRunFacts(
   const query = await dmTemplateQuery(tx, tpl.id);
   if (query === null) return null;
   const module = isModule(tpl.module) ? tpl.module : null;
-  const own = dmOwnScope(module, subject) ? await dmOwnContractorIds(tx, subject.employeeId) : null;
+  const own = dmOwnScope(module, subject, tpl.columns)
+    ? await dmOwnContractorIds(tx, subject.employeeId)
+    : null;
   return { tpl, query, own };
 }
 
