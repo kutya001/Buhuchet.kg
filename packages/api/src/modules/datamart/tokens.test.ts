@@ -6,7 +6,13 @@ import { DM_TOKEN_RE, DM_TOKENS_LIVE_MAX, UI_TEXTS } from '@buhuchet/domain';
 import { DmTokenCard, DmTokenForm, DmTokenIssued, DmTokenList } from '@buhuchet/shared';
 import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../testing';
+import {
+  apiRequest,
+  createStaffFixture,
+  signIn,
+  TEST_PASSWORD,
+  withRoleScopes,
+} from '../../testing';
 import { DM_TOKEN_ISSUE_RATE_LIMIT } from './tokens';
 
 /*
@@ -34,8 +40,9 @@ describe.skipIf(!databaseAvailable())('Витрина данных: API-токе
   const code = async (res: Response) => ((await res.json()) as { error: { code: string } }).error;
   const issue = (login: string, templateId: string, name: string, term = 30, base = '/api/dm') =>
     call(login, 'POST', `${base}/tokens`, { templateId, name, term });
+  // Все строки одной страницей: токенов за файл набирается больше 25.
   const listOf = async (login: string, base = '/api/dm') =>
-    (await ok(await call(login, 'GET', `${base}/tokens`), 200, DmTokenList)).items;
+    (await ok(await call(login, 'GET', `${base}/tokens?size=all`), 200, DmTokenList)).items;
   const cardOf = async (login: string, id: string, base = '/api/dm') =>
     ok(await call(login, 'GET', `${base}/tokens/${id}`), 200, DmTokenCard);
 
@@ -48,7 +55,8 @@ describe.skipIf(!databaseAvailable())('Витрина данных: API-токе
     // Обе организации оплачены надолго (подписка фикстуры `TEST_SUBSCRIPTION`); «Внешний доступ по
     // API» включён у А.
     await db.update(orgSettings).set({ extApi: true }).where(eq(orgSettings.orgId, f.a.orgId));
-    // «Старшему» в А — витрина с правом на токены; его область «Контрагентов» — «Свои».
+    // «Старшему» в А — витрина с правом на токены; его область «Контрагентов» — «Все» (с «Свои» токен
+    // к шаблону контрагентов не выпустить, п. Т-26 — свой тест ниже).
     await db.insert(schema.rolePermissions).values(
       ['dmView', 'dmTokens'].map((permissionId) => ({
         orgId: f.a.orgId,
@@ -56,6 +64,12 @@ describe.skipIf(!databaseAvailable())('Витрина данных: API-токе
         permissionId,
       })),
     );
+    await db
+      .update(schema.roleScopes)
+      .set({ scope: 'all' })
+      .where(
+        and(eq(schema.roleScopes.roleId, f.roleIds.senior), eq(schema.roleScopes.permGroup, 'cps')),
+      );
     const add = async (code: string, over: Partial<typeof dmTemplates.$inferInsert>) => {
       const [t] = await db
         .insert(dmTemplates)
@@ -108,9 +122,9 @@ describe.skipIf(!databaseAvailable())('Витрина данных: API-токе
       'tok-cps-own',
       'tok-rep',
     ]);
-    // «Старший»: нет «Просматривать отчёты», область «Свои» — только шаблон со столбцом «Контрагент».
+    // «Старший»: нет «Просматривать отчёты» — только шаблоны контрагентов.
     const senior = await ok(await call('senior-a', 'GET', '/api/dm/tokens/form'), 200, DmTokenForm);
-    expect(senior.templates.map((t) => t.code)).toEqual(['tok-cps-own']);
+    expect(senior.templates.map((t) => t.code).sort()).toEqual(['tok-cps-all', 'tok-cps-own']);
     expect(senior.owner).toBe(false);
     // У Б выключен «Внешний доступ по API».
     const b = await ok(await call('owner-b', 'GET', '/api/dm/tokens/form'), 200, DmTokenForm);
@@ -209,6 +223,30 @@ describe.skipIf(!databaseAvailable())('Витрина данных: API-токе
       .where(eq(schema.orgSubscriptions.orgId, f.b.orgId));
     // «Старший» выпускает к шаблону, видимому ему.
     await ok(await issue('senior-a', tpl.cpsOwn, 'Свои контрагенты'), 201, DmTokenIssued);
+  });
+
+  it('область «Свои контрагенты»: токен к шаблону контрагентов не выпустить и не перевыпустить (п. Т-26)', async () => {
+    // Токен отдаёт строки всей организации — сотрудник со «Свои» вынес бы через него чужих контрагентов.
+    const made = await ok(
+      await issue('senior-a', tpl.cpsOwn, 'До смены области'),
+      201,
+      DmTokenIssued,
+    );
+    const senior = f.people['senior-a']!;
+    await withRoleScopes(f.t.admin.db, senior.employeeId, { cps: 'own' }, async () => {
+      const form = await ok(await call('senior-a', 'GET', '/api/dm/tokens/form'), 200, DmTokenForm);
+      expect(form.templates).toEqual([]);
+      expect(form.refusal).toBe('dm_token_no_templates');
+      const res = await issue('senior-a', tpl.cpsOwn, 'Свои');
+      expect(res.status).toBe(400);
+      expect((await code(res)).code).toBe('dm_token_template');
+      const re = await call('senior-a', 'POST', `/api/dm/tokens/${made.item.id}/reissue`);
+      expect(re.status).toBe(409);
+      expect((await code(re)).code).toBe('dm_token_template');
+      // Отозвать свой токен — можно.
+      const done = await call('senior-a', 'POST', `/api/dm/tokens/${made.item.id}/revoke`);
+      expect(done.status).toBe(200);
+    });
   });
 
   it('отзыв: сразу и один раз, пояснение — когда и кто; история', async () => {

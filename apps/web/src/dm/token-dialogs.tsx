@@ -35,6 +35,7 @@ import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { useCopyText } from '../kb/video/video-copy';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
+import { HowBox } from './how-box';
 import {
   DM_TOKEN_GRID,
   issuedOf,
@@ -276,6 +277,7 @@ function TokenShownDialog({
           </button>
         </div>
         <Hint>{t('dm.tok.show.hint', { prefix: k.prefix })}</Hint>
+        {k.how ? <HowBox how={k.how} token={issued.token} /> : null}
       </Modal>
       {copier.node}
     </>
@@ -304,7 +306,7 @@ function journalRows(t: Translate, card: DmTokenCard): MiniRow[] {
   }));
 }
 
-/** Окно токена (прототип `dmTokDlg`): сведения, журнал запросов (последние 50), действия. */
+/** Окно токена (прототип `dmTokDlg`): сведения, «Как подключить» у своего действующего, журнал (последние 50), действия. */
 function TokenCardDialog({
   side,
   id,
@@ -434,6 +436,7 @@ function TokenCardDialog({
             <Box>
               <KeyValues items={info} />
             </Box>
+            {k.how ? <HowBox how={k.how} token={`${k.prefix}…`} /> : null}
             <Box title={t('dm.tok.log.title', { n: k.log.total })}>
               <MiniTable
                 label={t('dm.tok.log.title', { n: k.log.total })}
@@ -501,6 +504,15 @@ export function useTokenActions(side: DmSide) {
       if (data.refusal) {
         return toast(errorText({ code: data.refusal, message: '', details: { max: data.max } }), {
           icon: data.refusal === 'dm_token_limit' ? 'alert' : 'lock',
+          bad: true,
+        });
+      }
+      // «Выпустить токен» у шаблона, к которому вошедшему токен не выпустить (область «Свои»):
+      // не подставлять молча другой шаблон, а сказать почему.
+      // ОТКЛОНЕНИЕ: docs/deviations.md#Т-26
+      if (templateId && !data.templates.some((x) => x.id === templateId)) {
+        return toast(errorText({ code: 'dm_token_template', message: '' }), {
+          icon: 'lock',
           bad: true,
         });
       }

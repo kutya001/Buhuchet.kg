@@ -1,13 +1,19 @@
 import type { AppConfig } from '@buhuchet/adapters';
 import {
   cleanupContractorPageGrants,
+  cleanupDmRequests,
   cleanupContractorTelegramLinks,
   cleanupLoginAttempts,
   cleanupRateLimits,
   cleanupTelegramInbox,
   schema,
 } from '@buhuchet/db';
-import { formatMomentRu, JOURNAL_DAYS, RUN_KEEP_DAYS } from '@buhuchet/domain';
+import {
+  DM_REQUEST_KEEP_DAYS,
+  formatMomentRu,
+  JOURNAL_DAYS,
+  RUN_KEEP_DAYS,
+} from '@buhuchet/domain';
 import { lt } from 'drizzle-orm';
 import type { Job } from '../deps';
 import { purgeLeadDocsJob } from '../modules/admin/lead-purge';
@@ -37,7 +43,8 @@ const DAY_MS = 86_400_000;
 
 /**
  * Очистка журналов: запуски хранятся 30 дней, полученные ботом сообщения — 90 (Админка → «Запуски» и
- * «Телеграм» → «Журнал»; docs/decisions.md п. Т-15, Т-16). Отвечает, сколько строк удалено.
+ * «Телеграм» → «Журнал»; docs/decisions.md п. Т-15, Т-16), журнал запросов «Витрины данных» — 90
+ * (доработки 20.11.2026: Витрина данных, блок 6, пункт 7; п. Т-20). Отвечает, сколько строк удалено.
  */
 export const cleanupSchedulerRuns: Job = {
   name: 'system.cleanup-scheduler-runs',
@@ -50,7 +57,10 @@ export const cleanupSchedulerRuns: Job = {
       .where(lt(schedulerRuns.slot, new Date(now - RUN_KEEP_DAYS * DAY_MS)))
       .returning({ job: schedulerRuns.job });
     const inbox = await cleanupTelegramInbox(ctx.db, new Date(now - JOURNAL_DAYS * DAY_MS));
-    return runs.length + inbox;
+    // Журнал запросов «Витрины данных» — 90 дней, по часам базы (своей задачи у него нет).
+    // ОТКЛОНЕНИЕ: docs/deviations.md#Т-29
+    const requests = await cleanupDmRequests(ctx.db, DM_REQUEST_KEEP_DAYS);
+    return runs.length + inbox + requests;
   },
 };
 

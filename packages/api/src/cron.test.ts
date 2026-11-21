@@ -4,6 +4,7 @@ import { UI_TEXTS } from '@buhuchet/domain';
 import { schema } from '@buhuchet/db';
 import { createTestDatabase, databaseAvailable, type TestDatabase } from '@buhuchet/db/testing';
 import { ApiError, CronTickResponse } from '@buhuchet/shared';
+import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { createApp } from './app';
 import type { ApiDeps, Job } from './deps';
@@ -207,7 +208,7 @@ describe.skipIf(!databaseAvailable())('/api/cron/tick с базой', () => {
     expect(done.map((e) => e.job)).toEqual(['test.ok']);
   });
 
-  it('очистка удаляет запуски старше 30 дней и полученные ботом сообщения старше 90', async () => {
+  it('очистка удаляет запуски старше 30 дней, полученные ботом сообщения и журнал «Витрины» старше 90', async () => {
     await t.admin.db.insert(schema.schedulerRuns).values([
       { job: 'old', slot: new Date('2026-09-01T00:00:00Z') },
       { job: 'fresh', slot: new Date('2026-10-10T00:00:00Z') },
@@ -226,16 +227,35 @@ describe.skipIf(!databaseAvailable())('/api/cron/tick с базой', () => {
         inboxRow('старше 90 дней', '2026-07-19T00:00:00Z'),
         inboxRow('моложе 90 дней', '2026-07-21T00:00:00Z'),
       ]);
+    // Журнал запросов «Витрины данных» — тоже 90 дней, по часам базы (доработки 20.11.2026: Витрина
+    // данных, блок 6, пункт 7; поток Т, этап 2, П11).
+    const [tpl] = await t.admin.db
+      .insert(schema.dmTemplates)
+      .values({ code: 'cron-clean', name: 'Очистка', audience: 'admin', state: 'published' })
+      .returning({ id: schema.dmTemplates.id });
+    await t.admin.db.insert(schema.dmRequests).values(
+      [91, 89].map((days) => ({
+        templateId: tpl!.id,
+        via: 'screen' as const,
+        outcome: 'ok' as const,
+        rowCount: days,
+        at: sql`now() - make_interval(days => ${days})`,
+      })),
+    );
     const deps = createTestDeps({ db: t.app.db });
     const removed = await cleanupSchedulerRuns.run(deps, deps.clock.now());
+    const requests = await t.admin.db.select().from(schema.dmRequests);
+    expect(requests.map((r) => r.rowCount)).toEqual([89]);
     const left = (await t.admin.db.select().from(schema.schedulerRuns)).map((r) => r.job);
     expect(left).not.toContain('old');
     expect(left).toContain('fresh');
     const inbox = (await t.admin.db.select().from(schema.telegramInbox)).map((r) => r.text);
     expect(inbox).toEqual(['моложе 90 дней']);
-    // Итог задачи — сколько строк удалено из обоих журналов («Что сделано» в Админке → «Запуски»).
-    expect(removed).toBeGreaterThanOrEqual(2);
+    // Итог задачи — сколько строк удалено из всех журналов («Что сделано» в Админке → «Запуски»).
+    expect(removed).toBeGreaterThanOrEqual(3);
     await t.admin.db.delete(schema.telegramInbox);
+    await t.admin.db.delete(schema.dmRequests);
+    await t.admin.db.delete(schema.dmTemplates);
   });
 
   it('очистка счёта неверных паролей: удаляются забытые строки, закрытый вход остаётся', async () => {

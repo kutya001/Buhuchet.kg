@@ -1,6 +1,8 @@
 import type { ApiDeps } from '../../deps';
 import { createModuleApp } from '../../module';
+import { EXT_ROUTE, extHandler } from './ext';
 import { OUTPUT_ROUTES, outputHandlers } from './output';
+import { REQUEST_ROUTES, requestHandlers } from './requests';
 import { TEMPLATE_ADMIN_ROUTES, templateAdminHandlers } from './templates-admin';
 import { ADMIN_TOKEN_ROUTES, ORG_TOKEN_ROUTES, tokenHandlers } from './tokens';
 
@@ -12,12 +14,15 @@ type A = typeof ADMIN_TOKEN_ROUTES;
 
 /**
  * «Витрина данных» (доработки 20.11.2026: Витрина данных): «Вывод» и каталог «Шаблоны» организации и
- * Админки, редактор шаблонов Админки (этап 2, П3–П4), «API Токены» организации и Админки (поток Т, этап 1, П14). Пути без номера («form», «values», «export») — раньше `{id}`.
+ * Админки, редактор шаблонов Админки (этап 2, П3–П4), «API Токены» организации и Админки (поток Т,
+ * этап 1, П14), внешний адрес по токену `GET /api/ext/v1/{code}` и «Журнал запросов» Админки (поток Т,
+ * этап 2, П11). Пути без номера («form», «values», «export») — раньше `{id}`.
  */
 export function datamartModule(deps: ApiDeps) {
   const org = tokenHandlers(deps, 'org');
   const adm = tokenHandlers(deps, 'admin');
   const out = outputHandlers(deps);
+  const log = requestHandlers(deps);
   const tpl = templateAdminHandlers(deps);
   const T = TEMPLATE_ADMIN_ROUTES;
   return (
@@ -53,5 +58,10 @@ export function datamartModule(deps: ApiDeps) {
       .openapi<A['card']>(ADMIN_TOKEN_ROUTES.card, adm.card)
       .openapi<A['revoke']>(ADMIN_TOKEN_ROUTES.revoke, adm.revoke)
       .openapi<A['reissue']>(ADMIN_TOKEN_ROUTES.reissue, adm.reissue)
+      .openapi(REQUEST_ROUTES.list, log.list)
+      .openapi(REQUEST_ROUTES.values, log.values)
+      .openapi(REQUEST_ROUTES.export, log.exportList)
+      .openapi(REQUEST_ROUTES.summary, log.summary)
+      .openapi(EXT_ROUTE, extHandler(deps))
   );
 }

@@ -132,6 +132,7 @@ export * from './datamart/datamart';
 export * from './datamart/tokens';
 export * from './datamart/access';
 export * from './datamart/query';
+export * from './datamart/ext';
 export * from './datamart/scope';
 export * from './datamart/editor';
 export * from './kb/catalog';
