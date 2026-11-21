@@ -429,7 +429,7 @@ test.describe('Витрина данных: API Токены', () => {
         vba.getByRole('button', { name: 'Range("B1").Text', exact: true }),
       ).toBeVisible();
       await expect(vba.locator('[data-dm-how-code="vba"]')).toContainText(
-        `?format=csv" & "&date_from=" & p1 & "&date_to=" & p2`,
+        `?format=csv" & "&date_from=" & WorksheetFunction.EncodeURL(p1) & "&date_to=" & WorksheetFunction.EncodeURL(p2)`,
       );
       await how.locator('[data-dm-how-app="oth"] summary').click();
       const oth = how.locator('[data-dm-how-app="oth"]');

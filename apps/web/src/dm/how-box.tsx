@@ -200,6 +200,8 @@ export function HowBox({ how, token }: { how: DmTokenHow; token: string | null }
       paramsCells: t('dm.how.code.params_cells'),
       query: t('dm.how.code.query'),
       load: t('dm.how.code.load'),
+      parse: t('dm.how.code.parse'),
+      guard: t('dm.how.code.guard'),
       error: t('dm.how.code.error'),
       data1c: t('dm.how.code.data_1c'),
       row1c: t('dm.how.code.row_1c'),

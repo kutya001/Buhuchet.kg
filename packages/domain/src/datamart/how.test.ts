@@ -16,6 +16,8 @@ const WORDS: DmHowWords = {
   paramsCells: T['dm.how.code.params_cells']!,
   query: T['dm.how.code.query']!,
   load: T['dm.how.code.load']!,
+  parse: T['dm.how.code.parse']!,
+  guard: T['dm.how.code.guard']!,
   error: T['dm.how.code.error']!,
   data1c: T['dm.how.code.data_1c']!,
   row1c: T['dm.how.code.row_1c']!,
@@ -123,14 +125,17 @@ describe('dmExtHow', () => {
     expect(x.vba).toContain(
       `    Dim p1 As String: p1 = "2026-11-01"   ' Срок с, date_from, ГГГГ-ММ-ДД`,
     );
-    expect(x.vba).toContain(`url = "${BASE}?format=csv" & "&date_from=" & p1 & "&date_to=" & p2`);
+    // Значение параметра в адресе макроса и 1С кодируется (прототип v162).
+    expect(x.vba).toContain(
+      `url = "${BASE}?format=csv" & "&date_from=" & WorksheetFunction.EncodeURL(p1) & "&date_to=" & WorksheetFunction.EncodeURL(p2)`,
+    );
     expect(x.vba).toContain('MsgBox "Ошибка " & http.Status');
     expect(x.sheets).toContain(`const TOKEN = '${TOKEN}';`);
-    expect(x.sheets).toContain("  date_from: '2026-11-01',   // Срок с, ГГГГ-ММ-ДД");
+    expect(x.sheets).toContain('  date_from: "2026-11-01",   // Срок с, ГГГГ-ММ-ДД');
     expect(x.sheets).toContain(`UrlFetchApp.fetch('${BASE}?format=csv' + (q ? '&' + q : ''), {`);
     expect(x.code1c).toContain('Параметры_date_from = "2026-11-01"; // Срок с, ГГГГ-ММ-ДД');
     expect(x.code1c).toContain(
-      'Адрес = "/api/ext/v1/reports-due" + "?date_from=" + Параметры_date_from + "&date_to=" + Параметры_date_to;',
+      'Адрес = "/api/ext/v1/reports-due" + "?date_from=" + КодироватьСтроку(Параметры_date_from, СпособКодированияСтроки.КодировкаURL) + "&date_to=" + КодироватьСтроку(Параметры_date_to, СпособКодированияСтроки.КодировкаURL);',
     );
     expect(x.code1c).toContain(
       'Соединение = Новый HTTPСоединение("buhuchet.kg", 443, , , , 60, Новый ЗащищенноеСоединениеOpenSSL);',
@@ -192,7 +197,7 @@ describe('dmExtHow', () => {
     );
     expect(x.vba).toContain(`p1 = "а&б ""в"" 'г' \\ д"   ' Имя "в кавычках" 'и' \\ */ так, q`);
     expect(x.sheets).toContain(
-      `  q: 'а&б "в" \\'г\\' \\\\ д',   // Имя "в кавычках" 'и' \\ */ так`,
+      `  q: "а&б \\"в\\" 'г' \\\\ д",   // Имя "в кавычках" 'и' \\ */ так`,
     );
     expect(x.code1c).toContain(`Параметры_q = "а&б ""в"" 'г' \\ д"; // Имя`);
     expect(x.python).toContain(`PARAMS = {"q": "а&б \\"в\\" 'г' \\\\ д"}`);
@@ -214,8 +219,10 @@ describe('dmExtHow', () => {
     expect(x.vba.endsWith('    Next\nEnd Sub')).toBe(true);
     // Скрипт Google Таблиц ставит апостроф так же: `setValues` вводит строку на «=» формулой.
     expect(x.sheets).toContain(
-      `  const cells = rows.map(row => row.map(v => /^[=+@-]/.test(v) && isNaN(v) ? "'" + v : v));`,
+      `  // ${WORDS.guard}\n` +
+        `  const cells = rows.map(row => row.map(v => /^[=+@-]/.test(v) && isNaN(v) ? "'" + v : v));`,
     );
+    expect(x.vba).toContain(`    ' ${WORDS.parse}\n    Dim ws As Worksheet: Set ws = ActiveSheet`);
     expect(x.sheets).toContain('.setValues(cells);');
     const guard = (v: string) => (/^[=+@-]/.test(v) && isNaN(Number(v)) ? `'${v}` : v);
     expect(['=1+1', '+996 555', '@x', '-', '-5', '+7', 'текст', ''].map(guard)).toEqual([

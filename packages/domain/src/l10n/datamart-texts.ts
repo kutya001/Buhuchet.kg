@@ -400,6 +400,11 @@ export const DATAMART_TEXTS = {
   },
   'dm.how.code.query': { ru: '3. Запрос — менять не нужно', section: S },
   'dm.how.code.load': { ru: '3. Загрузка — менять не нужно', section: S },
+  'dm.how.code.parse': {
+    ru: '4. Разбор CSV по кавычкам, по одной ячейке; текст, похожий на формулу, — с апострофом',
+    section: S,
+  },
+  'dm.how.code.guard': { ru: 'текст, похожий на формулу, — с апострофом', section: S },
   'dm.how.code.error': { ru: 'Ошибка', section: S },
   'dm.how.code.data_1c': {
     ru: 'Данные.columns — столбцы, Данные.rows — строки, Данные.next — адрес следующей страницы (Неопределено, если её нет)',

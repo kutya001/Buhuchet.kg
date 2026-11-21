@@ -39,6 +39,10 @@ export interface DmHowWords {
   query: string;
   /** «3. Загрузка — менять не нужно». */
   load: string;
+  /** «4. Разбор CSV по кавычкам, по одной ячейке; текст, похожий на формулу, — с апострофом» — VBA. */
+  parse: string;
+  /** «текст, похожий на формулу, — с апострофом» — Google Таблицы. */
+  guard: string;
   /** «Ошибка» — в сообщении макроса и 1С. */
   error: string;
   /** «Данные.columns — столбцы, Данные.rows — строки…» — 1С. */
@@ -155,6 +159,8 @@ function vbaNote(s: string): string {
 }
 /** Строка оболочки в двойных кавычках: `\`, `"`, `$` и обратная кавычка — с обратной чертой. */
 const shq = (s: string) => `"${oneLine(s).replace(/[\\"$`]/g, '\\$&')}"`;
+/** Значение JavaScript в двойных кавычках (прототип v162: `JSON.stringify`). */
+const jdq = (s: string) => JSON.stringify(oneLine(s));
 /** Строка JavaScript в одинарных кавычках. */
 const jsq = (s: string) => `'${oneLine(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
 /** Строка Python в двойных кавычках. */
@@ -300,7 +306,7 @@ export function dmExtHow(o: {
       : []),
     `    ' ${vbaNote(w.query)}`,
     '    Dim url As String',
-    `    url = ${dq(`${o.base}?format=csv`)}${ps.map((p, i) => ` & "&${p.code}=" & p${i + 1}`).join('')}`,
+    `    url = ${dq(`${o.base}?format=csv`)}${ps.map((p, i) => ` & "&${p.code}=" & WorksheetFunction.EncodeURL(p${i + 1})`).join('')}`,
     '    Dim http As Object: Set http = CreateObject("MSXML2.XMLHTTP.6.0")',
     '    http.Open "GET", url, False',
     '    http.setRequestHeader "Authorization", "Bearer " & TOKEN',
@@ -311,6 +317,7 @@ export function dmExtHow(o: {
     '        .Type = 1: .Open: .Write http.responseBody',
     '        .Position = 0: .Type = 2: .Charset = "utf-8": txt = .ReadText',
     '    End With',
+    `    ' ${vbaNote(w.parse)}`,
     '    Dim ws As Worksheet: Set ws = ActiveSheet',
     '    ws.Cells.Clear',
     '    Dim r As Long, c As Long, i As Long, q As Boolean, ch As String, v As String',
@@ -351,7 +358,7 @@ export function dmExtHow(o: {
       ? [
           `// ${w.params}`,
           'const PARAMS = {',
-          ...ps.map((p) => `  ${p.code}: ${jsq(p.value)},   // ${tail(p.name, fmt(p))}`),
+          ...ps.map((p) => `  ${p.code}: ${jdq(p.value)},   // ${tail(p.name, fmt(p))}`),
           '};',
         ]
       : ['const PARAMS = {};']),
@@ -362,7 +369,7 @@ export function dmExtHow(o: {
     "    headers: { Authorization: 'Bearer ' + TOKEN }",
     '  });',
     "  const rows = Utilities.parseCsv(r.getContentText('UTF-8'));",
-    // Текст, похожий на формулу, — с апострофом впереди, как в макросе Excel (п. О-100).
+    `  // ${w.guard}`,
     `  const cells = rows.map(row => row.map(v => /^[=+@-]/.test(v) && isNaN(v) ? "'" + v : v));`,
     '  const sh = SpreadsheetApp.getActiveSheet();',
     '  sh.clearContents();',
@@ -372,7 +379,10 @@ export function dmExtHow(o: {
 
   const at = hostOf(o.base);
   const query1c = ps
-    .map((p, i) => ` + "${i ? '&' : '?'}${p.code}=" + Параметры_${p.code}`)
+    .map(
+      (p, i) =>
+        ` + "${i ? '&' : '?'}${p.code}=" + КодироватьСтроку(Параметры_${p.code}, СпособКодированияСтроки.КодировкаURL)`,
+    )
     .join('');
   const code1c = [
     `// ${w.token}`,
