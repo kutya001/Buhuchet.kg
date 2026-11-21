@@ -538,11 +538,18 @@ describe.skipIf(!databaseAvailable())(
       expect(await sentFiles(cpA)).toEqual([]);
     });
 
-    it('память организации заполнена: файл клиента не принимается — «Сейчас файл отправить нельзя» (доработки 20.11, блок 2, пункт 5)', async () => {
+    it('память организации заполнена: файл клиента не принимается и не скачивается — «Сейчас файл отправить нельзя» (доработки 20.11, блок 2, пункт 5)', async () => {
       // Предел — 0 МБ: занято (0) не меньше предела.
       const memory = (baseMb: number, seatMb: number) =>
         f.t.admin.db.update(schema.subscriptionSettings).set({ baseMb, seatMb });
       await memory(0, 0);
+      // Проверка памяти — до скачивания: Telegram файл не отдаёт (общая сборка этапа 1).
+      const load = tg.loadFile.bind(tg);
+      let loads = 0;
+      tg.loadFile = async (fileId, maxBytes) => {
+        loads += 1;
+        return load(fileId, maxBytes);
+      };
       try {
         await sendFile(CLIENT_2, { name: 'Акт.pdf' });
         expect(lastText(CLIENT_2)).toBe(text('tgCpFileMem'));
@@ -550,8 +557,10 @@ describe.skipIf(!databaseAvailable())(
           'Сейчас файл отправить нельзя. Сообщите вашему бухгалтеру.',
         );
       } finally {
+        tg.loadFile = load;
         await memory(2000, 200);
       }
+      expect(loads).toBe(0);
       expect(await sentFiles(cpA)).toEqual([]);
     });
 

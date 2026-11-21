@@ -60,6 +60,7 @@ import type { ApiDeps } from '../../../deps';
 import { orgAccessClosed, orgClosedNow } from '../../contractor-page/org-closed';
 import { addSentFiles, SentFilesRefused } from '../../files/sent-add';
 import { serverTexts } from '../../l10n/texts';
+import { memoryFullOf, subscriptionToday } from '../../../subscription-access';
 import { botSendOptions } from '../outbox';
 import type { BotPress } from '../press';
 import type { BotIncoming } from '../reply';
@@ -508,6 +509,10 @@ async function receiptReply(
     const arg = parseCpReceiptArg(current.message.ask?.arg ?? null);
     if (!arg?.paidId) return { key: 'tgActStale', close: false };
     if (!(await clientFilesOn(tx, ask.contractorId))) return refusalOf({ code: 'sent_off' }, true);
+    // Память организации заполнена — файл у Telegram не скачивается (общая сборка этапа 1, П2).
+    if (await memoryFullOf(tx, subscriptionToday(deps))) {
+      return refusalOf({ code: 'sent_mem_full' }, true);
+    }
     if ((await sentFilesLastDay(tx, ask.contractorId)) >= SENT_FILES_PER_DAY) {
       return refusalOf({ code: 'sent_day_limit' }, true);
     }
@@ -672,6 +677,9 @@ async function toContractor(
     async (tx): Promise<Refusal | null> => {
       if (!(await clientFilesOn(tx, link.contractorId)))
         return refusalOf({ code: 'sent_off' }, false);
+      if (await memoryFullOf(tx, subscriptionToday(deps))) {
+        return refusalOf({ code: 'sent_mem_full' }, false);
+      }
       if ((await sentFilesLastDay(tx, link.contractorId)) >= SENT_FILES_PER_DAY) {
         return refusalOf({ code: 'sent_day_limit' }, false);
       }
@@ -833,6 +841,7 @@ async function fileToChosen(
       if (await orgAccessClosed(tx, today)) return 'org_closed';
       if (!(await clientFilesOn(tx, row.contractorId)))
         return refusalOf({ code: 'sent_off' }, false);
+      if (await memoryFullOf(tx, today)) return refusalOf({ code: 'sent_mem_full' }, false);
       if ((await sentFilesLastDay(tx, row.contractorId)) >= SENT_FILES_PER_DAY) {
         return refusalOf({ code: 'sent_day_limit' }, false);
       }

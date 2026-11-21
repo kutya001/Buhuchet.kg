@@ -11,7 +11,13 @@ import {
 } from '@buhuchet/shared';
 import { and, eq, ne, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../testing';
+import {
+  apiRequest,
+  createStaffFixture,
+  signIn,
+  TEST_PASSWORD,
+  TEST_SUBSCRIPTION,
+} from '../../testing';
 
 type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
 
@@ -108,10 +114,12 @@ describe.skipIf(!databaseAvailable())('Контрагенты: места в п�
     await f?.t.drop();
   });
 
-  it('«Места в пакете»: без входа — 401; без подписки предела нет; владелец ли спрашивает', async () => {
+  it('«Места в пакете»: без входа — 401; у каждой организации свой пакет; владелец ли спрашивает', async () => {
     expect((await apiRequest(f.app, 'GET', '/api/contractors/seats')).status).toBe(401);
-    // Организация Б подписки не получала («Нет подписки» — доступ закрывает вход, не места).
-    expect(await seats(ownerB)).toEqual({ seats: null, owner: true });
+    // Организация Б — с подпиской фикстуры: свой пакет, контрагентов пока нет. «Нет подписки» закрывает
+    // вход (общая сборка этапа 1, п. О-89), поэтому места без подписки не спрашиваются.
+    const packB = { used: 0, limit: TEST_SUBSCRIPTION.seats, free: TEST_SUBSCRIPTION.seats };
+    expect(await seats(ownerB)).toEqual({ seats: packB, owner: true });
     const limit = await pack(2);
     expect(await seats(owner)).toEqual({
       seats: { used: limit - 2, limit, free: 2 },
@@ -148,7 +156,11 @@ describe.skipIf(!databaseAvailable())('Контрагенты: места в п�
 
   it('чужая организация: полный пакет А организации Б не виден и не мешает; без права «Просматривать контрагентов» — 403', async () => {
     await pack(0);
-    expect(await seats(ownerB)).toEqual({ seats: null, owner: true });
+    // Числа Б — только свои: полный пакет А их не меняет.
+    expect(await seats(ownerB)).toEqual({
+      seats: { used: 0, limit: TEST_SUBSCRIPTION.seats, free: TEST_SUBSCRIPTION.seats },
+      owner: true,
+    });
     const inB = await create(ownerB, { resp: 'acc-b' });
     expect(inB.status, await inB.clone().text()).toBe(201);
     expect((await failure(await create(owner))).code).toBe('no_seats');

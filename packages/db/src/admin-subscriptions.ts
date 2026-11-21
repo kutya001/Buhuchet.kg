@@ -583,20 +583,6 @@ async function paymentOf(tx: Tx, paymentId: string) {
   return row;
 }
 
-/** Чек оплаты для просмотра администратором: ключ хранилища, имя и тип (`withUserContext`). */
-export async function adminSubscriptionReceipt(tx: Tx, paymentId: string) {
-  const [row] = await tx
-    .select({
-      orgId: subscriptionPayments.orgId,
-      key: subscriptionPayments.receiptKey,
-      name: subscriptionPayments.receiptName,
-      type: subscriptionPayments.receiptType,
-    })
-    .from(subscriptionPayments)
-    .where(eq(subscriptionPayments.id, paymentId));
-  return row?.key ? { orgId: row.orgId, key: row.key, name: row.name!, type: row.type! } : null;
-}
-
 /** Организация оплаты — вне контекста организации, администратору. */
 export async function subscriptionPaymentOrg(tx: Tx, paymentId: string): Promise<string | null> {
   const [row] = await tx

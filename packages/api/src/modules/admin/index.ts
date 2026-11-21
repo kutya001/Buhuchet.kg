@@ -92,8 +92,6 @@ import {
   subscriptionPlansRoute,
   subscriptionPlanUpdateHandler,
   subscriptionPlanUpdateRoute,
-  subscriptionReceiptHandler,
-  subscriptionReceiptRoute,
   subscriptionRejectHandler,
   subscriptionRejectRoute,
   subscriptionSettingsHandler,
@@ -320,7 +318,6 @@ export function adminModule(deps: ApiDeps) {
       .openapi(subscriptionsValuesRoute, subscriptionsValuesHandler(deps))
       .openapi(subscriptionsExportRoute, subscriptionsExportHandler(deps))
       .openapi(subscriptionsSummaryRoute, subscriptionsSummaryHandler(deps))
-      .openapi(subscriptionReceiptRoute, subscriptionReceiptHandler(deps))
       .openapi(subscriptionConfirmRoute, subscriptionConfirmHandler(deps))
       .openapi(subscriptionRejectRoute, subscriptionRejectHandler(deps))
       .openapi(subscriptionCardRoute, subscriptionCardHandler(deps))

@@ -1124,11 +1124,9 @@ describe.skipIf(!databaseAvailable())(
           .where(eq(schema.contractorTelegramLinks.chatId, NEWCHAT));
       } finally {
         await f.t.admin.db.delete(schema.files).where(eq(schema.files.id, fileId));
-        // Подписка тестовой организации — как была: «Нет подписки» тоже закрывает доступ (п. О-89).
-        await f.t.admin.db
-          .update(schema.orgSubscriptions)
-          .set({ paidUntil: TEST_SUBSCRIPTION.paidUntil })
-          .where(eq(schema.orgSubscriptions.orgId, f.a.orgId));
+        // Подписка тестовой организации — как была, и после падения между удалением и оплатой:
+        // «Нет подписки» тоже закрывает доступ (п. О-89).
+        await subscription(TEST_SUBSCRIPTION.paidUntil);
       }
     });
 

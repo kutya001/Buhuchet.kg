@@ -1,25 +1,24 @@
 'use client';
 
 import { ContractorSeats, NoSeatsDetails } from '@buhuchet/shared';
-import { buttonClass, Icon, Modal, Note, useWindow } from '@buhuchet/ui';
+import { buttonClass, Icon, Modal, Note, useToast } from '@buhuchet/ui';
 import { queryOptions, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { api, apiFailure } from '../api-client';
+import { api, apiFailure, ApiFailure } from '../api-client';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
-import { useT } from '../l10n/provider';
+import { useErrorText, useT } from '../l10n/provider';
+import { orgSubQuery } from '../org/sub-data';
+import { useSubDialogs } from '../org/sub-dialogs';
 
 /*
  * Места в пакете (доработки 20.11.2026, блок 3, пункт 1; этап 1, П8; прототип v152 seatOk, seatDlg,
  * seatGrow): пакет заполнен — вместо формы «Новый контрагент», «Из свидетельства и выписки» и
- * «Вернуть из архива» окно «В пакете нет свободных мест». У владельца — «Расширить пакет»: экран
- * «Подписка» «Моей организации» сразу с окном расширения (`?pay=grow`, экран потока И); у сотрудника —
- * «Обратитесь к владельцу организации». Правило держит сервер (`no_seats`), экран только спрашивает
- * заранее, чтобы человек не заполнял форму зря.
+ * «Вернуть из архива» окно «В пакете нет свободных мест». У владельца — «Расширить пакет»: окно оплаты
+ * экрана «Подписка» (поток И, этап 1, П7: `useSubDialogs`) поверх формы или загрузки из Excel, как
+ * `seatGrow` → `subPayDlg('grow')` прототипа, — введённое остаётся; у сотрудника — «Обратитесь к
+ * владельцу организации». Правило держит сервер (`no_seats`), экран только спрашивает заранее, чтобы
+ * человек не заполнял форму зря.
  */
-
-/** Экран «Подписка» с окном «Расширить пакет» (поток И, этап 1, П7: параметр `pay`). */
-export const SEAT_GROW_HREF = '/app/org/sub?pay=grow';
 
 /** Места в пакете сейчас — всегда свежие: спрашиваются перед формой. */
 export const seatsQuery = queryOptions({
@@ -39,6 +38,26 @@ export function useSeatGuard() {
   const client = useQueryClient();
   const [slot, setSlot] = useState<DialogSlot<SeatWindow> | null>(null);
   const close = () => setSlot(closeSlot);
+  const sub = useSubDialogs();
+  const toast = useToast();
+  const errorText = useErrorText();
+
+  /**
+   * «Расширить пакет»: окно «В пакете нет свободных мест» закрывается, окно оплаты открывается по
+   * свежему экрану «Подписка» (чек уже на проверке — «Дождитесь проверки…», как у кнопки на экране).
+   * Места после чека — свежие при следующей проверке (`seatsQuery` всегда спрашивается заново).
+   */
+  const grow = async () => {
+    close();
+    try {
+      sub.pay(await client.fetchQuery({ ...orgSubQuery, staleTime: 0 }), 'grow');
+    } catch (e) {
+      toast(errorText(e instanceof ApiFailure ? e.error : { code: 'unknown', message: '' }), {
+        bad: true,
+        icon: 'alert',
+      });
+    }
+  };
 
   /**
    * Хватает ли мест на `need` новых активных контрагентов: нет — окно и `false`. Не удалось спросить —
@@ -75,7 +94,7 @@ export function useSeatGuard() {
             <button type="button" className={buttonClass('ghost')} onClick={close}>
               {t('btn.close')}
             </button>
-            <SeatGrowButton className={buttonClass('cta')} icon />
+            <SeatGrowButton className={buttonClass('cta')} icon onGrow={() => void grow()} />
           </>
         ) : (
           <button type="button" data-seat-ok="" className={buttonClass('cta')} onClick={close}>
@@ -93,27 +112,32 @@ export function useSeatGuard() {
     </Modal>
   ) : null;
 
-  return { ask, fromError, node };
+  return {
+    ask,
+    fromError,
+    grow,
+    node: (
+      <>
+        {node}
+        {sub.node}
+      </>
+    ),
+  };
 }
 
-/**
- * «Расширить пакет» внутри окна: окно закрывается перед переходом с заменой записи истории — «Назад» не
- * вернёт к нему. Окна под ним (форма, загрузка) уходят вместе с экраном контрагентов.
- */
-export function SeatGrowButton({ className, icon = false }: { className: string; icon?: boolean }) {
+/** «Расширить пакет» в окне «Нет мест» и в строке мест загрузки из Excel (`useSeatGuard().grow`). */
+export function SeatGrowButton({
+  className,
+  icon = false,
+  onGrow,
+}: {
+  className: string;
+  icon?: boolean;
+  onGrow: () => void;
+}) {
   const t = useT();
-  const router = useRouter();
-  const { leave } = useWindow();
   return (
-    <button
-      type="button"
-      data-seat-grow=""
-      className={className}
-      onClick={() => {
-        leave();
-        router.replace(SEAT_GROW_HREF);
-      }}
-    >
+    <button type="button" data-seat-grow="" className={className} onClick={onGrow}>
       {icon ? <Icon name="plus" size="sm" /> : null}
       {t('cp.seat.grow')}
     </button>

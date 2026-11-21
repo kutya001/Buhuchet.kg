@@ -4,6 +4,7 @@ import type { AdminStorageFile } from '@buhuchet/shared';
 import { DataGrid, EmptyState } from '@buhuchet/ui';
 import { useCallback, useMemo } from 'react';
 import { useAdminCards } from '../admin/admin-cards';
+import { useSubActions } from '../admin/sub-actions';
 import { useT } from '../l10n/provider';
 import { useListExport } from '../lists/export';
 import { useGridLabels } from '../lists/grid-labels';
@@ -56,9 +57,11 @@ export function AdminFilesAll() {
   );
   const exporter = useListExport(sendExport);
   const { openOrg, cards } = useAdminCards();
+  // «Открыть подписку» у чека — окно «Подписка организации» поверх «Всех файлов» (прототип `subOrgWin`).
+  const subs = useSubActions({ onOrg: (id) => openOrg(id) });
   const files = useStorageFileActions({
     onOrg: (id) => openOrg(id, null, 'files'),
-    onSub: (id) => openOrg(id, null, 'sub'),
+    onSub: (id) => subs.openWindow(id, ''),
   });
   const rows = list.data?.items ?? [];
   return (
@@ -92,6 +95,7 @@ export function AdminFilesAll() {
         onOpen={(r) => files.open(r, rows)}
       />
       {files.node}
+      {subs.nodes}
       {cards}
     </div>
   );

@@ -45,12 +45,8 @@ describe.skipIf(!databaseAvailable())('Витрина данных: API-токе
       cookies[login] = await signIn(f.app, login, TEST_PASSWORD);
     }
     const db = f.t.admin.db;
-    // Обе организации оплачены надолго; «Внешний доступ по API» включён у А.
-    for (const orgId of [f.a.orgId, f.b.orgId]) {
-      await db
-        .insert(schema.orgSubscriptions)
-        .values({ orgId, planId: 'm1', seats: 10, paidUntil: '2099-12-31' });
-    }
+    // Обе организации оплачены надолго (подписка фикстуры `TEST_SUBSCRIPTION`); «Внешний доступ по
+    // API» включён у А.
     await db.update(orgSettings).set({ extApi: true }).where(eq(orgSettings.orgId, f.a.orgId));
     // «Старшему» в А — витрина с правом на токены; его область «Контрагентов» — «Свои».
     await db.insert(schema.rolePermissions).values(
@@ -198,7 +194,10 @@ describe.skipIf(!databaseAvailable())('Витрина данных: API-токе
       .update(schema.orgSubscriptions)
       .set({ paidUntil: '2020-01-31' })
       .where(eq(schema.orgSubscriptions.orgId, f.b.orgId));
-    await fail(await issue('owner-b', tpl.rep, 'Закрыт'), 403, 'dm_token_sub_closed');
+    // Закрытый доступ: владельцу открыта только «Подписка» — слой входа отказывает раньше выпуска
+    // (общая сборка этапа 1, п. О-89); свой отказ выпуска `dm_token_sub_closed` остаётся второй
+    // проверкой (тест домена).
+    await fail(await issue('owner-b', tpl.rep, 'Закрыт'), 403, 'sub_closed_owner');
     await db.update(organizations).set({ isDemo: true }).where(eq(organizations.id, f.b.orgId));
     await fail(await issue('owner-b', tpl.rep, 'Демо'), 403, 'dm_token_demo');
     const demo = await ok(await call('owner-b', 'GET', '/api/dm/tokens/form'), 200, DmTokenForm);

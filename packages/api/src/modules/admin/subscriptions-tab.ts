@@ -2,7 +2,6 @@ import { randomBytes } from 'node:crypto';
 import { createRoute, z, type RouteHandler } from '@hono/zod-openapi';
 import {
   adminSubscriptionCard,
-  adminSubscriptionReceipt,
   createSubscriptionPlan,
   decidePayment,
   deleteSubscriptionPlan,
@@ -37,7 +36,6 @@ import {
   type Tx,
 } from '@buhuchet/db';
 import {
-  FILE_LINK_SECONDS,
   RecordChangedError,
   RecordNotFoundError,
   SUBSCRIPTION_PLAN_MESSAGES,
@@ -67,7 +65,6 @@ import {
   AdminSubscriptionSettings,
   AdminSubscriptionsSummary,
   ApiError,
-  FileLink,
   ListExportParams,
   ListQueryParams,
   ListValues,
@@ -424,47 +421,9 @@ export function subscriptionCardHandler(
   };
 }
 
-/* ── Чек: просмотр, «Подтвердить оплату», «Отклонить» (блок 6, пункт 3) ── */
+/* ── Чек: «Подтвердить оплату», «Отклонить» (блок 6, пункт 3; чек открывается окном «Файлы» Админки) ── */
 
 const payParam = z.object({ id: Uuid });
-
-export const subscriptionReceiptRoute = createRoute({
-  method: 'get',
-  path: '/admin/subscriptions/payments/{id}/receipt',
-  tags: ['admin'],
-  summary: 'Чек оплаты подписки: ссылка на просмотр на 15 минут',
-  middleware: [requirePlatformAdmin] as const,
-  request: { params: payParam },
-  responses: {
-    200: { description: 'Ссылка на просмотр чека', content: json(FileLink) },
-    ...denied,
-    404: { description: 'Нет оплаты или у неё нет чека', content: error },
-  },
-});
-
-/**
- * «Чек» в окне Админки (прототип `subFileBtn`): чек — PDF или картинка (тип проверен при загрузке и
- * ограничением базы), открывается в браузере, а не скачивается.
- */
-export function subscriptionReceiptHandler(
-  deps: ApiDeps,
-): RouteHandler<typeof subscriptionReceiptRoute, AppEnv> {
-  return async (c) => {
-    c.header('Cache-Control', 'no-store');
-    const { id } = c.req.valid('param');
-    const receipt = await withUserContext(deps.db, adminOf(c), (tx) =>
-      adminSubscriptionReceipt(tx, id),
-    );
-    if (!receipt) apiFail(404, 'not_found', 'Файл не найден');
-    const expiresAt = new Date(Date.now() + FILE_LINK_SECONDS * 1000);
-    const url = await deps.storage.signedDownloadUrl(receipt.key, {
-      expiresInSeconds: FILE_LINK_SECONDS,
-      fileName: receipt.name,
-      inline: { contentType: receipt.type },
-    });
-    return c.json({ url, expiresAt: expiresAt.toISOString() }, 200);
-  };
-}
 
 const decided = {
   description:

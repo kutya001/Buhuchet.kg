@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { platformAdmin, search } from './admin';
-import { cardTab, DEMO_PASSWORD, newOrgOwner, signIn } from './helpers';
+import { DEMO_PASSWORD, newOrgOwner, signIn } from './helpers';
 
 // Админка → «Файлы», вкладка «Файлы» карточки организации и «Ждут удаления» (доработки 20.11.2026,
 // пакет 2, блоки 3–5; прототип v154 admin/admin-files.js, modules/file-trash.js; этап 1, П4–П6,
@@ -154,7 +154,7 @@ test.describe('Доработки 20.11, пакет 2. Админка → «Фа
     await expect(own).toBeVisible();
   });
 
-  test('(блоки 3 и 4) чек подписки: «Открыть подписку» — вкладка «Подписка» карточки организации; «Подписка» на полосе памяти вкладки «Файлы» — туда же', async ({
+  test('(блоки 3 и 4) чек подписки: «Открыть подписку» — окно «Подписка организации»; «Подписка» на полосе памяти вкладки «Файлы» — вкладка «Подписка» карточки организации', async ({
     page,
     browser,
     baseURL,
@@ -185,14 +185,22 @@ test.describe('Доработки 20.11, пакет 2. Админка → «Фа
     await expect(win.locator('[data-fv="pdf"]')).toBeVisible();
     await win.locator('[data-afiles-sub]').click();
     await expect(win).toHaveCount(0);
+    // Окно подписки поверх «Всех файлов», как `subOrgWin` прототипа (общая сборка этапа 1).
+    const subWin = page.getByRole('dialog', { name: 'Подписка организации' });
+    await expect(subWin.locator(`[data-sub-body="${org.id}"]`)).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(subWin).toHaveCount(0);
 
+    // «Открыть организацию» в окне файла — вкладка «Файлы» карточки; полоса памяти ведёт на её «Подписку».
+    await row.getByText(name, { exact: true }).click();
+    await expect(win.locator('[data-fv="pdf"]')).toBeVisible();
+    await win.locator('[data-afiles-org]').click();
+    await expect(win).toHaveCount(0);
     const card = page.locator(`[data-org-card="${org.id}"]`);
     const cardWin = page.getByRole('dialog').filter({ has: card });
     await expect(cardWin.getByRole('tab', { selected: true })).toContainText(
-      texts['orgs.card.tab.sub']!,
+      texts['orgs.card.tab.files']!,
     );
-    // Полоса памяти вкладки «Файлы» ведёт на «Подписку» той же карточки.
-    await cardTab(page, cardWin, isMobile, texts['orgs.card.tab.files']!);
     await card.locator('[data-org-files-mem] [data-org-files-sub]').click();
     await expect(cardWin.getByRole('tab', { selected: true })).toContainText(
       texts['orgs.card.tab.sub']!,

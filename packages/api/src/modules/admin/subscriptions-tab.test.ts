@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { FakeTelegram } from '@buhuchet/adapters';
 import { schema } from '@buhuchet/db';
 import { createOrganization } from '@buhuchet/db/organizations';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
@@ -14,7 +15,7 @@ import {
 } from '@buhuchet/shared';
 import { and, eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../testing';
+import { apiRequest, createStaffFixture, linkTelegram, signIn, TEST_PASSWORD } from '../../testing';
 
 type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
 type Method = 'GET' | 'POST' | 'PUT' | 'DELETE';
@@ -29,6 +30,10 @@ describe.skipIf(!databaseAvailable())('Админка: «Подписки»', ()
   let f: Fixture;
   let admin = '';
   let owner = '';
+  const OWNER_CHAT = 7_301;
+  /** Сообщения бота в чат владельца Б. */
+  const ownerChat = () =>
+    (f.deps.telegram as FakeTelegram).sent.filter((m) => String(m.chatId) === String(OWNER_CHAT));
   const call = (method: Method, path: string, cookie: string, body?: unknown) =>
     apiRequest(f.app, method, path, cookie, body);
   const ok = async <T>(res: Response, parse: (x: unknown) => T): Promise<T> => {
@@ -90,6 +95,8 @@ describe.skipIf(!databaseAvailable())('Админка: «Подписки»', ()
     await seedAllPlatformDictionaries(f.t.admin.db);
     admin = await signIn(f.app, 'platform-admin', TEST_PASSWORD);
     owner = await signIn(f.app, 'owner-b', TEST_PASSWORD);
+    // Telegram владельца Б: сообщения о решении по чеку уходят сразу после транзакции решения.
+    await linkTelegram(f.app, owner, OWNER_CHAT);
   });
 
   afterAll(async () => {
@@ -117,7 +124,6 @@ describe.skipIf(!databaseAvailable())('Админка: «Подписки»', ()
       ['GET', '/api/admin/subscriptions/export?cols=name'],
       ['GET', '/api/admin/subscriptions/summary'],
       ['GET', `/api/admin/subscriptions/${f.b.orgId}`],
-      ['GET', `/api/admin/subscriptions/payments/${id}/receipt`],
       [
         'POST',
         `/api/admin/subscriptions/payments/${id}/confirm`,
@@ -220,6 +226,19 @@ describe.skipIf(!databaseAvailable())('Админка: «Подписки»', ()
     expect((await cardOf(org.orgId)).bytesLimit).toBeNull();
   });
 
+  it('окно одной организации: в экране владельца нет чека и оплат другой', async () => {
+    const id = await pending();
+    const a = await cardOf(f.a.orgId);
+    expect(a.org.id).toBe(f.a.orgId);
+    expect(a.payments.map((p) => p.id)).not.toContain(id);
+    expect(a.screen.payments.map((p) => p.id)).not.toContain(id);
+    expect(JSON.stringify(a)).not.toContain(f.b.orgId);
+    // У своей организации чек на проверке — и в окне, и в экране владельца.
+    const b = await cardOf(f.b.orgId);
+    expect(b.payments.map((p) => p.id)).toContain(id);
+    expect(b.screen.payments.map((p) => p.id)).toContain(id);
+  });
+
   it('«Подтвердить оплату»: по версии, продление 1–36 месяцев, второй раз — «уже проверили»', async () => {
     const id = await pending();
     const card = await cardOf(f.b.orgId);
@@ -231,13 +250,16 @@ describe.skipIf(!databaseAvailable())('Админка: «Подписки»', ()
       receipt: { name: 'Чек_Optima.pdf', type: 'application/pdf', bytes: 184_320 },
       version: 1,
     });
-    // Ключа хранилища в окне нет — только ссылка на 15 минут по отдельному запросу.
+    // Ключа хранилища в окне нет: чек открывает окно «Файлы» Админки (`/api/admin/files/receipt/{id}/link`).
     expect(JSON.stringify(card)).not.toContain(`subs/${id}`);
-    const link = await ok(
-      await call('GET', `/api/admin/subscriptions/payments/${id}/receipt`, admin),
-      (x) => FileLink.parse(x),
+    const link = await ok(await call('GET', `/api/admin/files/receipt/${id}/link`, admin), (x) =>
+      FileLink.parse(x),
     );
     expect(link.url).toContain(`subs/${id}`);
+    // Прежнего пути чека без предела открытий больше нет.
+    expect(
+      (await call('GET', `/api/admin/subscriptions/payments/${id}/receipt`, admin)).status,
+    ).toBe(404);
 
     const confirm = (body: unknown) =>
       call('POST', `/api/admin/subscriptions/payments/${id}/confirm`, admin, body);
@@ -288,6 +310,8 @@ describe.skipIf(!databaseAvailable())('Админка: «Подписки»', ()
       kind: 'other',
       targetKind: 'sub',
     });
+    // …и Telegram — уже к ответу «Подтвердить оплату», без задачи очереди.
+    expect(ownerChat().filter((m) => m.text.includes('30.06.2100'))).toHaveLength(1);
     const again = await fail(
       await confirm({ months: 6, paidUntil: '2100-06-30', version: 2 }),
       409,
@@ -347,6 +371,7 @@ describe.skipIf(!databaseAvailable())('Админка: «Подписки»', ()
       kind: 'other',
       targetKind: 'sub',
     });
+    expect(ownerChat().filter((m) => m.text.includes('Сумма не совпадает'))).toHaveLength(1);
     const [row] = await f.t.admin.db
       .select({ reason: schema.subscriptionPayments.reason })
       .from(schema.subscriptionPayments)

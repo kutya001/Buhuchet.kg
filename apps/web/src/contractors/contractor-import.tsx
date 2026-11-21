@@ -421,7 +421,10 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
                     : null}
                 </span>
                 {seatOver && seatsShown?.owner ? (
-                  <SeatGrowButton className={`${buttonClass('default', 'sm')} ${TOUCH_AREA}`} />
+                  <SeatGrowButton
+                    className={`${buttonClass('default', 'sm')} ${TOUCH_AREA}`}
+                    onGrow={() => void seat.grow()}
+                  />
                 ) : null}
               </div>
             </Note>

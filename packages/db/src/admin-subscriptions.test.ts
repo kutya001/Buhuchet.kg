@@ -10,7 +10,6 @@ import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   adminSubscriptionCard,
-  adminSubscriptionReceipt,
   createSubscriptionPlan,
   decidePayment,
   deleteSubscriptionPlan,
@@ -197,7 +196,7 @@ describe.skipIf(!databaseAvailable())('Админка: подписки орга
     ).toEqual({ byStatus: {}, late: 0 });
   });
 
-  it('окно «Подписка организации»: только организация контекста; чек — только администратору', async () => {
+  it('окно «Подписка организации»: только организация контекста; организация оплаты — только администратору', async () => {
     const card = await adminIn(c.orgId, (tx) => adminSubscriptionCard(tx, c.orgId));
     expect(card.org).toMatchObject({ id: c.orgId, name: 'ОсОО «Гамма»', demo: false });
     expect(card.sub).toMatchObject({ planId: 'm1', seats: 10, paidUntil: '2026-11-25' });
@@ -214,18 +213,7 @@ describe.skipIf(!databaseAvailable())('Админка: подписки орга
     await expect(adminIn(a.orgId, (tx) => adminSubscriptionCard(tx, c.orgId))).rejects.toThrow(
       RecordNotFoundError,
     );
-    expect(await asAdmin((tx) => adminSubscriptionReceipt(tx, latePay))).toEqual({
-      orgId: c.orgId,
-      key: `org/${c.orgId}/subs/${latePay}`,
-      name: 'Чек_Optima.pdf',
-      type: 'application/pdf',
-    });
     expect(await asAdmin((tx) => subscriptionPaymentOrg(tx, latePay))).toBe(c.orgId);
-    expect(
-      await withUserContext(db.app.db, a.ownerUserId, (tx) =>
-        adminSubscriptionReceipt(tx, latePay),
-      ),
-    ).toBeNull();
     expect(
       await withUserContext(db.app.db, c.ownerUserId, (tx) => subscriptionPaymentOrg(tx, latePay)),
     ).toBeNull();

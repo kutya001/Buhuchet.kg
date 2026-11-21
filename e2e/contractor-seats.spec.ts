@@ -115,8 +115,15 @@ test.describe('Доработки 20.11.2026: места в пакете', () =>
       await expect(seatLine).toContainText(
         'Свободных мест в пакете: 0, новых контрагентов в файле: 1. Загрузить можно, когда мест хватит на всех: расширьте пакет или переведите контрагентов в архив.',
       );
-      await expect(seatLine.getByRole('button', { name: 'Расширить пакет' })).toBeVisible();
       await expect(load.getByRole('button', { name: 'ОК, создать 1' })).toBeDisabled();
+      // «Расширить пакет» (прототип `seatGrow` → `subPayDlg('grow')`): окно оплаты поверх загрузки,
+      // таблица остаётся.
+      const grow = page.getByRole('dialog', { name: 'Расширить пакет' });
+      await seatLine.getByRole('button', { name: 'Расширить пакет' }).click();
+      await expect(grow.locator('[data-sub-pay="grow"]')).toBeVisible();
+      await grow.locator('[data-window-close]').click();
+      await expect(grow).toBeHidden();
+      await expect(load.locator('[data-cp-import-row="0"]')).toContainText('готова');
       await load.locator('[data-window-close]').click();
       await discardChanges(page);
       await expect(load).toBeHidden();
@@ -134,14 +141,18 @@ test.describe('Доработки 20.11.2026: места в пакете', () =>
       await closeWindow(form);
       await newContractor(page.request, origin, { tariff: false });
 
-      // Пакет снова полон: «Расширить пакет» ведёт на экран «Подписка» с окном расширения (поток И, П7).
+      // Пакет снова полон: «Расширить пакет» открывает окно расширения экрана «Подписка» (поток И, П7)
+      // здесь же, на «Контрагентах».
       await addVia(page, 'Контрагент');
       await full.getByRole('button', { name: 'Расширить пакет' }).click();
-      await expect(page).toHaveURL(/\/app\/org\/sub(\?|$)/);
       await expect(full).toHaveCount(0);
-      await expect(
-        page.getByRole('dialog', { name: 'Расширить пакет' }).locator('[data-sub-pay="grow"]'),
-      ).toBeVisible();
+      await expect(grow.locator('[data-sub-pay="grow"]')).toBeVisible();
+      await expect(page).toHaveURL(/\/app\/cps\/all(\?|$)/);
+      // Новый пакет по умолчанию — на шаг больше нынешнего (прототип `subPayDlg('grow')`).
+      const sub = await page.request.get('/api/org/subscription', { maxRetries: 2 });
+      expect(sub.status(), await sub.text()).toBe(200);
+      const { prices } = (await sub.json()) as { prices: { seatStep: number } };
+      await expect(grow.locator('#sp-pack')).toHaveValue(String(PACK + prices.seatStep));
     } finally {
       await admin.dispose();
     }

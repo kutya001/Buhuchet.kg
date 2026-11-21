@@ -25,6 +25,7 @@ type Created = { organization: { id: string; slug: string } };
  */
 async function newOrg(page: Page, origin: string, name: string, seats: number) {
   const ownerLogin = uniqueLogin('e2e-sub');
+  const temporaryPassword = ownerPassword();
   const res = await page.request.post('/api/admin/organizations', {
     headers: { origin },
     data: {
@@ -32,12 +33,12 @@ async function newOrg(page: Page, origin: string, name: string, seats: number) {
       inn: uniqueInn(),
       ownerFullName: 'Подпискина Сквозная',
       ownerLogin,
-      temporaryPassword: ownerPassword(),
+      temporaryPassword,
       subscription: { ...E2E_SUBSCRIPTION, seats, free: false },
     },
   });
   expect(res.status(), await res.text()).toBe(201);
-  return { ...((await res.json()) as Created).organization, ownerLogin };
+  return { ...((await res.json()) as Created).organization, ownerLogin, temporaryPassword };
 }
 
 /** Тексты словаря интерфейса (`GET /api/l10n`): тест не копирует строки экрана владельца. */
@@ -301,6 +302,8 @@ test.describe('Админка → «Подписки»', () => {
     baseURL,
     isMobile,
   }) => {
+    // Длинный сценарий: свой администратор, шесть смен входа, два чека через окно оплаты.
+    test.slow();
     const origin = new URL(baseURL!).origin;
     const admin = await platformAdmin(page.request, origin);
     const name = `ОсОО «${uniqueLogin('Чек')}»`;
@@ -308,18 +311,35 @@ test.describe('Админка → «Подписки»', () => {
 
     // Владелец задаёт свой пароль и отправляет чек на экране «Подписка».
     const ownPassword = 'Свой-пароль-e2e-1';
-    await switchTo(page, origin, org.ownerLogin, ownerPassword());
+    await switchTo(page, origin, org.ownerLogin, org.temporaryPassword);
     const changed = await page.request.post('/api/auth/password', {
       headers: { origin },
-      data: { currentPassword: ownerPassword(), newPassword: ownPassword },
+      data: { currentPassword: org.temporaryPassword, newPassword: ownPassword },
     });
     expect(changed.status(), await changed.text()).toBe(200);
     const texts = await dictionary(page.request);
     const first = `чек-${randomBytes(3).toString('hex')}.pdf`;
     const firstId = await ownerSendsReceipt(page, first);
 
-    // Администратор: чек на проверке — первым в окне, открывается в окне просмотра файлов.
+    // Администратор: колокольчик «Новый чек на проверку» открывает окно организации и тогда, когда
+    // выбраны «Виды подписок» (прототип `subBellGo` → `subOrgWin`).
     await switchTo(page, origin, admin, ADMIN_PASSWORD);
+    await page.goto('/app/orgs/subs');
+    await expect(page.locator('[data-subs-orgs] [data-grid] [data-id]').first()).toBeVisible();
+    await page
+      .locator('[data-subs-part]')
+      .getByRole('button', { name: 'Виды подписок', exact: true })
+      .click();
+    await expect(page.locator('[data-subs-kinds]')).toBeVisible();
+    await page.locator('[data-bell]').click();
+    await page.locator('[data-bell-panel] [data-bell-row]').filter({ hasText: name }).click();
+    const linked = page.getByRole('dialog', { name: 'Подписка организации' });
+    await expect(linked.locator(`[data-sub-body="${org.id}"]`)).toBeVisible();
+    await expect(page.locator('[data-subs-part]')).toHaveAttribute('data-subs-part', 'orgs');
+    await page.keyboard.press('Escape');
+    await expect(linked).toBeHidden();
+
+    // Чек на проверке — первым в окне, открывается в окне просмотра файлов.
     const win = async () => {
       const row = await subsRow(page, isMobile, name);
       await row.click();
@@ -337,6 +357,8 @@ test.describe('Админка → «Подписки»', () => {
     await wait.locator(`[data-sub-receipt="${firstId}"]`).click();
     const viewer = page.getByRole('dialog', { name: first });
     await expect(viewer.locator(`[data-file-viewer="${firstId}"]`)).toBeVisible();
+    // Окно прочитало чек по ссылке Админки «Файлы» (`/api/admin/files/receipt/{id}/link`).
+    await expect(viewer.locator('[data-fv="pdf"] iframe')).toHaveAttribute('src', /^blob:/);
     await page.keyboard.press('Escape');
     await expect(viewer).toBeHidden();
 
@@ -375,7 +397,10 @@ test.describe('Админка → «Подписки»', () => {
     await expect(dialog.locator('[data-sub-wait]')).toHaveCount(0);
     const card = (await (
       await page.request.get(`/api/admin/subscriptions/${org.id}`, { maxRetries: 2 })
-    ).json()) as { sub: { planId: string } | null; payments: { id: string; status: string }[] };
+    ).json()) as {
+      sub: { planId: string; paidUntil: string } | null;
+      payments: { id: string; status: string }[];
+    };
     expect(card.sub?.planId).toBe('m3');
     expect(card.payments.find((p) => p.id === secondId)?.status).toBe('confirmed');
     expect(card.payments.find((p) => p.id === firstId)?.status).toBe('rejected');
@@ -387,7 +412,9 @@ test.describe('Админка → «Подписки»', () => {
     };
     const subRows = bell.items.filter((x) => x.event === 'sub').map((x) => x.text);
     expect(subRows.some((x) => x.includes(reason))).toBe(true);
-    expect(subRows.some((x) => x.startsWith('✅'))).toBe(true);
+    // «Оплата подтверждена» — с новым «Оплачено до» (шаблон `tgSubPaid` можно менять, дата — нет).
+    const until = card.sub!.paidUntil.split('-').reverse().join('.');
+    expect(subRows.some((x) => x.includes(until) && !x.includes(reason))).toBe(true);
     await page.goto('/app/org/sub');
     await expect(page.locator('[data-sub-screen="own"] [data-sub-top]')).toContainText(
       texts['sub.st.active']!,

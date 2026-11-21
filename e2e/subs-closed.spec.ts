@@ -19,6 +19,15 @@ const bishkekDay = (days: number) =>
   new Date(Date.now() + 6 * 3600_000 + days * DAY).toISOString().slice(0, 10);
 const ruDate = (iso: string) => iso.split('-').reverse().join('.');
 
+/** Текст словаря интерфейса с подстановкой `{date}`: тест не копирует строки экрана. */
+async function dictText(api: APIRequestContext, key: string, date: string): Promise<string> {
+  const res = await api.get('/api/l10n', { maxRetries: 2 });
+  expect(res.status()).toBe(200);
+  const text = ((await res.json()) as { texts: Record<string, string> }).texts[key];
+  expect(text, key).toBeTruthy();
+  return text!.replace('{date}', ruDate(date));
+}
+
 /** Администратор платформы: «Изменить подписку» организации владельца `ownerLogin` — «Оплачено до» `paidUntil`. */
 async function setPaidUntil(
   admin: APIRequestContext,
@@ -64,6 +73,9 @@ test('(доработки 20.11.2026, блок 4, пункт 4; прототип
   playwright,
   baseURL,
 }) => {
+  // Длинный сценарий: организация и администратор через `pnpm db:*`, наём сотрудника, вторая вкладка,
+  // три входа формой.
+  test.slow();
   const origin = new URL(baseURL!).origin;
   const owner = await playwright.request.newContext({ baseURL });
   const ownerLogin = await newOrgOwner(owner, origin);
@@ -85,29 +97,39 @@ test('(доработки 20.11.2026, блок 4, пункт 4; прототип
 
   // Сотрудник вошёл, пока доступ открыт: вкладка программы открыта.
   const staffContext = await browser.newContext({ baseURL });
-  const staffTab = await staffContext.newPage();
-  const password = 'Свой-пароль-e2e-2';
-  await signIn(staffTab.request, origin, login, temporaryPassword);
-  const changed = await staffTab.request.post('/api/auth/password', {
-    headers: { origin },
-    data: { currentPassword: temporaryPassword, newPassword: password },
-  });
-  expect(changed.status(), await changed.text()).toBe(200);
-  await staffTab.goto('/app');
-  await expect(staffTab).toHaveURL(/\/app(\/|$)/);
-
-  // Администратор платформы: «Изменить подписку» — «Оплачено до» вчера по Бишкеку.
-  const admin = await playwright.request.newContext({ baseURL });
-  await platformAdmin(admin, origin);
   const yesterday = bishkekDay(-1);
-  await setPaidUntil(admin, origin, ownerLogin, yesterday);
-  await admin.dispose();
+  const password = 'Свой-пароль-e2e-2';
+  try {
+    const staffTab = await staffContext.newPage();
+    await signIn(staffTab.request, origin, login, temporaryPassword);
+    const changed = await staffTab.request.post('/api/auth/password', {
+      headers: { origin },
+      data: { currentPassword: temporaryPassword, newPassword: password },
+    });
+    expect(changed.status(), await changed.text()).toBe(200);
+    await staffTab.goto('/app');
+    await expect(staffTab).toHaveURL(/\/app(\/|$)/);
+    // Ссылка модуля: в левой панели на ПК, в нижней панели на телефоне.
+    const reports = staffTab.locator('a[href^="/app/reports"]:visible').first();
+    await expect(reports).toBeVisible();
 
-  await test.step('открытая вкладка сотрудника при следующем переходе уходит на вход', async () => {
-    await staffTab.reload();
-    await expect(staffTab).toHaveURL(/\/login/);
+    // Администратор платформы: «Изменить подписку» — «Оплачено до» вчера по Бишкеку.
+    const admin = await playwright.request.newContext({ baseURL });
+    try {
+      await platformAdmin(admin, origin);
+      await setPaidUntil(admin, origin, ownerLogin, yesterday);
+    } finally {
+      await admin.dispose();
+    }
+
+    await test.step('открытая вкладка сотрудника при следующем переходе уходит на вход', async () => {
+      // Переход внутри открытой программы, без перезагрузки: ответ `sub_closed` уводит на вход.
+      await reports.click();
+      await expect(staffTab).toHaveURL(/\/login/);
+    });
+  } finally {
     await staffContext.close();
-  });
+  }
 
   await page.goto('/login');
   await test.step('неверный пароль — «Неверный логин или пароль», о подписке ни слова', async () => {
@@ -126,7 +148,7 @@ test('(доработки 20.11.2026, блок 4, пункт 4; прототип
     await expect(page).toHaveURL(/\/app(\/|$)/);
     await page.goto('/app/org/sub');
     const screen = page.locator('[data-sub-screen="own"]');
-    await expect(screen).toContainText(`Подписка закончилась ${ruDate(yesterday)}`);
+    await expect(screen).toContainText(await dictText(page.request, 'sub.head.ended', yesterday));
     await expect(screen.locator('[data-sub-pay-open="renew"]')).toBeEnabled();
     await expect(page.getByRole('tab', { selected: true })).toContainText('Подписка');
     await expect(page.locator('[data-sub-closed]')).toHaveCount(0);
@@ -141,15 +163,22 @@ test('(доработки 20.11.2026, блок 4, пункт 3; прототип
   const origin = new URL(baseURL!).origin;
   const ownerLogin = await newOrgOwner(page.request, origin);
   const admin = await playwright.request.newContext({ baseURL });
-  await platformAdmin(admin, origin);
   const soon = bishkekDay(3);
-  await setPaidUntil(admin, origin, ownerLogin, soon);
-  await admin.dispose();
+  try {
+    await platformAdmin(admin, origin);
+    await setPaidUntil(admin, origin, ownerLogin, soon);
+  } finally {
+    await admin.dispose();
+  }
 
   await page.goto('/app');
   const bar = page.locator('[data-sub-renew]');
-  await expect(bar).toContainText(`Подписка оплачена до ${ruDate(soon)}`);
+  await expect(bar).toContainText(await dictText(page.request, 'sub.head.expiring', soon));
   await bar.getByRole('link').click();
   await expect(page).toHaveURL(/\/app\/org\/sub/);
   await expect(page.locator('[data-sub-pay="renew"]')).toBeVisible();
+  // Окно «Продлить» — с выбранным видом подписки.
+  await expect(
+    page.locator('[data-sub-pay="renew"] [data-sub-kind][aria-checked="true"]'),
+  ).toHaveCount(1);
 });
