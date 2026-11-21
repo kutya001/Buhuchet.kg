@@ -46,5 +46,6 @@ export * from './admin-runs';
 export * from './datamart';
 export * from './datamart-output';
 export * from './datamart-out-export';
+export * from './datamart-admin';
 export * from './admin-telegram';
 export * from './admin-subscriptions';

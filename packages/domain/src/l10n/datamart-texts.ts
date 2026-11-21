@@ -1,3 +1,4 @@
+import { DATAMART_ADMIN_TEXTS } from './datamart-admin-texts';
 import { DATAMART_OUT_TEXTS } from './datamart-out-texts';
 import { DATAMART_OUTPUT_TEXTS } from './datamart-output-texts';
 import type { UiTextDefault } from './texts';
@@ -201,6 +202,7 @@ export const DATAMART_TEXTS = {
   },
   // «Вывод» и каталог «Шаблоны» (этап 2, П3–П4).
   ...DATAMART_OUTPUT_TEXTS,
+  ...DATAMART_ADMIN_TEXTS,
   // Экраны «Вывод», каталог «Шаблоны» и «Попросить шаблон» (этап 2, П6–П7, поток И).
   ...DATAMART_OUT_TEXTS,
 } as const satisfies Record<string, UiTextDefault>;
