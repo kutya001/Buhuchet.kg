@@ -64,7 +64,8 @@ export function OutTab({ side }: { side: DmSide }) {
       </Note>
     );
   }
-  if (!catalog.data) return null;
+  // Пока каталог грузится — заглушка `aria-busy`: «Показать как» ждёт её, а не пустой экран.
+  if (!catalog.data) return <div className="min-h-[200px]" aria-busy="true" data-dm-loading="" />;
   const { items, canExport } = catalog.data;
   if (!items.length) {
     return (

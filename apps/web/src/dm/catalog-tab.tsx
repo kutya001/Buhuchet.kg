@@ -37,7 +37,8 @@ export function CatalogTab({
       </Note>
     );
   }
-  if (!catalog.data) return null;
+  // Пока каталог грузится — заглушка `aria-busy`: «Показать как» ждёт её, а не пустой экран.
+  if (!catalog.data) return <div className="min-h-[200px]" aria-busy="true" data-dm-loading="" />;
   const { items, canTokens } = catalog.data;
   const groups = catalogGroups(items);
   const show = (code: string) => {

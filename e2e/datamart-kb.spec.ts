@@ -28,6 +28,30 @@ async function dictionary(api: APIRequestContext): Promise<Record<string, string
   return ((await res.json()) as { texts: Record<string, string> }).texts;
 }
 
+type KbShowsLite = { shows: { step: string; items: { s?: string | null; t?: string }[] }[] };
+
+/** Заголовки облачков сценария «Показать как» шага (`GET /api/kb/shows`): тест не копирует refDB. */
+async function showItemTitles(api: APIRequestContext, step: string, only?: readonly string[]) {
+  const res = await api.get('/api/kb/shows', { maxRetries: 2 });
+  expect(res.status()).toBe(200);
+  const show = ((await res.json()) as KbShowsLite).shows.find((x) => x.step === step);
+  expect(show, `сценарий «Показать как» шага ${step}`).toBeTruthy();
+  return show!.items.filter((x) => x.t && (!only || only.includes(x.s ?? ''))).map((x) => x.t!);
+}
+
+/** Первый абзац статьи «Базы знаний» (`GET /api/kb/articles/{id}`) — её самая длинная часть текста. */
+async function articleLead(api: APIRequestContext, id: string) {
+  const res = await api.get(`/api/kb/articles/${id}`, { maxRetries: 2 });
+  expect(res.status()).toBe(200);
+  const { blocks } = (await res.json()) as {
+    blocks: { type: string; inline?: { text: string }[] }[];
+  };
+  const lead = blocks.find((b) => b.type === 'p')?.inline ?? [];
+  const text = lead.map((x) => x.text.trim()).sort((a, b) => b.length - a.length)[0];
+  expect(text, `абзац статьи ${id}`).toBeTruthy();
+  return text!;
+}
+
 /** «Перейти» у шага урока на «Уроках». */
 async function goStep(page: Page, id: string) {
   await page.goto('/app/kb/lessons');
@@ -66,6 +90,7 @@ test.describe('Витрина данных: урок «Базы знаний»',
   }) => {
     const origin = new URL(baseURL!).origin;
     await newOrgOwner(page.request, origin);
+    const texts = await dictionary(page.request);
     const before = await kbMe(page.request);
     const show = stepOf(before, 'dmshow');
     expect(show, 'шаг «Показать отчёт» в программе владельца').toBeTruthy();
@@ -78,6 +103,8 @@ test.describe('Витрина данных: урок «Базы знаний»',
     const go = page.locator('[data-dm-out-show]');
     // «Перейти» подсвечивает кнопку «Показать» (прототип `G('dm','out','#dm-go')`).
     await expect(go).toHaveAttribute('data-ck-flash', '');
+    // Подсветка плавно прокручивает кнопку к середине экрана: нажатие — когда она встала (№ 34).
+    await stillElement(go);
     await go.click();
 
     const done = page.getByRole('dialog', { name: `Готово: шаг «${show!.title}» выполнен` });
@@ -88,17 +115,16 @@ test.describe('Витрина данных: урок «Базы знаний»',
     await done.getByRole('button', { name: 'Остаться здесь' }).click();
     await expect(done).toBeHidden();
 
-    // «?» у названия модуля → «Вся инструкция» — статья модуля «Витрина данных» (refDB a_dm).
+    // «?» у названия модуля → «Вся инструкция» — окно модуля со статьёй «Витрина данных» (refDB a_dm).
+    const lead = await articleLead(page.request, 'a_dm');
     const info = page.getByRole('button', { name: 'Что здесь: подсказка по модулю' });
     await info.click();
     const infoBox = page.getByRole('dialog', { name: 'Что здесь: подсказка по модулю' });
     await infoBox.getByRole('button', { name: 'Вся инструкция' }).click();
     await expect(infoBox).toBeHidden();
-    const article = page
-      .getByRole('dialog')
-      .filter({ hasText: 'Готовые отчёты платформы по вашим данным' });
+    const article = page.getByRole('dialog', { name: texts['nav.dm'] });
     await expect(article).toBeVisible();
-    await expect(article).toContainText('Внешний доступ по API');
+    await expect(article).toContainText(lead);
   });
 
   test('(доработки 20.11.2026, Витрина данных, этап 3) «Выпустить API-токен»: при выключенном API «Перейти» подсвечивает красную плашку; включён — сразу «Новый API-токен», а «Готово» — только после окна с токеном', async ({
@@ -137,6 +163,14 @@ test.describe('Витрина данных: урок «Базы знаний»',
     const form = page.getByRole('dialog', { name: texts['dm.tok.new.title'] });
     await expect(form).toBeVisible();
     await form.getByLabel(texts['dm.tok.new.name']!).fill('Урок базы знаний');
+    // Отметку шага приносит сверка после сохранения: ждём её ответ, чтобы проверка «Готово ещё нет»
+    // шла уже после того, как экран его разобрал.
+    const synced = page.waitForResponse(
+      async (r) =>
+        r.request().method() === 'POST' &&
+        new URL(r.url()).pathname === '/api/kb/sync' &&
+        ((await r.json()) as { fresh: { id: string }[] }).fresh.some((x) => x.id === 'dmtok'),
+    );
     await form.getByRole('button', { name: texts['dm.tok.new.ok'], exact: true }).click();
 
     // Окно с токеном не закрывается нажатием мимо: «Готово» урока ждёт, пока его закроют (прототип
@@ -144,6 +178,7 @@ test.describe('Витрина данных: урок «Базы знаний»',
     const shown = page.getByRole('dialog', { name: texts['dm.tok.show.title'] });
     await expect(shown).toBeVisible();
     await expect(shown.locator('[data-dm-token-value]')).toHaveText(/^bk_/);
+    await synced;
     await expect
       .poll(async () => stepOf(await kbMe(page.request), 'dmtok')?.done?.how)
       .toBe('action');
@@ -158,6 +193,8 @@ test.describe('Витрина данных: урок «Базы знаний»',
     page,
     baseURL,
   }) => {
+    // Новая организация (`pnpm db:create-org`) и два показа со сменой экрана, до 10 с на облачко.
+    test.slow();
     const origin = new URL(baseURL!).origin;
     await newOrgOwner(page.request, origin);
 
@@ -171,7 +208,7 @@ test.describe('Витрина данных: урок «Базы знаний»',
     // в конце «Сделать сейчас», оно подсвечивает «Показать», как «Перейти».
     const shown = await showTitles(page);
     expect(shown.titles).toEqual(
-      expect.arrayContaining(['Шаблон', 'Параметры', 'Кнопка «Показать»']),
+      expect.arrayContaining(await showItemTitles(page.request, 'dmshow')),
     );
     expect(shown.label).toBe('Сделать сейчас');
     await nextButton(page).click();
@@ -187,7 +224,12 @@ test.describe('Витрина данных: урок «Базы знаний»',
       .click();
     await expect(page).toHaveURL(/\/app\/dm\/tpl$/);
     const catalog = await showTitles(page);
-    expect(catalog.titles).toEqual(expect.arrayContaining(['Карточка шаблона', '«Показать»']));
+    // Карточка и её «Показать» есть у любого владельца; «Попросить шаблон» и «Выпустить токен» — по правам.
+    expect(catalog.titles).toEqual(
+      expect.arrayContaining(
+        await showItemTitles(page.request, 'dmcat', ['#mbody .dm-card', '#mbody [data-dm-show]']),
+      ),
+    );
     expect(catalog.label).toBe('Готово');
     await nextButton(page).click();
     await expect(bubble(page)).toHaveCount(0);

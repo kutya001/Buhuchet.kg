@@ -175,6 +175,16 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
   it('«Выпустить API-токен» — не в демо-организации, остальные шаги «Витрины данных» остаются', async () => {
     const ids = async () => steps(await state(ownerB)).map((x) => x.id);
     expect(await ids()).toEqual(expect.arrayContaining(['dmshow', 'dmxl', 'dmcat', 'dmtok']));
+    // Та же настройка — у «Уровней сотрудников»: шагов владельца в демо на один меньше.
+    const params = new URLSearchParams(
+      listQueryParams({ sort: undefined, page: 1, size: 25, filters: {} }),
+    );
+    const ownerTotal = async () =>
+      KbTeamList.parse(await ok(await call('GET', `/api/kb/team?${params}`, ownerB))).items.find(
+        (r) => r.fullName === 'Владелец owner-b',
+      )?.total;
+    const before = await ownerTotal();
+    expect(before).toBeGreaterThan(0);
     const demo = (isDemo: boolean) =>
       f.t.admin.db
         .update(schema.organizations)
@@ -185,9 +195,11 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
       const inDemo = await ids();
       expect(inDemo).not.toContain('dmtok');
       expect(inDemo).toEqual(expect.arrayContaining(['dmshow', 'dmxl', 'dmcat']));
+      expect(await ownerTotal()).toBe(before! - 1);
     } finally {
       await demo(false);
     }
+    expect(await ownerTotal()).toBe(before);
   });
 
   it('администратор платформы — своя программа: шаги сделанных модулей Админки', async () => {
