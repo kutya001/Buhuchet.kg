@@ -3,23 +3,29 @@ import {
   dmErrorOf,
   dmParamDefsOf,
   logDmRequest,
+  releaseRateLimit,
   runDmAdmin,
   runDmOrg,
+  takeRateLimit,
   withOrgContext,
   withUserContext,
   type DmOutputTemplate,
   type DmRequestEntry,
   type DmResult,
   type DmTemplateColumn,
+  type RateLimit,
 } from '@buhuchet/db';
 import {
   dmBind,
   dmContractorColumn,
   dmScopeQuery,
   formatText,
+  type DmQueryProblem,
+  type DmSqlProblem,
   type IsoDate,
 } from '@buhuchet/domain';
 import type { ApiDeps } from '../../deps';
+import { apiFail } from '../../errors';
 import { serverTexts } from '../l10n/texts';
 
 /*
@@ -87,6 +93,63 @@ export type DmRunOutcome =
    */
   | { ok: false; outcome: 'error'; adminDetail: string };
 
+/** Текст словаря с подстановками (`t` — тексты `serverTexts`). */
+export type DmTr = (key: string, params?: Record<string, string | number>) => string;
+
+/**
+ * Что не так с текстом запроса — словами словаря (прототип `dmSqlErr`): проверка окна
+ * (`dmQueryProblem`) и разбор для исполнителя (`dmBind` → `DmSqlProblem`). Видит только администратор
+ * платформы: ответ «Проверить», «Проверен» окна шаблона, подробности ответа Админке.
+ */
+export function dmSqlProblemText(tr: DmTr, p: DmQueryProblem | DmSqlProblem): string {
+  if ('code' in p) {
+    return p.code === 'forbidden'
+      ? tr('err.dm_sql_forbidden', { word: p.word })
+      : tr(`err.dm_sql_${p.code}`);
+  }
+  return p.problem === 'unknown_param'
+    ? tr('err.dm_param_missing', { param: p.name })
+    : tr(`err.dm_sql_${p.problem}`);
+}
+
+/**
+ * Запусков шаблонов с экрана одновременно на весь сайт — «Показать» всех организаций, Админки и
+ * «Проверить» вместе (защита строже ТЗ, п. О-96): каждый держит соединение пула до 15 с, а пул — 5
+ * соединений (`DATABASE_POOL_MAX`); пятерых, нажавших «Показать» на тяжёлом шаблоне, иначе хватило бы,
+ * чтобы сайт встал для всех (п. О-46). Внешний адрес по токену — своим пределом потока Т (п. Т-20:
+ * ответ «Слишком часто, повторите через N секунд» по ТЗ, блок 6, пункты 4–5). Места — строки
+ * `rate_limits` вида `dm_run_all` с арендой: упавший процесс отпускает своё через `leaseSeconds`.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#О-96 — предела одновременных запусков на весь сайт нет в ТЗ и прототипе.
+export const DM_RUN_SLOTS = 2;
+export const DM_RUN_ALL_LIMIT: RateLimit = {
+  kind: 'dm_run_all',
+  max: 1_000_000,
+  windowSeconds: 60,
+  leaseSeconds: 30,
+};
+
+/** Выполнить `run` на свободном месте; свободных нет — 429 `dm_busy_all` (вне транзакций). */
+export async function withDmPoolSlot<T>(
+  deps: ApiDeps,
+  t: (key: string) => string,
+  run: () => Promise<T>,
+): Promise<T> {
+  for (let i = 0; i < DM_RUN_SLOTS; i += 1) {
+    const subject = `slot:${i}`;
+    const slot = await takeRateLimit(deps.db, DM_RUN_ALL_LIMIT, subject);
+    if (!slot.ok) continue;
+    try {
+      return await run();
+    } finally {
+      await releaseRateLimit(deps.db, DM_RUN_ALL_LIMIT, subject, slot.ticket).catch(
+        (err: unknown) => deps.logger.error({ err }, 'витрина: место запуска не отпущено'),
+      );
+    }
+  }
+  return apiFail(429, 'dm_busy_all', t('err.dm_busy_all'));
+}
+
 /** Код ошибки PostgreSQL «запрос прерван по пределу времени». */
 const QUERY_CANCELED = '57014';
 
@@ -126,6 +189,7 @@ export async function logDmRun(
  */
 export async function runDmTemplate(deps: ApiDeps, r: DmRunRequest): Promise<DmRunOutcome> {
   const t = await serverTexts(deps);
+  const tr: DmTr = (key, values) => formatText(t(key), values ?? {});
   const admin = r.who.kind === 'admin';
   const params = loggedParams(r.template, r.input);
   const entry = (e: Pick<DmRequestEntry, 'outcome' | 'rows' | 'ms' | 'error'>): DmRequestEntry => ({
@@ -151,7 +215,7 @@ export async function runDmTemplate(deps: ApiDeps, r: DmRunRequest): Promise<DmR
 
   const bound = dmBind(r.query, dmParamDefsOf(r.template.params), r.input, r.today);
   if (!bound.ok) {
-    if (bound.error === 'sql') return failed(`запрос: ${bound.problem}`);
+    if (bound.error === 'sql') return failed(dmSqlProblemText(tr, bound));
     const name = r.template.params.find((p) => p.code === bound.param)?.name ?? bound.param;
     await logDmRun(
       deps,
@@ -170,17 +234,19 @@ export async function runDmTemplate(deps: ApiDeps, r: DmRunRequest): Promise<DmR
   if (r.ownContractorIds) {
     const cp = dmContractorColumn(r.template.columns);
     // Шаблон без «Контрагента» сотруднику со «Свои» не виден (`dmTemplateSeen`): сюда он не доходит.
-    if (!cp) return failed('нет столбца «Контрагент» для области «Свои»');
+    if (!cp) return failed(tr('err.dm_run_no_cp'));
     text = dmScopeQuery(text, cp, r.ownContractorIds);
   }
 
   const q = { text, params: bound.params, maxRows: r.maxRows, timeoutMs: r.timeoutMs };
   let res: DmResult;
   try {
-    res =
-      r.who.kind === 'org'
-        ? await runDmOrg(deps.db, { orgId: r.who.orgId, userId: r.who.userId }, q)
-        : await runDmAdmin(deps.db, r.who.adminId, q);
+    const who = r.who;
+    const exec = () =>
+      who.kind === 'org'
+        ? runDmOrg(deps.db, { orgId: who.orgId, userId: who.userId }, q)
+        : runDmAdmin(deps.db, who.adminId, q);
+    res = r.via === 'api' ? await exec() : await withDmPoolSlot(deps, t, exec);
   } catch (err) {
     const pg = dmErrorOf(err);
     if (!pg) throw err;
@@ -198,7 +264,9 @@ export async function runDmTemplate(deps: ApiDeps, r: DmRunRequest): Promise<DmR
   const columns = r.template.columns.filter(shownColumn);
   const at = columns.map((c) => res.columns.indexOf(c.code));
   const missing = columns.filter((_, i) => at[i]! < 0).map((c) => c.code);
-  if (missing.length > 0) return failed(`в ответе запроса нет столбцов: ${missing.join(', ')}`);
+  if (missing.length > 0) {
+    return failed(tr('err.dm_run_missing', { columns: missing.join(', ') }));
+  }
   const rows = res.rows.map((row) => at.map((i) => row[i]));
   await logDmRun(deps, r.who, entry({ outcome: 'ok', rows: rows.length, ms: res.ms, error: null }));
   return { ok: true, columns, rows, more: res.more, ms: res.ms };

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { schema, takeRateLimit } from '@buhuchet/db';
+import { releaseRateLimit, schema, takeRateLimit } from '@buhuchet/db';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
 import { UI_TEXTS } from '@buhuchet/domain';
 import { DmCatalog, DmRunResult } from '@buhuchet/shared';
@@ -7,7 +7,7 @@ import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../testing';
 import { DM_RUN_RATE_LIMIT } from './output';
-import { runDmTemplate } from './run';
+import { DM_RUN_ALL_LIMIT, DM_RUN_SLOTS, runDmTemplate } from './run';
 
 /*
  * «Витрина данных» → «Вывод» и каталог «Шаблоны» (доработки 20.11.2026: Витрина данных, блоки 3–4;
@@ -256,6 +256,7 @@ describe.skipIf(!databaseAvailable())('Витрина данных: «Вывод
       .select()
       .from(dmRequests)
       .where(and(eq(dmRequests.templateId, tpl['out-month']!), eq(dmRequests.outcome, 'bad_param')))
+      .orderBy(dmRequests.id)
       .limit(1);
     expect(row).toMatchObject({ params: { month: '2026-13' }, rowCount: null });
   });
@@ -298,6 +299,96 @@ describe.skipIf(!databaseAvailable())('Витрина данных: «Вывод
     expect(history.map((h) => h.reason)).toContain(
       txt('dm.out.history_porg').replace('{name}', 'Шаблон out-cps'),
     );
+  });
+
+  it('модуль без области («Сотрудники»): со столбцом «Контрагент» — строки своих по «Контрагентам», без него — сотруднику со «Свои» не виден (п. О-95)', async () => {
+    const db = f.t.admin.db;
+    await db
+      .insert(schema.rolePermissions)
+      .values({ orgId: f.a.orgId, roleId: f.roleIds.senior, permissionId: 'staffView' });
+    for (const [code, query, columns] of [
+      [
+        'out-staff-cp',
+        'select c.id as contractor_id, c.name as name from contractors c order by c.name',
+        [cpCol, col('name')],
+      ],
+      ['out-staff-total', 'select count(*)::int as n from contractors', [col('n', 'num')]],
+    ] as const) {
+      const [t] = await db
+        .insert(dmTemplates)
+        .values({ code, name: `Шаблон ${code}`, module: 'staff', state: 'published', columns })
+        .returning({ id: dmTemplates.id });
+      tpl[code] = t!.id;
+      await db.insert(dmTemplateSql).values({ templateId: t!.id, query });
+    }
+    const senior = await ok(await call('senior-a', 'GET', '/api/dm/output'), 200, DmCatalog);
+    expect(codes(senior)).toEqual(['out-cps', 'out-staff-cp']);
+    const mine = await ok(await run('senior-a', 'out-staff-cp'), 200, DmRunResult);
+    expect(mine.rows).toEqual([['Альфа']]);
+    expect((await fail(await run('senior-a', 'out-staff-total'), 404)).code).toBe(
+      'dm_template_not_found',
+    );
+    // Владельцу — оба целиком.
+    const own = await ok(await run('owner-a', 'out-staff-cp'), 200, DmRunResult);
+    expect(own.rows).toEqual([['Альфа'], ['Бета'], ['Вега']]);
+    expect((await ok(await run('owner-a', 'out-staff-total'), 200, DmRunResult)).rows).toEqual([
+      [3],
+    ]);
+  });
+
+  it('на весь сайт — не больше двух запусков с экрана одновременно: мест нет — 429 «Сейчас выполняется много запросов»; внешний адрес по токену — мимо мест', async () => {
+    const slots = [];
+    for (let i = 0; i < DM_RUN_SLOTS; i += 1) {
+      const slot = await takeRateLimit(f.t.app.db, DM_RUN_ALL_LIMIT, `slot:${i}`);
+      if (!slot.ok) throw new Error('место занято');
+      slots.push({ subject: `slot:${i}`, ticket: slot.ticket });
+    }
+    const busy = await fail(await run('owner-b', 'out-cps'), 429);
+    expect(busy).toMatchObject({ code: 'dm_busy_all', message: txt('err.dm_busy_all') });
+    // Другая организация и Админка — тоже ждут: место одно на всех.
+    expect((await fail(await adminRun('out-adm'), 429)).code).toBe('dm_busy_all');
+    // Внешний адрес по токену в эти места не входит: у него свой предел потока Т (п. Т-20).
+    const [token] = await f.t.admin.db
+      .insert(schema.dmTokens)
+      .values({
+        orgId: f.b.orgId,
+        templateId: tpl['out-cps']!,
+        name: 'Проверка мест',
+        tokenHash: 'a'.repeat(64),
+        prefix: 'bk_slot',
+        expiresAt: new Date(Date.now() + 86_400_000),
+        createdBy: f.b.ownerUserId,
+      })
+      .returning({ id: schema.dmTokens.id });
+    const api = await runDmTemplate(f.deps, {
+      template: {
+        id: tpl['out-cps']!,
+        code: 'out-cps',
+        name: 'x',
+        description: null,
+        audience: 'org',
+        module: 'cps',
+        needPermission: null,
+        state: 'published',
+        params: [],
+        columns: [{ code: 'n', name: 'n', type: 'text', total: false, contractor: false }],
+      },
+      query: "select 'да' as n",
+      input: {},
+      who: { kind: 'org', orgId: f.b.orgId, userId: f.b.ownerUserId },
+      ownContractorIds: null,
+      via: 'api',
+      tokenId: token!.id,
+      ip: null,
+      maxRows: 10,
+      today: '2026-11-21',
+    });
+    expect(api).toMatchObject({ ok: true, rows: [['да']] });
+    await releaseRateLimit(f.t.app.db, DM_RUN_ALL_LIMIT, slots[0]!.subject, slots[0]!.ticket);
+    expect((await ok(await run('owner-b', 'out-cps'), 200, DmRunResult)).rows).toEqual([
+      ['Гамма', 125050],
+    ]);
+    await releaseRateLimit(f.t.app.db, DM_RUN_ALL_LIMIT, slots[1]!.subject, slots[1]!.ticket);
   });
 
   it('один запрос одновременно: пока идёт прежний — 429 «Предыдущий запрос ещё выполняется»', async () => {

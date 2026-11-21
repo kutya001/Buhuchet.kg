@@ -30,6 +30,7 @@ describe('текст запроса (прототип dmSqlErr)', () => {
       word: 'delete',
     });
     expect(dmQueryProblem("select 'не закрыта")).toEqual({ code: 'unclosed' });
+    expect(dmQueryProblem('select 1) x union all select (2')).toEqual({ code: 'parens' });
     expect(dmQueryProblem('select $1')).toEqual({ code: 'positional' });
   });
 

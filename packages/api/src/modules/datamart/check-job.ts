@@ -18,13 +18,15 @@ import {
 import type { Job, JobContext } from '../../deps';
 import { alertTexts, sendPlatformAlert, type AlertTexts } from '../../jobs/alerts';
 import { putBell } from '../telegram/bell';
-import { DM_ROWS_MAX } from './run';
+import { DM_ROWS_MAX, dmSqlProblemText } from './run';
 
 /*
  * «Витрина: проверка шаблонов» (доработки 20.11.2026: Витрина данных, блок 8, пункт 7; общий план 20.11,
  * этап 2, П4; docs/decisions.md п. О-66): после выпуска с миграциями и каждую ночь каждый опубликованный и
  * сломанный шаблон запускается так же, как его запускает «Вывод»: шаблон организаций — на
- * демо-организации без вошедшего, шаблон Админки — от имени администратора платформы; параметры — по
+ * демо-организации без вошедшего, а где её нет (рабочий сайт), — в пустом контексте (`DM_NO_DATA_ORG`:
+ * ни одной строки организаций, данные настоящих организаций не читаются; проверяются текст, таблицы,
+ * столбцы и типы; п. О-96); шаблон Админки — от имени администратора платформы; параметры — по
  * умолчанию, обязательный без значения — пустой (как «Проверить»). Не выполнился — «Сломан» (организации
  * видят «Шаблон временно не работает», токены — остановлены) и сообщение администраторам платформы в
  * Telegram; строку их колокольчика кладёт его чтение (`dmBellSync`). Снова выполняется — «Опубликован».
@@ -36,6 +38,12 @@ import { DM_ROWS_MAX } from './run';
  */
 
 const JOB = 'dm.check-templates';
+/**
+ * Номер организации, которой нет: запуск в её контексте не видит ни одной строки организаций (RLS
+ * исполнителя — по организации запуска), а справочники платформы видит, как любая организация.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#О-96 — на рабочем сайте без демо — пустой контекст, не чужие данные.
+export const DM_NO_DATA_ORG = '00000000-0000-0000-0000-000000000000';
 const BATCH = 10;
 const BUDGET_MS = 40_000;
 const QUERY_CANCELED = '57014';
@@ -57,13 +65,7 @@ async function checkOne(
   t: AlertTexts,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const problem = dmQueryProblem(it.query);
-  if (problem) {
-    const error =
-      problem.code === 'forbidden'
-        ? t('err.dm_sql_forbidden', { word: problem.word })
-        : t(`err.dm_sql_${problem.code}`);
-    return { ok: false, error };
-  }
+  if (problem) return { ok: false, error: dmSqlProblemText(t, problem) };
   const bound = dmBind(
     it.query,
     it.params.map((p) => ({ k: p.code, type: p.type, req: false, def: p.default })),
@@ -71,7 +73,13 @@ async function checkOne(
     bishkekDate(ctx.clock.now()),
   );
   if (!bound.ok) {
-    return { ok: false, error: bound.error === 'sql' ? bound.problem : `:${bound.param}` };
+    const error =
+      bound.error === 'sql'
+        ? dmSqlProblemText(t, bound)
+        : t('err.dm_bad_param', {
+            param: it.params.find((p) => p.code === bound.param)?.name ?? bound.param,
+          });
+    return { ok: false, error };
   }
   const q = { text: bound.text, params: bound.params, maxRows: DM_ROWS_MAX };
   let columns: string[];
@@ -85,6 +93,9 @@ async function checkOne(
     const pg = dmErrorOf(err);
     // Не ошибка запроса (нет связи с базой) — шаблон не виноват: задача падает и повторится.
     if (!pg) throw err;
+    // В пустом контексте ошибка данных (класс 22: деление на count(*) = 0 и т. п.) — от пустоты, а не
+    // от выпуска: у организаций с данными шаблон работает (п. О-96).
+    if (on.orgId === DM_NO_DATA_ORG && pg.code.startsWith('22')) return { ok: true };
     return {
       ok: false,
       error: pg.code === QUERY_CANCELED ? t('err.dm_timeout') : `${pg.code}: ${pg.message}`,
@@ -121,7 +132,12 @@ export function dmCheckTemplatesJob(): Job {
       for (const it of due.items) {
         if (Date.now() - started > BUDGET_MS) break;
         const orgId = it.audience === 'org' ? due.demoOrgId : null;
-        const outcome = await checkOne(ctx, it, { orgId, adminId: due.adminId }, t);
+        const outcome = await checkOne(
+          ctx,
+          it,
+          { orgId: it.audience === 'org' ? (orgId ?? DM_NO_DATA_ORG) : null, adminId: due.adminId },
+          t,
+        );
         const marked = await dmCheckMark(ctx.db, {
           id: it.id,
           version: it.version,

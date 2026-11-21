@@ -21,7 +21,8 @@ describe.skipIf(!databaseAvailable())('Запуск подписок на баз
   const notices: string[] = [];
   const org = { a: randomUUID(), b: randomUUID(), blocked: randomUUID(), demo: randomUUID() };
   let today = '' as IsoDate;
-  let until = '';
+  /** «Оплачено до» = день запуска + 30: день берётся до миграций и после (полночь по Бишкеку между ними). */
+  let untils: string[] = [];
 
   const exec = <T>(q: ReturnType<typeof sql>) =>
     db.admin.db.execute(q) as unknown as Promise<Rows<T>>;
@@ -61,12 +62,15 @@ describe.skipIf(!databaseAvailable())('Запуск подписок на баз
       values (${fileId}::uuid, ${org.a}::uuid, 'manual', 'Договор.pdf', 'application/pdf', 5000,
         ${`org/${org.a}/files/${fileId}`}, 'ready', ${user!.id}::uuid)`);
 
+    const day = () =>
+      exec<{ today: string; until: string }>(sql`
+        select ((now() at time zone 'Asia/Bishkek')::date)::text as today,
+          ((now() at time zone 'Asia/Bishkek')::date + 30)::text as until`).then((r) => r[0]!);
+    const before = await day();
     await db.migrateRest((line) => notices.push(line));
-    const [d] = await exec<{ today: string; until: string }>(sql`
-      select ((now() at time zone 'Asia/Bishkek')::date)::text as today,
-        ((now() at time zone 'Asia/Bishkek')::date + 30)::text as until`);
-    today = d!.today as IsoDate;
-    until = d!.until;
+    const after = await day();
+    today = after.today as IsoDate;
+    untils = [...new Set([before.until, after.until])];
   }, 240_000);
 
   afterAll(async () => {
@@ -94,9 +98,11 @@ describe.skipIf(!databaseAvailable())('Запуск подписок на баз
       select org_id, plan_id, seats, paid_until::text, free from org_subscriptions order by seats desc, org_id`);
     expect(subs).toHaveLength(3);
     const of = (id: string) => subs.find((s) => s.org_id === id);
-    expect(of(org.a)).toMatchObject({ plan_id: 'm1', seats: 20, paid_until: until, free: true });
-    expect(of(org.b)).toMatchObject({ plan_id: 'm1', seats: 10, paid_until: until, free: true });
-    expect(of(org.blocked)).toMatchObject({ plan_id: 'm1', seats: 10, paid_until: until });
+    expect(of(org.a)).toMatchObject({ plan_id: 'm1', seats: 20, free: true });
+    expect(of(org.b)).toMatchObject({ plan_id: 'm1', seats: 10, free: true });
+    expect(of(org.blocked)).toMatchObject({ plan_id: 'm1', seats: 10 });
+    for (const sub of subs) expect(untils).toContain(sub.paid_until);
+    expect(new Set(subs.map((x) => x.paid_until)).size).toBe(1);
     expect(of(org.demo)).toBeUndefined();
 
     // В «Истории оплат» — одна запись без суммы от «Системы».
@@ -114,7 +120,7 @@ describe.skipIf(!databaseAvailable())('Запуск подписок на баз
         kind: 'free',
         status: 'confirmed',
         created_by: null,
-        paid_until: until,
+        paid_until: subs[0]!.paid_until,
       });
     }
   });

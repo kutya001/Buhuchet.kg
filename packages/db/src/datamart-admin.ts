@@ -155,8 +155,9 @@ export async function lockDmTemplateCodes(tx: Tx): Promise<void> {
 }
 
 /**
- * Организации, которые пользовались шаблоном за период (прототип `dmUse`): запросы журнала с `since`
- * от организаций — с экрана и по токену; запросы Админки к своим шаблонам не считаются.
+ * Организации, которые пользовались шаблоном за период (прототип `dmUse`: живые токены и журнал
+ * запросов по токенам): запросы журнала с `since` по токенам организаций; «Показать» с экрана (и
+ * администратора «глазами организации») и запросы Админки к своим шаблонам не считаются.
  */
 export async function dmTemplateRequestOrgs(
   tx: Tx,
@@ -166,7 +167,7 @@ export async function dmTemplateRequestOrgs(
     select distinct r.template_id, r.org_id
     from public.dm_requests r
     where r.at >= ${since.toISOString()}::timestamptz
-      and r.template_id is not null and r.org_id is not null`);
+      and r.via = 'api' and r.template_id is not null and r.org_id is not null`);
   const out = new Map<string, Set<string>>();
   for (const r of rows) {
     const set = out.get(r.template_id) ?? new Set<string>();

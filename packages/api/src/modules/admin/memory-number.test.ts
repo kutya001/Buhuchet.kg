@@ -12,7 +12,7 @@ import {
   FileUploadTicket,
   OrgSubscriptionView,
 } from '@buhuchet/shared';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../testing';
 
@@ -21,11 +21,11 @@ import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../tes
  * «Занято» у владельца на экране «Подписка», на вкладке «Подписки» Админки (список и окно организации)
  * и в модуле «Файлы» Админки («Хранилище» → «По организациям» и «Файлы» карточки организации) считает
  * одна функция базы `app.org_usage` — пять мест показывают одно и то же число после загрузки, файла от
- * контрагента, его решения и удаления.
+ * контрагента, его решения, ссылок на несколько записей и удаления.
  */
 
 type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
-const { contractorSentFiles } = schema;
+const { contractorSentFiles, fileLinks, files } = schema;
 
 describe.skipIf(!databaseAvailable())('Одно число памяти на трёх экранах', () => {
   let f: Fixture;
@@ -184,6 +184,27 @@ describe.skipIf(!databaseAvailable())('Одно число памяти на т�
       .from(contractorSentFiles)
       .where(eq(contractorSentFiles.id, accepted));
     expect(row?.status).toBe('accepted');
+    await expectAll(f.a.orgId, owner, base + 2400);
+  });
+
+  it('файл, прикреплённый ссылками к нескольким записям, считается один раз', async () => {
+    // Принятый файл от контрагента — файл контрагента: его можно прикрепить ссылками (п. К-19).
+    const [own] = await f.t.admin.db
+      .select({ id: files.id })
+      .from(files)
+      .where(
+        and(eq(files.orgId, f.a.orgId), eq(files.contractorId, cpId), eq(files.state, 'ready')),
+      );
+    expect(own).toBeDefined();
+    await f.t.admin.db.insert(fileLinks).values(
+      (['report', 'receipt'] as const).map((sourceKind) => ({
+        orgId: f.a.orgId,
+        fileId: own!.id,
+        sourceKind,
+        sourceId: randomUUID(),
+        createdBy: f.a.ownerUserId,
+      })),
+    );
     await expectAll(f.a.orgId, owner, base + 2400);
   });
 
