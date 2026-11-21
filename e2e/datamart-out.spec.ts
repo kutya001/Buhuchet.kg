@@ -1,4 +1,4 @@
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import { E2E_SUBSCRIPTION, ownerPassword, platformAdmin, search, uniqueInn } from './admin';
 import { cardTab, onPhone, openColumnFilter, phoneListMenu, uniqueLogin } from './helpers';
 
@@ -36,6 +36,23 @@ function textPattern(text: string, values: Record<string, string>): RegExp {
   );
 }
 
+/**
+ * Нажать кнопку окна шаблона, которая запускает запрос (`POST path`), и дождаться ответа не 429.
+ * «Проверить» и «Опубликовать» в очереди не ждут, в отличие от «Показать»: соседний тест под тем же
+ * администратором платформы (тесты идут параллельно, ПК и телефон — разными проектами) может в этот
+ * момент держать его запуск — тогда 429 `dm_busy` («Предыдущий запрос ещё выполняется») или
+ * `dm_busy_all`, и нажимаем снова; любой другой ответ — итог нажатия.
+ */
+async function pressRun(page: Page, button: Locator, path: string): Promise<void> {
+  await expect(async () => {
+    const res = page.waitForResponse(
+      (r) => new URL(r.url()).pathname === path && r.request().method() === 'POST',
+    );
+    await button.click();
+    expect((await res).status()).not.toBe(429);
+  }).toPass({ timeout: 20_000, intervals: [250, 500, 1_000] });
+}
+
 /** Пункт меню «+ Добавить»: у «Витрины данных» Админки — «Шаблон» и «Токен». */
 async function addMenu(page: Page, item: string) {
   await page.getByRole('button', { name: 'Добавить', exact: true }).click();
@@ -69,6 +86,8 @@ test.describe('Витрина данных: «Шаблоны» и «Вывод»
     baseURL,
     isMobile,
   }) => {
+    // Нажатия «Проверить» и «Опубликовать» могут ждать очереди администратора (`pressRun`).
+    test.slow();
     const origin = new URL(baseURL!).origin;
     await platformAdmin(page.request, origin);
     const texts = await dictionary(page.request);
@@ -88,21 +107,23 @@ test.describe('Витрина данных: «Шаблоны» и «Вывод»
       .selectOption('admin');
     const query = dialog.locator('[data-dm-ed-query]');
     const publish = dialog.locator('[data-dm-ed-publish]');
+    const check = () =>
+      pressRun(page, dialog.locator('[data-dm-ed-check]'), '/api/admin/dm/templates/check');
 
     // Два оператора подряд: «Проверить» отклоняет с причиной, опубликовать по-прежнему нельзя.
     await query.fill('SELECT 7 AS seven; SELECT 8 AS eight');
     await expect(publish).toBeDisabled();
-    await dialog.locator('[data-dm-ed-check]').click();
+    await check();
     await expect(dialog).toContainText(texts['err.dm_sql_two_statements']!);
     await expect(dialog.locator('[data-dm-ed-result]')).toHaveCount(0);
     await expect(publish).toBeDisabled();
     // UPDATE — тоже отказ с причиной; закрытая таблица сеансов не читается: ошибка базы под запросом.
     await query.fill('UPDATE organizations SET name = name');
-    await dialog.locator('[data-dm-ed-check]').click();
+    await check();
     await expect(dialog).toContainText(texts['err.dm_sql_not_select']!);
     await expect(publish).toBeDisabled();
     await query.fill('SELECT token_hash FROM sessions');
-    await dialog.locator('[data-dm-ed-check]').click();
+    await check();
     // У поля запроса текст совпадает с запросом, поэтому «sessions» ищем после причины отказа.
     await expect(dialog).toContainText(
       new RegExp(`${textPattern(texts['err.dm_check_failed']!, { error: '' }).source}.*sessions`),
@@ -112,13 +133,13 @@ test.describe('Витрина данных: «Шаблоны» и «Вывод»
 
     // Один оператор: «Запрос выполнен: строк 1», столбец прочитан, «Опубликовать» доступна.
     await query.fill('SELECT 7 AS seven');
-    await dialog.locator('[data-dm-ed-check]').click();
+    await check();
     await expect(dialog.locator('[data-dm-ed-result]')).toContainText(
       textPattern(texts['dm.ed.check_ok_adm']!, { n: '1' }),
     );
     await expect(dialog.locator('[data-dm-ed-col="seven"]')).toBeVisible();
     await expect(publish).toBeEnabled();
-    await publish.click();
+    await pressRun(page, publish, '/api/admin/dm/templates');
     await expect(dialog).toBeHidden();
     await expect(
       page.getByRole('status').filter({ hasText: texts['dm.ed.published']! }),
