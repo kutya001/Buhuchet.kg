@@ -146,7 +146,7 @@ const dq = (s: string) => `"${oneLine(s).replace(/"/g, '""')}"`;
 /** Строка и имя в кавычках Power Query: ещё и `#(` — начало управляющей записи языка M. */
 const mq = (s: string) => dq(s).replaceAll('#(', '#(#)(');
 /** Комментарий VBA: ` _` в конце строки втянул бы в комментарий следующую строку кода. */
-const vbaNote = (s: string) => oneLine(s).replace(/[ _]+$/, '');
+const vbaNote = (s: string) => oneLine(s).replace(/[\s_]+$/u, '');
 /** Строка оболочки в двойных кавычках: `\`, `"`, `$` и обратная кавычка — с обратной чертой. */
 const shq = (s: string) => `"${oneLine(s).replace(/[\\"$`]/g, '\\$&')}"`;
 /** Строка JavaScript в одинарных кавычках. */
@@ -236,7 +236,17 @@ export function dmExtHow(o: {
 
   // Power Query (Excel и Power BI): параметры — отдельными строками в начале, адрес без параметров.
   // Имя шага — подпись параметра; совпала с шагом запроса или с подписью выше — к ней код параметра.
-  const steps = new Set(['Token', 'Source', 'Csv', 'Result']);
+  const steps = new Set([
+    'Token',
+    'Source',
+    'Csv',
+    'Result',
+    // Имя шага, равное имени функции запроса, перекрыло бы её.
+    'Web.Contents',
+    'Csv.Document',
+    'Table.PromoteHeaders',
+    'QuoteStyle.Csv',
+  ]);
   const pqNames = new Map<string, string>();
   for (const p of ps) {
     let name = oneLine(p.name);
@@ -346,9 +356,11 @@ export function dmExtHow(o: {
     "    headers: { Authorization: 'Bearer ' + TOKEN }",
     '  });',
     "  const rows = Utilities.parseCsv(r.getContentText('UTF-8'));",
+    // Текст, похожий на формулу, — с апострофом впереди, как в макросе Excel (п. О-100).
+    `  const cells = rows.map(row => row.map(v => /^[=+@-]/.test(v) && isNaN(v) ? "'" + v : v));`,
     '  const sh = SpreadsheetApp.getActiveSheet();',
     '  sh.clearContents();',
-    '  if (rows.length) sh.getRange(1, 1, rows.length, rows[0].length).setValues(rows);',
+    '  if (cells.length) sh.getRange(1, 1, cells.length, cells[0].length).setValues(cells);',
     '}',
   ].join('\n');
 

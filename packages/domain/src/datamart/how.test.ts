@@ -212,6 +212,22 @@ describe('dmExtHow', () => {
         '            If Len(v) > 0 Then ws.Cells(r, c).Value = v',
     );
     expect(x.vba.endsWith('    Next\nEnd Sub')).toBe(true);
+    // Скрипт Google Таблиц ставит апостроф так же: `setValues` вводит строку на «=» формулой.
+    expect(x.sheets).toContain(
+      `  const cells = rows.map(row => row.map(v => /^[=+@-]/.test(v) && isNaN(v) ? "'" + v : v));`,
+    );
+    expect(x.sheets).toContain('.setValues(cells);');
+    const guard = (v: string) => (/^[=+@-]/.test(v) && isNaN(Number(v)) ? `'${v}` : v);
+    expect(['=1+1', '+996 555', '@x', '-', '-5', '+7', 'текст', ''].map(guard)).toEqual([
+      "'=1+1",
+      "'+996 555",
+      "'@x",
+      "'-",
+      '-5',
+      '+7',
+      'текст',
+      '',
+    ]);
   });
 
   it('слова словаря с переводом строки своих строк в код не дописывают', () => {
@@ -243,20 +259,22 @@ describe('dmExtHow', () => {
         { code: 'b', name: 'Token', type: 'text', value: '1' },
         { code: 'c', name: 'Период', type: 'text', value: '2' },
         { code: 'd', name: 'Период', type: 'text', value: '3' },
+        { code: 'e', name: 'Web.Contents', type: 'text', value: '4' },
       ],
     });
+    expect(x.powerQuery).toContain('    #"Web.Contents (e)" = "4",   // e');
     expect(x.powerQuery).toContain('    #"Счёт #(#)(основной)" = "#(#)(lf)",   // a');
     expect(x.powerQuery).toContain('    #"Token (b)" = "1",   // b');
     expect(x.powerQuery).toContain('    #"Период" = "2",   // c');
     expect(x.powerQuery).toContain('    #"Период (d)" = "3",   // d');
     expect(x.powerQuery).toContain(
-      'Query = [format = "csv", a = #"Счёт #(#)(основной)", b = #"Token (b)", c = #"Период", d = #"Период (d)"],',
+      'Query = [format = "csv", a = #"Счёт #(#)(основной)", b = #"Token (b)", c = #"Период", d = #"Период (d)", e = #"Web.Contents (e)"],',
     );
   });
 
   it('комментарий VBA не кончается переносом строки « _»', () => {
     const x = how({
-      words: { ...WORDS, token: 'Токен _', fmtDate: 'ГГГГ-ММ-ДД _ ' },
+      words: { ...WORDS, token: 'Токен _\u00a0', fmtDate: 'ГГГГ-ММ-ДД _ ' },
     });
     expect(x.vba).toContain("    ' Токен\n    Const TOKEN");
     expect(x.vba).toContain(`p1 = "2026-11-01"   ' Срок с, date_from, ГГГГ-ММ-ДД\n`);
