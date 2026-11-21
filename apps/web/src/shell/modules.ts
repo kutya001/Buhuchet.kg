@@ -127,6 +127,8 @@ interface ModuleDef {
   title: UiTextKey;
   short: UiTextKey;
   desc: UiTextKey;
+  /** Описание у организации, когда модуль есть и в Админке, а делает у организации другое. */
+  orgDesc?: UiTextKey;
   tabs?: readonly TabDef[];
   add?: readonly AddDef[];
 }
@@ -439,6 +441,7 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
     title: 'nav.dm',
     short: 'nav.short.dm',
     desc: 'nav.desc.dm',
+    orgDesc: 'nav.desc.dm_org',
     tabs: [
       { id: 'out', icon: 'table', label: 'tab.dm.out' },
       { id: 'tpl', icon: 'layers', label: 'tab.dm.tpl' },
@@ -623,6 +626,12 @@ export const APP_PATH = '/app';
 
 export function isModuleId(id: string): id is MenuModuleId {
   return Object.hasOwn(MODULES, id);
+}
+
+/** Описание модуля под заголовком: у организации — своё, если оно есть (прототип: BIZ и ADM). */
+export function moduleDesc(id: MenuModuleId, access: ShellAccess): UiTextKey {
+  const def: ModuleDef = MODULES[id];
+  return !access.admin && def.orgDesc ? def.orgDesc : def.desc;
 }
 
 /** Вкладки модуля, которые видит вошедший, по порядку. */

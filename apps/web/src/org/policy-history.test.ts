@@ -92,6 +92,13 @@ describe('история учётной политики словами', () => 
     expect(text([{ field: 'cpFilesUpload', from: false, to: true }])).toBe(
       'Контрагент может отправлять файлы: включено',
     );
+    // «Внешний доступ по API» (Витрина данных, блок 5, пункт 9; прототип v155 `dmApiMount`).
+    expect(text([{ field: 'extApi', from: false, to: true }])).toBe(
+      'Внешний доступ по API: включён',
+    );
+    expect(text([{ field: 'extApi', from: true, to: false }])).toBe(
+      'Внешний доступ по API: выключен',
+    );
     // Выключили подтверждение сдачи — сколько ждущих отчётов подтверждено (прототип repConfSet).
     expect(
       text([

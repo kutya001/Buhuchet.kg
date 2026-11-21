@@ -14,6 +14,7 @@ import {
   addActions,
   lockedMe,
   MODULES,
+  moduleDesc,
   moduleHref,
   parseAppPath,
   phoneModules,
@@ -219,6 +220,16 @@ describe('вкладки и «+ Добавить» по правам и учёт
       me({ permissions: PERMISSION_IDS.filter((p) => p !== 'dmTokens') as PermissionId[] }),
     );
     expect(ids(visibleTabs('dm', viewer))).toEqual(['out', 'tpl']);
+  });
+
+  it('описание под заголовком «Витрины данных» у организации — своё, у Админки — своё (прототип v155: BIZ и ADM)', () => {
+    expect(moduleDesc('dm', shellAccess(me()))).toBe('nav.desc.dm_org');
+    expect(moduleDesc('dm', shellAccess(me({ admin: true })))).toBe('nav.desc.dm');
+    expect(UI_TEXTS['nav.desc.dm_org'].ru).toBe(
+      'Отчёты по готовым шаблонам в таблице как в Excel и выдача тех же данных внешним программам по API-токену.',
+    );
+    // У остальных модулей описание одно.
+    expect(moduleDesc('files', shellAccess(me()))).toBe(MODULES.files.desc);
   });
 });
 

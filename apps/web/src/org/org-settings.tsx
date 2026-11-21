@@ -20,6 +20,7 @@ import { useKb } from '../kb/kb-provider';
 import { useErrorText, useT } from '../l10n/provider';
 import { useShell } from '../shell/context';
 import { TelegramNoticesBox, type NoticeSave } from '../telegram/notices';
+import { ExtApiBox } from './ext-api-box';
 import { policyQuery, roleOptionsQuery, useOrgRefresh } from './org-data';
 
 type RoleOption = { id: string; name: string };
@@ -40,8 +41,10 @@ interface Drafts {
 /**
  * «Моя организация» → «Настройки» (прототип modules/org.js, renderOrg → settings): часовой пояс и роль по
  * умолчанию для новых сотрудников — «Сохранить настройки»; ниже — блок «Telegram-уведомления» (пакет
- * 14.11.2026, блок 3; прототип v111): его строки сохраняются сразу. Без права «Настройки и учётная
- * политика» (оно только у владельца) всё только для просмотра. Вверху — «Хранилище файлов» (задача 2.29).
+ * 14.11.2026, блок 3; прототип v111): его строки сохраняются сразу; последним — «Внешний доступ по API»
+ * (доработки 20.11.2026: Витрина данных, блок 5, пункт 9; прототип v155 `dmApiBox`), тоже сразу. Без права
+ * «Настройки и учётная политика» (оно только у владельца) всё только для просмотра. Вверху — «Хранилище
+ * файлов» (задача 2.29).
  */
 export function OrgSettingsTab() {
   const t = useT();
@@ -119,10 +122,15 @@ function SettingsForm({
   };
 
   /**
-   * Строка блока «Telegram-уведомления» сохраняется сразу (прототип v111 `tgnMount`, `#st-tgact`,
-   * `pgTgNoticeMount`): одно поле с версией политики; несохранённые часовой пояс и роль остаются.
+   * Строка блока «Telegram-уведомления» и «Внешний доступ по API» сохраняются сразу (прототип v111
+   * `tgnMount`, `#st-tgact`, `pgTgNoticeMount`; v155 `dmApiMount`): одно поле с версией политики;
+   * несохранённые часовой пояс и роль остаются.
    */
-  const saveNow: NoticeSave = async (patch, done) => {
+  const saveField = async (
+    patch: Omit<UpdateOrgPolicyRequest, 'version'>,
+    done: string,
+    icon: 'tg' | 'key',
+  ) => {
     if (readOnly || busy || changed) return;
     setBusy(true);
     const res = await callApi(() =>
@@ -134,11 +142,16 @@ function SettingsForm({
       onDrafts({ version: saved.version, timezone, roleId });
       client.setQueryData(policyQuery.queryKey, saved);
       refresh(false);
-      return toast(done, { icon: 'tg' });
+      // «API Токены» «Витрины данных» показывают, включён ли доступ, — пусть перечитают.
+      if (patch.extApi !== undefined) void client.invalidateQueries({ queryKey: ['dm'] });
+      return toast(done, { icon });
     }
     if (res.error.code === 'record_changed') return setChanged(true);
     toast(errorText(res.error), { bad: true, icon: 'alert' });
   };
+  const saveNow: NoticeSave = (patch, done) => saveField(patch, done, 'tg');
+  const saveExtApi = (on: boolean) =>
+    saveField({ extApi: on }, t(on ? 'dm.api.on_done' : 'dm.api.off_done'), 'key');
 
   return (
     <div className="flex flex-col gap-3.5">
@@ -210,6 +223,7 @@ function SettingsForm({
         </div>
       )}
       <TelegramNoticesBox policy={policy} own={!readOnly} busy={off} save={saveNow} />
+      <ExtApiBox policy={policy} own={!readOnly} busy={off} save={saveExtApi} />
     </div>
   );
 }
