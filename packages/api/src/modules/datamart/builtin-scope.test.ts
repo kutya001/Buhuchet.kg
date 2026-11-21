@@ -22,8 +22,16 @@ const { contractors, dmTemplateSql, dmTemplates, employees, rolePermissions, rol
 
 /** Бухгалтер демо (роль «Бухгалтер», область «Свои» во всех группах): Алишер Т. */
 const ACC = 'alisher';
-/** Бухгалтер с правом «Видеть плату за обслуживание», но без «Просматривать финансовые операции». */
+/**
+ * Бухгалтер с правом «Видеть плату за обслуживание», но без «Просматривать финансовые операции»; ещё
+ * «Просматривать сотрудников» и «Видеть задачи всех» — ему виден шаблон «Задачи» (модуль без области).
+ */
 const FEE_ACC = 'aigerim';
+/**
+ * Бухгалтер с «Просматривать сотрудников», без «Видеть задачи всех»; области разные: «Контрагенты» —
+ * «Все», остальные группы — «Свои».
+ */
+const STAFF_ACC = 'nurlan';
 const OWNER = 'erkin';
 
 interface Builtin {
@@ -104,7 +112,7 @@ describe.skipIf(!databaseAvailable())(
         .insert(rolePermissions)
         .values({ orgId: DEMO_ORG_ID, roleId: acc, permissionId: 'dmView' });
       // Свой бухгалтер с платой за обслуживание, без финансовых операций: права «Бухгалтера» − finView
-      // + fee, область «Свои» во всех группах.
+      // + fee, staffView и tasksAll (шаблон «Задачи»), область «Свои» во всех группах.
       const accPerms = (
         await db
           .select({ id: rolePermissions.permissionId })
@@ -116,11 +124,13 @@ describe.skipIf(!databaseAvailable())(
         .values({ orgId: DEMO_ORG_ID, name: 'Бухгалтер с платой' })
         .returning({ id: roles.id });
       await db.insert(rolePermissions).values(
-        [...accPerms.filter((p) => p !== 'finView'), 'fee'].map((permissionId) => ({
-          orgId: DEMO_ORG_ID,
-          roleId: feeRole!.id,
-          permissionId,
-        })),
+        [...accPerms.filter((p) => p !== 'finView'), 'fee', 'staffView', 'tasksAll'].map(
+          (permissionId) => ({
+            orgId: DEMO_ORG_ID,
+            roleId: feeRole!.id,
+            permissionId,
+          }),
+        ),
       );
       await db.insert(roleScopes).values(
         SCOPE_GROUPS.map((g) => ({
@@ -134,10 +144,33 @@ describe.skipIf(!databaseAvailable())(
         .update(employees)
         .set({ roleId: feeRole!.id })
         .where(eq(employees.id, demoId('employee', 'e4')));
+      const [staffRole] = await db
+        .insert(roles)
+        .values({ orgId: DEMO_ORG_ID, name: 'Бухгалтер с сотрудниками' })
+        .returning({ id: roles.id });
+      await db.insert(rolePermissions).values(
+        [...accPerms, 'staffView'].map((permissionId) => ({
+          orgId: DEMO_ORG_ID,
+          roleId: staffRole!.id,
+          permissionId,
+        })),
+      );
+      await db.insert(roleScopes).values(
+        SCOPE_GROUPS.map((g) => ({
+          orgId: DEMO_ORG_ID,
+          roleId: staffRole!.id,
+          permGroup: g,
+          scope: g === 'cps' ? ('all' as const) : ('own' as const),
+        })),
+      );
+      await db
+        .update(employees)
+        .set({ roleId: staffRole!.id })
+        .where(eq(employees.id, demoId('employee', 'e5')));
 
       deps = createTestDeps({ db: t.app.db });
       app = createApp(deps);
-      for (const login of [OWNER, ACC, FEE_ACC]) {
+      for (const login of [OWNER, ACC, FEE_ACC, STAFF_ACC]) {
         cookies[login] = await signIn(app, login, TEST_PASSWORD);
       }
       for (const row of await db
@@ -231,6 +264,7 @@ describe.skipIf(!databaseAvailable())(
         'reports-overdue',
         'revenue',
         'service-fee',
+        'tasks',
         'tax-due',
       ]);
       for (const [login, code] of [
@@ -290,6 +324,44 @@ describe.skipIf(!databaseAvailable())(
         if (!builtin.get(code)!.columns.some((c) => c.contractor)) continue;
         const got = await shown(OWNER, code);
         expect(sorted(got.rows), code).toEqual(sorted((await raw(code)).map((r) => r.shown)));
+      }
+    });
+
+    it('«Задачи» — только с «Видеть задачи всех» (п. К-27): с «Просматривать сотрудников» без него шаблона нет, «Показать» — 404; отбор берёт область группы модуля шаблона', async () => {
+      expect(await catalog(OWNER)).toContain('tasks');
+      expect(await catalog(STAFF_ACC)).toEqual([
+        'contractors',
+        'indicators-by-month',
+        'money-operations',
+        'projects-services',
+        'reports-due',
+        'reports-overdue',
+        'tax-due',
+      ]);
+      const res = await run(STAFF_ACC, 'tasks');
+      expect(res.status, await res.clone().text()).toBe(404);
+      // «Контрагенты» — «Все»: шаблон «Контрагенты» целиком; «Отчёты» и «Финансовые операции» — «Свои».
+      const own = new Set(
+        (
+          await t.admin.db
+            .select({ id: contractors.id })
+            .from(contractors)
+            .where(eq(contractors.responsibleEmployeeId, demoId('employee', 'e5')))
+        ).map((r) => r.id),
+      );
+      expect(own.size).toBeGreaterThan(0);
+      const all = await raw('contractors');
+      expect(sorted((await shown(STAFF_ACC, 'contractors')).rows)).toEqual(
+        sorted(all.map((r) => r.shown)),
+      );
+      for (const code of ['reports-due', 'money-operations']) {
+        const rows = await raw(code);
+        const ownRows = rows.filter((r) => r.contractor !== null && own.has(r.contractor));
+        expect(ownRows.length, code).toBeGreaterThan(0);
+        expect(ownRows.length, code).toBeLessThan(rows.length);
+        expect(sorted((await shown(STAFF_ACC, code)).rows), code).toEqual(
+          sorted(ownRows.map((r) => r.shown)),
+        );
       }
     });
   },

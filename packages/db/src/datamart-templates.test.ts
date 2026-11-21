@@ -47,6 +47,7 @@ import {
 import {
   DEMO_ORG_ID,
   demoId,
+  DM_BUILTIN_PERMISSION,
   dmBuiltinRows,
   dmParamDefsOf,
   seedAll,
@@ -320,7 +321,7 @@ describe.skipIf(!databaseAvailable())('готовые шаблоны «Витр�
         state: 'published',
         access: 'all',
         module: src.mod,
-        needPermission: src.perm,
+        needPermission: DM_BUILTIN_PERMISSION[x.code] ?? src.perm,
         audience: src.kind === 'org' ? 'org' : 'admin',
         createdBy: null,
       });
@@ -337,6 +338,9 @@ describe.skipIf(!databaseAvailable())('готовые шаблоны «Витр�
         .map((x) => x.code)
         .sort(),
     ).toEqual(['debtors', 'revenue', 'service-fee']);
+    // «Задачи» — только с «Видеть задачи всех» (п. К-27): в refDB права у шаблона нет.
+    expect(all.find((x) => x.code === 'tasks')!.needPermission).toBe('tasksAll');
+    expect(list.find((x) => x.code === 'tasks')!.perm).toBeNull();
 
     expect(await seedDmTemplates(db.admin.db, refDB.dmTemplates, { update: true })).toEqual({
       inserted: 0,
