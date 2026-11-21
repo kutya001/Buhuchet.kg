@@ -180,36 +180,57 @@ export const SCREEN_BUSY =
 
 /**
  * Ждать ли элемент дальше: первые 2,5 секунды — всегда (переход на экран), потом — только пока экран
- * показывает заглушку загрузки, и не дольше 10 секунд. Без этого «Перейти» на медленной связи молча
- * ничего не подсвечивало и не открывало: кнопка блока появляется после ответа сервера
- * (docs/typical-mistakes.md № 81).
+ * открывается или показывает заглушку загрузки (`busy`), не дольше 10 секунд и пока пользователь не
+ * ушёл на другой адрес (`moved`). Без этого «Перейти» на медленной связи молча ничего не подсвечивало
+ * и не открывало: кнопка блока появляется после ответа сервера (docs/typical-mistakes.md № 81).
  */
-export function flashWaits(elapsed: number, busy: boolean): boolean {
-  return elapsed < FLASH_WAIT_MS || (busy && elapsed < FLASH_BUSY_MS);
+export function flashWaits(elapsed: number, busy: boolean, moved = false): boolean {
+  if (elapsed < FLASH_WAIT_MS) return true;
+  return busy && !moved && elapsed < FLASH_BUSY_MS;
+}
+
+/** Открыт ли экран `path` (сам адрес или глубже него: вкладка, карточка). */
+export function onScreen(pathname: string, path: string): boolean {
+  const trim = (x: string) => (x.length > 1 ? x.replace(/\/$/, '') : x);
+  const at = trim(pathname);
+  const want = trim(path);
+  return at === want || at.startsWith(`${want}/`);
 }
 
 /**
  * Подсветить место шага (прототип ckFlash): первый видимый элемент по селектору прокручивается в
  * середину экрана и дважды вспыхивает рамкой. Экран после перехода может ещё грузиться — элемент
- * ищется 2,5 секунды и дольше, пока на экране заглушка загрузки (`flashWaits`); ушёл пользователь
- * за это время на другой экран — поиск прекращается. `onFlash` — элемент найден и подсвечен.
+ * ищется 2,5 секунды и дольше, пока экран открывается или показывает заглушку загрузки (`flashWaits`).
+ *
+ * `path` — адрес экрана шага («Перейти» на другой экран): элемент ищут только на этом экране — пока
+ * открыт другой, ждут (до 10 секунд), на нём ничего не подсвечивается и не нажимается (у шага с `press`
+ * `onFlash` нажимает кнопку). Без `path` продлённое ожидание идёт, только пока адрес не сменился.
+ * `onFlash` — элемент найден и подсвечен. Возвращает отмену: поиск прекращается, начатая подсветка
+ * гаснет.
  */
-export function flashTarget(selector: string, onFlash?: (el: HTMLElement) => void): () => void {
+export function flashTarget(
+  selector: string,
+  onFlash?: (el: HTMLElement) => void,
+  path?: string | null,
+): () => void {
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let lit: HTMLElement | null = null;
   const started = Date.now();
-  // Экран, на котором ожидание продлено из-за загрузки: нажимать кнопку на другом экране нельзя.
+  // Без `path`: экран, на котором ожидание продлено из-за загрузки.
   let lateOn: string | null = null;
   const find = () => {
-    const el = [...document.querySelectorAll<HTMLElement>(selector)].find(
-      (x) => x.getClientRects().length > 0,
-    );
+    const elapsed = Date.now() - started;
+    const here = !path || onScreen(window.location.pathname, path);
+    const el = here
+      ? [...document.querySelectorAll<HTMLElement>(selector)].find(
+          (x) => x.getClientRects().length > 0,
+        )
+      : undefined;
     if (!el) {
-      const elapsed = Date.now() - started;
-      if (elapsed >= FLASH_WAIT_MS) {
-        lateOn ??= window.location.pathname;
-        if (lateOn !== window.location.pathname) return;
-      }
-      if (flashWaits(elapsed, !!document.querySelector(SCREEN_BUSY))) timer = setTimeout(find, 150);
+      if (!path && elapsed >= FLASH_WAIT_MS) lateOn ??= window.location.pathname;
+      const moved = lateOn !== null && lateOn !== window.location.pathname;
+      const busy = !here || !!document.querySelector(SCREEN_BUSY);
+      if (flashWaits(elapsed, busy, moved)) timer = setTimeout(find, 150);
       return;
     }
     const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -217,9 +238,17 @@ export function flashTarget(selector: string, onFlash?: (el: HTMLElement) => voi
     el.removeAttribute('data-ck-flash');
     void el.offsetWidth;
     el.setAttribute('data-ck-flash', '');
+    lit = el;
     onFlash?.(el);
-    timer = setTimeout(() => el.removeAttribute('data-ck-flash'), FLASH_MS);
+    timer = setTimeout(() => {
+      el.removeAttribute('data-ck-flash');
+      lit = null;
+    }, FLASH_MS);
   };
   timer = setTimeout(find, 380);
-  return () => clearTimeout(timer);
+  return () => {
+    clearTimeout(timer);
+    lit?.removeAttribute('data-ck-flash');
+    lit = null;
+  };
 }

@@ -9,7 +9,9 @@ import { manualReport } from './reports';
 // «Новый контрагент» (2.09); тот же механизм — на «Сотрудниках», «Ролях» и «Задачах».
 
 async function stepDone(api: APIRequestContext, id: string) {
-  const res = await api.get('/api/kb/me');
+  // Чтение — повтор безопасен: после долгого показа сайт мог закрыть простаивающее соединение
+  // (docs/typical-mistakes.md № 26).
+  const res = await api.get('/api/kb/me', { maxRetries: 2 });
   expect(res.status(), await res.text()).toBe(200);
   const me = (await res.json()) as {
     lessons: { steps: { id: string; done: { how: string } | null }[] }[];
@@ -517,7 +519,9 @@ test.describe('Этап 2: База знаний — «Показать как»
     baseURL,
   }) => {
     await newOrgOwner(page.request, new URL(baseURL!).origin);
+    // До первого облачка — переход с «Уроков» и загрузка «Настроек» (политика, роли, объём хранилища).
     await showStep(page, 'settings');
+    await expect(nextButton(page)).toBeEnabled({ timeout: 15_000 });
     const settings = await toEnd(page, ['Сделать сейчас']);
     expect(settings.label).toBe('Сделать сейчас');
     expect(settings.titles).toContain('Кнопка «Сохранить настройки»');
@@ -527,6 +531,7 @@ test.describe('Этап 2: База знаний — «Показать как»
     await expect(page.locator('main [data-org-settings-save][data-ck-flash]')).toBeVisible();
 
     await showStep(page, 'storage');
+    await expect(nextButton(page)).toBeEnabled({ timeout: 15_000 });
     const storage = await toEnd(page);
     expect(storage.titles).toContain('Хранилище');
     await nextButton(page).click();
