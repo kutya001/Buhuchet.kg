@@ -318,7 +318,9 @@ const dmCode=code=>`<div class="dm-code"><pre class="mono dm-pre" data-dmcp="${e
 const dmFmt=x=>x.type==='date'?'ГГГГ-ММ-ДД':x.type==='month'?'ГГГГ-ММ':x.type==='year'?'ГГГГ':'';
 document.addEventListener('click',e=>{const x=e.target.closest('[data-dmcp]');if(!x)return;if(x.tagName==='PRE'&&String(getSelection()||''))return;copyText(x.dataset.dmcp,x.tagName==='PRE'||x.classList.contains('dm-code-b')?'Код скопирован':'Скопировано')});
 function dmHow(t,tok){if(!t)return '';const full=!/…$/.test(tok),T=full?tok:'bk_ВАШ_ТОКЕН',B='Bearer '+T,p={};t.params.forEach(x=>{p[x.k]=dmDef(x.def)});
-  const ps=t.params.filter(x=>p[x.k]),qs=ps.map(x=>`${x.k}=${p[x.k]}`).join('&'),base=`${DM_HOST}/api/ext/v1/${t.code}`,url=base+(qs?'?'+qs:''),csv=`${base}?format=csv${qs?'&'+qs:''}`;
+  // Подпись параметра в коде — одной строкой, значения — в кавычках своего языка, в адресе — закодированы (как в продукте, О-100, 21.11.2026)
+  const ln=s=>String(s??'').replace(/[\r\n\u2028\u2029]+/g,' ').trim(),dq=s=>'"'+String(s).replace(/"/g,'""')+'"',E=encodeURIComponent;
+  const ps=t.params.filter(x=>p[x.k]),qs=ps.map(x=>`${x.k}=${E(p[x.k])}`).join('&'),base=`${DM_HOST}/api/ext/v1/${t.code}`,url=base+(qs?'?'+qs:''),csv=`${base}?format=csv${qs?'&'+qs:''}`;
   const r=dmRun(t,p,t.kind==='adm'?null:ORG.id),cs=t.cols.filter(c=>c.type!=='cp');
   const ex=r?r.rows.slice(0,2).map(x=>Object.fromEntries(cs.map(c=>[c.k,c.type==='money'?Math.round((x[c.k]||0)*100)/100:x[c.k]??null]))):[];
   const js=JSON.stringify({columns:cs.map(c=>({key:c.k,title:c.label,type:c.type})),rows:ex,total:r?r.rows.length:0,next:r&&r.rows.length>1000?url+(qs?'&':'?')+'page=2':null},null,2);
@@ -328,10 +330,10 @@ function dmHow(t,tok){if(!t)return '';const full=!/…$/.test(tok),T=full?tok:'b
     // 1. Токен (полностью, вместе с bk_)
     Token = ${mq(T)},
 ${ps.length?`    // 2. Параметры: меняйте значения здесь, затем «Обновить»
-${ps.map(x=>`    #"${x.label}" = ${mq(p[x.k])},   // ${x.k}, ${dmFmt(x)}`).join('\n')}
+${ps.map(x=>`    #${mq(ln(x.label))} = ${mq(p[x.k])},   // ${x.k}, ${dmFmt(x)}`).join('\n')}
 `:''}    // 3. Запрос — менять не нужно
     Source = Web.Contents(${mq(base)}, [
-        Query = [format = "csv"${ps.map(x=>`, ${x.k} = #"${x.label}"`).join('')}],
+        Query = [format = "csv"${ps.map(x=>`, ${x.k} = #${mq(ln(x.label))}`).join('')}],
         Headers = [Authorization = "Bearer " & Token]
     ]),
     Csv = Csv.Document(Source, [Delimiter = ",", Encoding = 65001, QuoteStyle = QuoteStyle.Csv]),
@@ -343,10 +345,10 @@ in
     ' 1. Токен (полностью, вместе с bk_)
     Const TOKEN As String = "${T}"
 ${ps.length?`    ' 2. Параметры: впишите значения или берите из ячеек, например Range("B1").Text
-${ps.map((x,i)=>`    Dim p${i + 1} As String: p${i + 1} = "${p[x.k]}"   ' ${x.label}, ${x.k}, ${dmFmt(x)}`).join('\n')}
+${ps.map((x,i)=>`    Dim p${i + 1} As String: p${i + 1} = ${dq(p[x.k])}   ' ${ln(x.label)}, ${x.k}, ${dmFmt(x)}`).join('\n')}
 `:''}    ' 3. Запрос — менять не нужно
     Dim url As String
-    url = "${base}?format=csv"${ps.map((x,i)=>` & "&${x.k}=" & p${i + 1}`).join('')}
+    url = "${base}?format=csv"${ps.map((x,i)=>` & "&${x.k}=" & WorksheetFunction.EncodeURL(p${i + 1})`).join('')}
     Dim http As Object: Set http = CreateObject("MSXML2.XMLHTTP.6.0")
     http.Open "GET", url, False
     http.setRequestHeader "Authorization", "Bearer " & TOKEN
@@ -357,19 +359,43 @@ ${ps.map((x,i)=>`    Dim p${i + 1} As String: p${i + 1} = "${p[x.k]}"   ' ${x.la
         .Type = 1: .Open: .Write http.responseBody
         .Position = 0: .Type = 2: .Charset = "utf-8": txt = .ReadText
     End With
-    Dim lines, i As Long, ws As Worksheet: Set ws = ActiveSheet
+    ' 4. Разбор CSV по кавычкам, по одной ячейке; текст, похожий на формулу, — с апострофом
+    Dim ws As Worksheet: Set ws = ActiveSheet
     ws.Cells.Clear
-    lines = Split(Replace(txt, vbCr, ""), vbLf)
-    For i = 0 To UBound(lines)
-        If Len(lines(i)) > 0 Then ws.Cells(i + 1, 1).Value = lines(i)
+    Dim r As Long, c As Long, i As Long, q As Boolean, ch As String, v As String
+    r = 1: c = 1
+    If Right$(txt, 1) <> vbLf Then txt = txt & vbLf
+    For i = 1 To Len(txt)
+        ch = Mid$(txt, i, 1)
+        If q Then
+            If ch <> """" Then
+                v = v & ch
+            ElseIf Mid$(txt, i + 1, 1) = """" Then
+                v = v & ch: i = i + 1
+            Else
+                q = False
+            End If
+        ElseIf ch = """" Then
+            q = True
+        ElseIf ch = "," Or ch = vbLf Then
+            If v Like "[=+@-]*" And Not IsNumeric(v) Then v = "'" & v
+            If Len(v) > 0 Then ws.Cells(r, c).Value = v
+            v = ""
+            If ch = "," Then
+                c = c + 1
+            Else
+                r = r + 1: c = 1
+            End If
+        ElseIf ch <> vbCr Then
+            v = v & ch
+        End If
     Next
-    ws.Columns(1).TextToColumns DataType:=xlDelimited, TextQualifier:=xlDoubleQuote, Comma:=True
 End Sub`;
   const gs=`// 1. Токен (полностью, вместе с bk_). Его видят все редакторы таблицы
 const TOKEN = '${T}';
 ${ps.length?`// 2. Параметры: меняйте значения здесь
 const PARAMS = {
-${ps.map(x=>`  ${x.k}: '${p[x.k]}',   // ${x.label}, ${dmFmt(x)}`).join('\n')}
+${ps.map(x=>`  ${x.k}: ${JSON.stringify(p[x.k])},   // ${ln(x.label)}, ${dmFmt(x)}`).join('\n')}
 };
 `:'const PARAMS = {};\n'}// 3. Загрузка — менять не нужно
 function load() {
@@ -378,16 +404,18 @@ function load() {
     headers: { Authorization: 'Bearer ' + TOKEN }
   });
   const rows = Utilities.parseCsv(r.getContentText('UTF-8'));
+  // текст, похожий на формулу, — с апострофом
+  const cells = rows.map(row => row.map(v => /^[=+@-]/.test(v) && isNaN(v) ? "'" + v : v));
   const sh = SpreadsheetApp.getActiveSheet();
   sh.clearContents();
-  if (rows.length) sh.getRange(1, 1, rows.length, rows[0].length).setValues(rows);
+  if (cells.length) sh.getRange(1, 1, cells.length, cells[0].length).setValues(cells);
 }`;
   const c1=`// 1. Токен (полностью, вместе с bk_)
 Токен = "${T}";
 ${ps.length?`// 2. Параметры: меняйте значения здесь
-${ps.map(x=>`Параметры_${x.k} = "${p[x.k]}"; // ${x.label}, ${dmFmt(x)}`).join('\n')}
+${ps.map(x=>`Параметры_${x.k} = ${dq(p[x.k])}; // ${ln(x.label)}, ${dmFmt(x)}`).join('\n')}
 `:''}// 3. Запрос — менять не нужно
-Адрес = "/api/ext/v1/${t.code}"${ps.length?` + "?${ps.map((x,i)=>`${i?'&':''}${x.k}=" + Параметры_${x.k}`).join(' + "')}`:''};
+Адрес = "/api/ext/v1/${t.code}"${ps.length?` + "?${ps.map((x,i)=>`${i?'&':''}${x.k}=" + КодироватьСтроку(Параметры_${x.k}, СпособКодированияСтроки.КодировкаURL)`).join(' + "')}`:''};
 Соединение = Новый HTTPСоединение("buhuchet.kg", 443, , , , 60, Новый ЗащищенноеСоединениеOpenSSL);
 Заголовки = Новый Соответствие;
 Заголовки.Вставить("Authorization", "Bearer " + Токен);
@@ -406,14 +434,14 @@ ${ps.map(x=>`Параметры_${x.k} = "${p[x.k]}"; // ${x.label}, ${dmFmt(x)}
   const py=`import requests
 
 TOKEN = "${T}"
-PARAMS = {${ps.map(x=>`"${x.k}": "${p[x.k]}"`).join(', ')}}
+PARAMS = {${ps.map(x=>`"${x.k}": ${JSON.stringify(p[x.k])}`).join(', ')}}
 
 r = requests.get("${base}", params=PARAMS,
                  headers={"Authorization": "Bearer " + TOKEN}, timeout=60)
 r.raise_for_status()
 data = r.json()   # columns, rows, total, next
 print(len(data["rows"]), "строк")`;
-  const parts=[`${base}?format=csv`,...ps.map(x=>`&${x.k}=${p[x.k]}`)];
+  const parts=[`${base}?format=csv`,...ps.map(x=>`&${x.k}=${E(p[x.k])}`)];
   const hdr=`<li>«Параметры заголовка HTTP-запроса»: слева ${dmCp('Authorization')}, справа ${dmCp(B)}</li>`;
   const urlParts=`<li>В «Части URL-адреса» вставьте по одной строке, для каждой следующей — «Добавить часть»:<div class="dm-cps">${parts.map(v=>dmCp(v)).join('')}</div></li>`;
   const app=(k,icon,title,sub,body,open)=>`<details class="dm-app" data-dm-app="${k}"${open?' open':''}><summary><span class="dm-app-i">${ic(icon)}</span><span class="dm-app-t"><b>${title}</b><span class="hint">${sub}</span></span><span class="dm-app-ch">${ic('right','sm')}</span></summary><div class="dm-app-b">${body}</div></details>`;
@@ -438,7 +466,7 @@ print(len(data["rows"]), "строк")`;
     app('1c','building','1С','HTTPСоединение, ответ в JSON',`
       <ol class="dm-steps"><li>В обработке или общем модуле (на сервере) вставьте код.</li>${ps.length?'<li>Параметры — в начале кода.</li>':''}<li>Строки — в Данные.rows; если Данные.next заполнен, запросите следующую страницу с ${dmCp('page=2')}.</li></ol>${dmCode(c1)}`),
     app('oth','link','Другие сервисы','Любая программа, которая умеет GET-запрос с заголовком',`
-      <ol class="dm-steps"><li>Адрес: ${dmCp(base)}, параметры — после «?»${ps.length?`: ${ps.map(x=>dmCp(`${x.k}=${p[x.k]}`)).join(' ')}`:''}.</li><li>Заголовок: ${dmCp('Authorization')} со значением ${dmCp(B)}. В адресе токен не принимается.</li>
+      <ol class="dm-steps"><li>Адрес: ${dmCp(base)}, параметры — после «?»${ps.length?`: ${ps.map(x=>dmCp(`${x.k}=${E(p[x.k])}`)).join(' ')}`:''}.</li><li>Заголовок: ${dmCp('Authorization')} со значением ${dmCp(B)}. В адресе токен не принимается.</li>
         <li>Таблица CSV — с ${dmCp('format=csv')}, без него — JSON. Страница — 1 000 строк, больше — ${dmCp('limit=5000')}, следующая — ${dmCp('page=2')}.</li></ol>${dmCode(curl)}${dmCode(py)}`)].join('');
   return `<div class="box dm-how"><h3>Как подключить</h3><span class="hint">Нажмите на адрес, параметр или код — он скопируется.</span>
     ${full?'':`<div class="note warn">${ic('alert')}<span>Здесь токен показан не целиком. Вместо ${dmCp('bk_ВАШ_ТОКЕН')} вставьте полный токен, сохранённый при выпуске; потеряли — перевыпустите.</span></div>`}

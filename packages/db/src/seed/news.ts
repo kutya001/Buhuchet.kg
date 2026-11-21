@@ -106,11 +106,15 @@ function publishedAt(item: z.infer<typeof NewsSection>[number], now: Date): Date
  * v160 («Как подключить» у API-токена — по программам) и v161 (подсветка SQL и номера строк в окне
  * шаблона) — правки «Витрины данных» 21.11.2026: синхронизация spec/ шла отдельным PR раньше экранов,
  * новости открыты PR, который перенёс эти правки (п. О-99).
+ * v162 (макрос Excel VBA без формул, параметры в адресах кодируются) — прототип выровнен с продуктом
+ * (п. О-100) и добавил кодирование параметров в коде VBA и 1С: новость выходит вместе с PR, который
+ * переносит этот остаток (п. О-101).
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#Т-14
 // ОТКЛОНЕНИЕ: docs/deviations.md#О-84
 // ОТКЛОНЕНИЕ: docs/deviations.md#О-86
 // ОТКЛОНЕНИЕ: docs/deviations.md#О-99
+// ОТКЛОНЕНИЕ: docs/deviations.md#О-101
 export const NEWS_NOT_YET: ReadonlySet<string> = new Set([
   'v107',
   'v108',
@@ -120,6 +124,7 @@ export const NEWS_NOT_YET: ReadonlySet<string> = new Set([
   'v147',
   'v148',
   'v149',
+  'v162',
 ]);
 
 /**
