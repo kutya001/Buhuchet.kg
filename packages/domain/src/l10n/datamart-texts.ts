@@ -1,3 +1,4 @@
+import { DATAMART_OUTPUT_TEXTS } from './datamart-output-texts';
 import type { UiTextDefault } from './texts';
 
 const S = 'Витрина данных';
@@ -197,4 +198,6 @@ export const DATAMART_TEXTS = {
     ru: 'Слишком много новых токенов за час. Попробуйте позже',
     section: E,
   },
+  // «Вывод» и каталог «Шаблоны» (этап 2, П3–П4).
+  ...DATAMART_OUTPUT_TEXTS,
 } as const satisfies Record<string, UiTextDefault>;
