@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { createFakeTelegram, createMemoryStorage, fixedClock, parseCron } from '@buhuchet/adapters';
 import { schema } from '@buhuchet/db';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
@@ -42,6 +42,7 @@ const SENDING = [
   'subs.reminders',
   'subs.memory-checks',
   'files.storage-reconcile',
+  'dm.token-expiry',
 ] as const;
 
 /** Задачи, которым здесь нечего отправлять (уборка, пересчёт, вебхук): повтор проверяется так же. */
@@ -300,6 +301,28 @@ describe.skipIf(!databaseAvailable())(
       const extra = `org/${a}/files/${randomUUID()}`;
       await storage.put(extra, new Uint8Array(5), { contentType: 'application/pdf' });
       storage.setModified(extra, new Date('2026-10-15T05:00:00Z'));
+      // API-токен «Витрины данных» на 30 дней, до конца срока 5 дней — владельцам «осталось дней: 5».
+      const [dmTpl] = await f.t.admin.db
+        .insert(schema.dmTemplates)
+        .values({
+          code: 'repeat-cps',
+          name: 'Контрагенты',
+          module: 'cps',
+          state: 'published',
+          columns: [{ k: 'n', type: 'int' }],
+        })
+        .returning({ id: schema.dmTemplates.id });
+      const dmToken = `bk_${'R'.repeat(43)}`;
+      await f.t.admin.db.insert(schema.dmTokens).values({
+        orgId: a,
+        templateId: dmTpl!.id,
+        name: 'Power BI',
+        tokenHash: createHash('sha256').update(dmToken).digest('hex'),
+        prefix: dmToken.slice(0, 9),
+        createdAt: new Date('2026-09-24T09:00:00+06:00'),
+        expiresAt: new Date('2026-10-24T09:00:00+06:00'),
+        createdBy: f.a.ownerUserId,
+      });
       // Строки колокольчика подготовки (привязка клиента) записаны по постоянным часам теста, а
       // `app.bell_cleanup` убирает строки старше 90 дней по часам базы: без этого через 90 дней после
       // 18.10.2026 уборка удалила бы их и попала в «отправляет» (docs/typical-mistakes.md № 52, 57).

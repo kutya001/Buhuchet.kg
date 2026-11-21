@@ -51,6 +51,9 @@ export const BELL_TARGETS = [
   // «Витрина данных» (общий план 20.11, этап 2, П4): администратору платформы — окно шаблона Админки
   // (номер — шаблон), когда проверка системой его сломала.
   'dm_template',
+  // API-токен «Витрины данных» (этап 3, П5): владельцу — окно токена на вкладке «API Токены» (номер —
+  // токен): создан, отозван, до конца срока 7 дней.
+  'dm_token',
 ] as const;
 export type BellTarget = (typeof BELL_TARGETS)[number];
 export const BELL_REPORT_TABS = ['week', 'overdue', 'wait'] as const;

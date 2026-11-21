@@ -89,6 +89,8 @@ export const ALERTS_TEXTS = {
   'alert.job.files_storage_reconcile': { ru: 'Файлы: сверка хранилища', section: S },
   'alert.job.subs_reminders': { ru: 'Подписки: напоминания об оплате', section: S },
   'alert.job.subs_memory_checks': { ru: 'Подписки: память и чеки на проверке', section: S },
+  // Срок API-токенов «Витрины данных» (поток Т, общий план 20.11, этап 3, П5; прототип v158 schedJobs).
+  'alert.job.dm_token_expiry': { ru: 'Витрина: срок API-токенов', section: S },
   'alert.job.kb_cleanup_video_uploads': {
     ru: 'Очистка брошенных загрузок видео',
     section: S,

@@ -4,7 +4,7 @@ import { formatMomentRu, type ListSort } from '@buhuchet/domain';
 import type { DmTokenRow } from '@buhuchet/shared';
 import { buttonClass, DataGrid, EmptyState, MONO_CLASS, Note, type GridColumn } from '@buhuchet/ui';
 import { useQuery } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useEffectEvent, useMemo } from 'react';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
@@ -12,6 +12,7 @@ import { useListExport } from '../lists/export';
 import { useGridLabels } from '../lists/grid-labels';
 import { useListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
+import { dropAddressParam, linkedRecordId } from '../record-link';
 import { useShell } from '../shell/context';
 import { tabHref } from '../shell/modules';
 import { TokenStatePill, useTokenActions } from './token-dialogs';
@@ -135,6 +136,17 @@ export function TokensTab({ side }: { side: DmSide }) {
   const { search, clearSearch, addRequest, clearAddRequest, access } = useShell();
   const form = useQuery(tokenFormQuery(side));
   const tokens = useTokenActions(side);
+  // Строка колокольчика и кнопка «Открыть» сообщения бота «API-токен создан», «отозван», «истекает»
+  // (общий план 20.11, этап 3, П5): окно токена и адрес без `?tok=`.
+  const tokParam = useSearchParams().get('tok');
+  const openLinked = useEffectEvent((value: string) => {
+    dropAddressParam('tok');
+    const id = linkedRecordId(value);
+    if (id) tokens.open(id);
+  });
+  useEffect(() => {
+    if (tokParam) openLinked(tokParam);
+  }, [tokParam]);
   const loadValues = useMemo(() => fetchTokenValues(side), [side]);
   const list = useListPage({
     gridKey,
