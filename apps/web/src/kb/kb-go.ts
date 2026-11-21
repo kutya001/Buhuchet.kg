@@ -43,7 +43,7 @@ export const KB_GO: Readonly<Record<string, KbTarget>> = {
   accs: { module: 'org', tab: 'main', flash: '[data-org-account-add]', press: true },
   policy: { module: 'org', tab: 'policy', flash: 'main section' },
   remind: { module: 'org', tab: 'policy', flash: '[data-remind-days]' },
-  settings: { module: 'org', tab: 'settings', flash: 'main [type=submit]' },
+  settings: { module: 'org', tab: 'settings', flash: '[data-org-settings-save]' },
   // «Хранилище файлов» (задача 2.29).
   storage: { module: 'org', tab: 'settings', flash: '[data-org-storage]' },
   tg: { module: null, flash: '[data-profile-telegram]', open: 'profile' },
@@ -166,23 +166,50 @@ export const KB_GO: Readonly<Record<string, KbTarget>> = {
 
 /** Сколько ждать, пока нужный элемент появится на экране после перехода, мс. */
 const FLASH_WAIT_MS = 2500;
+/** Сколько ждать самое большее, пока экран показывает заглушку загрузки, мс. */
+const FLASH_BUSY_MS = 10_000;
 /** Сколько держится подсветка (две вспышки по 1,3 с), мс. */
 const FLASH_MS = 2800;
 
 /**
+ * Экран или открытое окно ещё грузится: на нём заглушка `aria-busy` (кнопка «в работе» не в счёт).
+ * Этим же признаком показ «Показать как» ждёт экран (tour/tour-dom.ts, `settle`).
+ */
+export const SCREEN_BUSY =
+  'main [aria-busy="true"]:not(button), [data-window] [aria-busy="true"]:not(button)';
+
+/**
+ * Ждать ли элемент дальше: первые 2,5 секунды — всегда (переход на экран), потом — только пока экран
+ * показывает заглушку загрузки, и не дольше 10 секунд. Без этого «Перейти» на медленной связи молча
+ * ничего не подсвечивало и не открывало: кнопка блока появляется после ответа сервера
+ * (docs/typical-mistakes.md № 81).
+ */
+export function flashWaits(elapsed: number, busy: boolean): boolean {
+  return elapsed < FLASH_WAIT_MS || (busy && elapsed < FLASH_BUSY_MS);
+}
+
+/**
  * Подсветить место шага (прототип ckFlash): первый видимый элемент по селектору прокручивается в
  * середину экрана и дважды вспыхивает рамкой. Экран после перехода может ещё грузиться — элемент
- * ищется до 2,5 секунд. `onFlash` — элемент найден и подсвечен.
+ * ищется 2,5 секунды и дольше, пока на экране заглушка загрузки (`flashWaits`); ушёл пользователь
+ * за это время на другой экран — поиск прекращается. `onFlash` — элемент найден и подсвечен.
  */
 export function flashTarget(selector: string, onFlash?: (el: HTMLElement) => void): () => void {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const started = Date.now();
+  // Экран, на котором ожидание продлено из-за загрузки: нажимать кнопку на другом экране нельзя.
+  let lateOn: string | null = null;
   const find = () => {
     const el = [...document.querySelectorAll<HTMLElement>(selector)].find(
       (x) => x.getClientRects().length > 0,
     );
     if (!el) {
-      if (Date.now() - started < FLASH_WAIT_MS) timer = setTimeout(find, 150);
+      const elapsed = Date.now() - started;
+      if (elapsed >= FLASH_WAIT_MS) {
+        lateOn ??= window.location.pathname;
+        if (lateOn !== window.location.pathname) return;
+      }
+      if (flashWaits(elapsed, !!document.querySelector(SCREEN_BUSY))) timer = setTimeout(find, 150);
       return;
     }
     const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
