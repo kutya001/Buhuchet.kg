@@ -323,6 +323,15 @@ export async function seedDemoOrganization(
       pageSections: defaults.pageSections,
     })
     .onConflictDoNothing();
+  if (options.update) {
+    // «Внешний доступ по API» в демо-организации меняет только наполнение (выключатель там только для
+    // просмотра, 400 `ext_api_demo`): у демо-организации, наполненной до этапа 3 (стенд), столбец
+    // остался выключенным по умолчанию миграции 0165, а в прототипе он включён.
+    await db
+      .update(orgSettings)
+      .set({ extApi: org.apiOn ?? false })
+      .where(eq(orgSettings.orgId, orgId));
+  }
 
   // Виды отчётов демо-организации (модуль «Справочники», задача 2.02): автор — демо-сотрудник.
   const userOf = (protoId: string) =>

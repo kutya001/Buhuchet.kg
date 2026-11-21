@@ -33,6 +33,7 @@ import {
   oneOffServicePayments,
   oneOffServices,
   organizations,
+  orgSettings,
   platformLeads,
   projectPayments,
   projects,
@@ -963,5 +964,24 @@ describe.skipIf(!databaseAvailable())('готовые шаблоны «Витр�
       ['dm.unknown-job', 1, 1, 0],
     ]);
     expect(Date.parse(runs.objs[0]!.last as string)).toBe(slot(3).getTime());
+  });
+
+  it('«Внешний доступ по API» демо-организации — как в demoDB.json (включён); выключенный у демо-организации, наполненной до этапа 3 (стенд), включает только --update', async () => {
+    const extApi = async () =>
+      (
+        await db.admin.db
+          .select({ on: orgSettings.extApi })
+          .from(orgSettings)
+          .where(eq(orgSettings.orgId, DEMO_ORG_ID))
+      )[0]!.on;
+    expect(await extApi()).toBe(true);
+    await db.admin.db
+      .update(orgSettings)
+      .set({ extApi: false })
+      .where(eq(orgSettings.orgId, DEMO_ORG_ID));
+    await seedAll(db.admin.db, { update: false, demo: true });
+    expect(await extApi(), 'без --update наполнение уже наполненное не меняет').toBe(false);
+    await seedAll(db.admin.db, { update: true, demo: true });
+    expect(await extApi()).toBe(true);
   });
 });
