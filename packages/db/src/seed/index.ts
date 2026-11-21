@@ -15,6 +15,7 @@ import { seedMessageTemplates, seedStatusTones } from './system-dicts';
 export { checksumOf } from './checksum';
 export { seedPermissions, seedRoleTemplates } from './access';
 export {
+  DM_BUILTIN_PERMISSION,
   DM_COLUMN_TYPES,
   dmBuiltinRows,
   dmParamDefsOf,

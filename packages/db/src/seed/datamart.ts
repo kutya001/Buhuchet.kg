@@ -61,6 +61,15 @@ export { dmParamDefsOf, type DmTemplateColumn, type DmTemplateParam };
 
 const PERMISSION_CODES = new Set<string>(PERMISSIONS.map(([id]) => id));
 
+/**
+ * Обязательное право готового шаблона поверх refDB.json. «Задачи» — модуль «Сотрудники» (право
+ * «Просматривать сотрудников», области у группы нет): по прототипу (`perm: null`) сотрудник без «Видеть
+ * задачи всех» видел бы через «Вывод» все задачи организации, а в модуле «Задачи» — только свои. Защита —
+ * по более строгому: шаблон — только тем, кто видит вкладку «Все» модуля «Задачи».
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#К-27
+export const DM_BUILTIN_PERMISSION: Readonly<Record<string, string>> = { tasks: 'tasksAll' };
+
 /** Строка `dm_templates` и запрос готового шаблона из записи refDB.json. */
 export function dmBuiltinRows(section: unknown) {
   const list = z.array(Template).parse(section ?? []);
@@ -99,7 +108,7 @@ export function dmBuiltinRows(section: unknown) {
         params,
         columns,
         module: t.mod,
-        needPermission: t.perm,
+        needPermission: DM_BUILTIN_PERMISSION[t.code] ?? t.perm,
         access: 'all' as const,
         state: 'published' as const,
         builtin: true,
