@@ -40,9 +40,6 @@ const PRODUCT_ONLY: Readonly<Record<string, string>> = {
   tgCpOffWhich: 'К-2',
   tgActMemFull: 'О-93',
   tgCpFileMem: 'О-93',
-  tgDmTokNew: 'Т-31',
-  tgDmTokRevoked: 'Т-31',
-  tgDmTokSoon: 'Т-31',
 };
 
 /**

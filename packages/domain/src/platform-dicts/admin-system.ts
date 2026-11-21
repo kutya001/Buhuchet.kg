@@ -318,6 +318,10 @@ export const MESSAGE_TEMPLATE_VARIABLES: Readonly<Record<string, readonly string
   tgSubMemFull: ['организация', 'занято', 'лимит'],
   tgSubCheckNew: ['организация', 'что', 'сумма'],
   tgSubCheckWait: ['организация', 'сумма', 'дней'],
+  // API-токены «Витрины данных» (прототип v158): владельцам организации.
+  tgDmTokNew: ['организация', 'название', 'шаблон', 'дата', 'кто'],
+  tgDmTokRevoked: ['организация', 'название', 'шаблон', 'кто'],
+  tgDmTokSoon: ['организация', 'название', 'шаблон', 'дата', 'дней'],
   tgActNoLink: [],
   // Кнопки под отчётами и задачами, ответы и просьбы бота (прототип v97).
   tgBtnWork: [],
@@ -550,6 +554,9 @@ export const MESSAGE_TEMPLATE_ORDER = [
   'tgSubMemFull',
   'tgSubCheckNew',
   'tgSubCheckWait',
+  'tgDmTokNew',
+  'tgDmTokRevoked',
+  'tgDmTokSoon',
   'tgActNoLink',
   'tgBtnWork',
   'tgBtnDone',
