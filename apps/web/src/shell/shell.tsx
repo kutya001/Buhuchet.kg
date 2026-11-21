@@ -66,6 +66,7 @@ import {
   isModuleId,
   lockedMe,
   MODULES,
+  moduleDesc,
   moduleHref,
   parseAppPath,
   phoneModules,
@@ -483,7 +484,7 @@ function ShellPage({
   };
 
   const title = current?.title ?? '';
-  const desc = current ? t(MODULES[current.id as MenuModuleId].desc) : '';
+  const desc = current ? t(moduleDesc(current.id as MenuModuleId, access)) : '';
   const state = useMemo(
     () => ({
       search,

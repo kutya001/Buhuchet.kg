@@ -152,6 +152,11 @@ export const OrgPolicy = z.object({
   /** «Контрагент может отправлять файлы» — для всех контрагентов. */
   cpFilesUpload: z.boolean(),
   /**
+   * «Внешний доступ по API» (доработки 20.11.2026: Витрина данных, блок 5, пункт 9): выдавать данные
+   * внешним программам по API-токенам; сначала выключен, меняет только владелец.
+   */
+  extApi: z.boolean(),
+  /**
    * «Час напоминаний», ЧЧ:ММ по Бишкеку: в этот час каждый день уходят напоминания о сроках, недельная
    * сводка (в свой день) и сводка дня в общий чат (блок «Telegram-уведомления», прототип v111).
    */
@@ -193,6 +198,17 @@ export type OrgRoleOptions = z.infer<typeof OrgRoleOptions>;
 export const OrgWaitingReports = z.object({ count: z.number().int().nonnegative() });
 export type OrgWaitingReports = z.infer<typeof OrgWaitingReports>;
 
+/**
+ * Блок «Внешний доступ по API» вкладки «Настройки» (прототип v155 `dmApiBox`): демо-организация (там
+ * токены не выпускаются и выключатель недоступен) и сколько токенов организации сейчас «Действует» —
+ * для подписи и вопроса «Выключить внешний доступ?».
+ */
+export const OrgExtApi = z.object({
+  demo: z.boolean(),
+  activeTokens: z.number().int().nonnegative(),
+});
+export type OrgExtApi = z.infer<typeof OrgExtApi>;
+
 /** Время отправки «ЧЧ:ММ» (00:00–23:59). */
 const NoticeTime = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 
@@ -220,6 +236,8 @@ export const UpdateOrgPolicyRequest = z.object({
   cpTgPay: z.boolean().optional(),
   cpTgDebt: z.boolean().optional(),
   cpFilesUpload: z.boolean().optional(),
+  /** «Внешний доступ по API». Меняет только владелец; в демо-организации — нельзя. */
+  extApi: z.boolean().optional(),
   digestTime: NoticeTime.optional(),
   /** День недельной сводки, 1–7 (понедельник … воскресенье). */
   weekDay: z.number().int().min(1).max(7).optional(),

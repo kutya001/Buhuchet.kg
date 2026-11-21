@@ -15,6 +15,9 @@ export const MENU_MODULES = [
   { id: 'kpi', feature: 'indicators', permission: 'kpiView' },
   { id: 'tasks', feature: 'tasks', permission: null },
   { id: 'files', feature: 'files', permission: 'filesView' },
+  // «Витрина данных» (доработки 20.11.2026: Витрина данных; прототип v155 BIZ): после «Файлового
+  // менеджера», право «Смотреть витрину данных», функции учётной политики нет.
+  { id: 'dm', feature: null, permission: 'dmView' },
   { id: 'staff', feature: null, permission: 'staffView' },
   { id: 'dicts', feature: null, permission: null },
   { id: 'org', feature: null, permission: null },

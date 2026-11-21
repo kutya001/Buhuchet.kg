@@ -60,6 +60,8 @@ export interface OrgPolicyRecord extends OrgPolicy {
   cpFeeDays: number[];
   cpFeeAt: string;
   cpDebtWeekDay: WeekDay;
+  /** «Внешний доступ по API» (`org_settings.ext_api`, «Витрина данных», блок 5, пункт 9). */
+  extApi: boolean;
   /** Роль по умолчанию для новых сотрудников; null — не выбрана. */
   defaultRoleId: string | null;
   defaultRoleName: string | null;
@@ -175,6 +177,7 @@ export async function getOrgPolicy(tx: Tx, orgId: string): Promise<OrgPolicyReco
     cpTgPay: s.cpTgPay,
     cpTgDebt: s.cpTgDebt,
     cpFilesUpload: s.cpFilesUpload,
+    extApi: s.extApi,
     // В базе — time «09:00:00», в интерфейсе — «09:00».
     digestTime: s.digestTime.slice(0, 5),
     weekDay: weekDayOf(r.weekDay),
@@ -199,6 +202,18 @@ export async function getOrgPolicy(tx: Tx, orgId: string): Promise<OrgPolicyReco
     },
     version: s.version,
   };
+}
+
+/**
+ * Демо-организация из контекста (`organizations.is_demo`): она открыта всем, поэтому «Внешний доступ по
+ * API» в ней не меняется, а токены «Витрины данных» не выпускаются (прототип v155 `dmDemo`).
+ */
+export async function orgIsDemo(tx: Tx, orgId: string): Promise<boolean> {
+  const [r] = await tx
+    .select({ demo: organizations.isDemo })
+    .from(organizations)
+    .where(eq(organizations.id, orgId));
+  return r?.demo ?? false;
 }
 
 /**

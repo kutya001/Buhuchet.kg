@@ -5,6 +5,7 @@ import {
   countWaitingReports,
   getOrgPolicy,
   getRole,
+  orgIsDemo,
   orgPolicyHistory,
   orgRoleOptions,
   schema,
@@ -62,6 +63,7 @@ function orgPolicyBody(p: OrgPolicyRecord): OrgPolicy {
     cpTgPay: p.cpTgPay,
     cpTgDebt: p.cpTgDebt,
     cpFilesUpload: p.cpFilesUpload,
+    extApi: p.extApi,
     digestTime: p.digestTime,
     weekDay: p.weekDay,
     cpPayDays: p.cpPayDays,
@@ -187,7 +189,8 @@ export const updateOrgPolicyRoute = createRoute({
       description:
         'Функция нужна другой, включённой, или требует выключенную; дни вне 1–60 или 1–30; ' +
         'роль по умолчанию — не роль организации или роль владельца; день недельной сводки вне 1–7; ' +
-        'у «К оплате» и «Оплаты за обслуживание» нет ни одного дня, день вне 1–5 или время не «ЧЧ:ММ»',
+        'у «К оплате» и «Оплаты за обслуживание» нет ни одного дня, день вне 1–5 или время не «ЧЧ:ММ»; ' +
+        '«Внешний доступ по API» в демо-организации',
       content: error,
     },
     401: { description: 'Нет входа', content: error },
@@ -242,6 +245,16 @@ export function updateOrgPolicyHandler(
       if (features) {
         const problem = featureChangeProblem(current.features, features);
         if (problem) apiFail(400, problem.code, problem.message, { feature: problem.feature });
+      }
+      // «Внешний доступ по API» (Витрина данных, блок 5, пункт 9; прототип v155 `dmApiMount`): меняет
+      // только владелец (право «Настройки и учётная политика» — только у него), в демо-организации —
+      // никто: она открыта всем (выключатель там недоступен, токены не выпускаются).
+      if (
+        body.extApi !== undefined &&
+        body.extApi !== current.extApi &&
+        (await orgIsDemo(tx, ctx.orgId))
+      ) {
+        apiFail(400, 'ext_api_demo', 'В демо-версии токены не выпускаются');
       }
       if (body.defaultRoleId !== undefined && body.defaultRoleId !== current.defaultRoleId) {
         const role = await getRole(tx, body.defaultRoleId);
@@ -305,6 +318,7 @@ export function updateOrgPolicyHandler(
           cpTgPay: body.cpTgPay,
           cpTgDebt: body.cpTgDebt,
           cpFilesUpload: body.cpFilesUpload,
+          extApi: body.extApi,
           digestTime: changed(body.digestTime, current.digestTime),
           defaultRoleId: body.defaultRoleId,
         },

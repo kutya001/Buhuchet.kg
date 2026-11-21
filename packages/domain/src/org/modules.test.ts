@@ -32,6 +32,7 @@ describe('модули в меню — как mods() прототипа', () => 
       'kpi',
       'tasks',
       'files',
+      'dm',
       'staff',
       'dicts',
       'org',
@@ -50,6 +51,15 @@ describe('модули в меню — как mods() прототипа', () => 
 
   it('без права просмотра модуль скрыт; «Главная», «Справочники», «Моя организация», «База знаний» — у всех', () => {
     expect(menuModules(role(), all)).toEqual(['home', 'tasks', 'dicts', 'org', 'kb']);
+    // «Витрина данных» — только с правом «Смотреть витрину данных» (ТЗ «Витрина данных», «Права и
+    // вывод»: сотрудник без права не видит модуль); функции учётной политики у неё нет.
+    expect(menuModules(role('dmView'), without(...FEATURES))).toEqual([
+      'home',
+      'dm',
+      'dicts',
+      'org',
+      'kb',
+    ]);
     expect(menuModules(role('cpView', 'repView', 'projView'), all)).toEqual([
       'home',
       'cps',
@@ -94,14 +104,14 @@ describe('модули Админки и общий список модулей'
     ]);
   });
 
-  it('общий список без повторов: «База знаний» есть и у организации, и в Админке', () => {
+  it('общий список без повторов: «База знаний» и «Витрина данных» есть и у организации, и в Админке', () => {
     expect(MENU_MODULE_IDS.filter((id) => id === 'kb')).toHaveLength(1);
+    expect(MENU_MODULE_IDS.filter((id) => id === 'dm')).toHaveLength(1);
     expect(MENU_MODULE_IDS).toEqual([
       ...MENU_MODULES.map((m) => m.id),
       'accounts',
       'orgs',
       'afiles',
-      'dm',
       'pdicts',
       'l10n',
       'kbadm',
