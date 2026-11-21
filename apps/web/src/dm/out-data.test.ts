@@ -12,6 +12,10 @@ describe('«Вывод»: прежний запрос человека ещё и
     expect(retry(0, busy)).toBe(true);
     expect(retry(39, busy)).toBe(true);
     expect(retry(40, busy)).toBe(false);
+    // Заняты все места запуска сайта (п. О-96) — тоже очередь, а не ошибка на экране.
+    const busyAll = new ApiFailure(429, { code: 'dm_busy_all', message: 'busy all' });
+    expect(retry(0, busyAll)).toBe(true);
+    expect(retry(40, busyAll)).toBe(false);
     expect(runOutQuery('admin', { code: 'orgs', params: {}, orgId: null, n: 0 }).retryDelay).toBe(
       500,
     );

@@ -27,8 +27,11 @@ export interface DmRunRequest extends DmRunInput {
   n: number;
 }
 
-/** Сколько раз переспросить при `dm_busy`: 40 × 0,5 с — дольше предела запроса в 15 с. */
+/** Сколько раз переспросить при `dm_busy` и `dm_busy_all`: 40 × 0,5 с — дольше предела запроса в 15 с. */
 const BUSY_RETRIES = 40;
+
+/** Очередь: идёт прежний запрос человека (`dm_busy`) или заняты все места запуска сайта (`dm_busy_all`). */
+const BUSY_CODES: ReadonlySet<string> = new Set(['dm_busy', 'dm_busy_all']);
 
 /**
  * «Показать»: результат целиком (до 50 000 строк); повтор того же нажатия берётся из памяти. Ключ — не
@@ -36,6 +39,7 @@ const BUSY_RETRIES = 40;
  * шаблону организации — ещё и запись в её историю. Человек выполняет один запрос одновременно (блок 8,
  * пункт 5): пока идёт прежний (сам запуск при открытии вкладки, второе нажатие «Показать», запуск
  * прежнего шаблона), сервер отвечает 429 `dm_busy` — новый запрос ждёт очереди, а не показывает ошибку.
+ * Так же — 429 `dm_busy_all`: все места запуска на сайте заняты чужими запросами (п. О-96).
  */
 export const runOutQuery = (side: DmSide, run: DmRunRequest) =>
   queryOptions({
@@ -55,7 +59,7 @@ export const runOutQuery = (side: DmSide, run: DmRunRequest) =>
     gcTime: 60_000,
     // Прежний запрос идёт не дольше 15 с: ждём его, переспрашивая раз в полсекунды (этап 2, П6).
     retry: (count, error) =>
-      count < BUSY_RETRIES && error instanceof ApiFailure && error.error.code === 'dm_busy',
+      count < BUSY_RETRIES && error instanceof ApiFailure && BUSY_CODES.has(error.error.code),
     retryDelay: 500,
   });
 
