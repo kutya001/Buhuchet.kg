@@ -120,6 +120,9 @@ export function projectHistoryText(
         fileHistoryText(t, e) ??
         t('report.hist.file_delete', { name: str(valueOf(e, 'file', 'from')) });
       break;
+    case 'file_restore':
+      text = fileHistoryText(t, e) ?? '';
+      break;
     case 'file_hide':
       text = t('files.hist.page_hide', { name: str(valueOf(e, 'file', 'to')) });
       break;

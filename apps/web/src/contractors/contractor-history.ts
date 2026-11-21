@@ -14,6 +14,7 @@ import {
 import type { ContractorHistory } from '@buhuchet/shared';
 import type { TimelineItem } from '@buhuchet/ui';
 import { pageHistoryActor, pageHistoryText } from '../contractor-page/page-history';
+import { fileHistoryText } from '../files/file-history';
 import { sentHistoryActor, sentHistoryText } from '../files/sent-history';
 import {
   feePaymentDeletedText,
@@ -441,15 +442,17 @@ export function contractorHistoryText(t: Translate, e: Entry, names: Names): str
       break;
     }
     case 'task':
+      // Файл задачи вернул администратор платформы (пакет 2 от 20.11.2026, блок 5, пункт 4).
       lines = [
-        t(
-          e.action === 'create'
-            ? 'cp.hist.task.create'
-            : e.action === 'delete'
-              ? 'cp.hist.task.delete'
-              : 'cp.hist.task.update',
-          { title: e.subject ?? '' },
-        ),
+        (e.action === 'file_restore' ? fileHistoryText(t, e) : null) ??
+          t(
+            e.action === 'create'
+              ? 'cp.hist.task.create'
+              : e.action === 'delete'
+                ? 'cp.hist.task.delete'
+                : 'cp.hist.task.update',
+            { title: e.subject ?? '' },
+          ),
       ];
       break;
     case 'contractor_page':

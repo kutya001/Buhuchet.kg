@@ -396,7 +396,13 @@ export function FileViewer<F extends ViewerFile>({
     <Modal
       open={open}
       onClose={onClose}
-      title={file.name}
+      // Длинное название — в одну строку с многоточием, как `.fv-m .mh h2` прототипа: на телефоне
+      // «Договор-286ce8.txt» без места для переноса залезал на «‹ 1 из 6 ›» (этап 2, П5).
+      title={
+        <span className="block truncate" title={file.name}>
+          {file.name}
+        </span>
+      }
       sub={
         sub
           ? sub(file)

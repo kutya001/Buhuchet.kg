@@ -68,6 +68,7 @@ export function taskHistoryText(t: Translate, entry: TaskHistoryEntry): string {
     case 'file_attach':
       return fileHistoryText(t, entry) ?? t('task.hist.file_attach', { name: file('to') });
     case 'file_edit':
+    case 'file_restore':
       return fileHistoryText(t, entry) ?? '';
     case 'file_delete':
       return t('task.hist.file_delete', { name: file('from') });

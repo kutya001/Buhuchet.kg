@@ -33,6 +33,10 @@ describe('история проекта', () => {
     expect(projectHistoryText(t, entry('update', [{ field: 'name' }]), names)).toBe(
       'Проект изменён',
     );
+    // «Вернуть» администратора платформы (пакет 2 от 20.11.2026, блок 5, пункт 4).
+    expect(
+      projectHistoryText(t, entry('file_restore', [{ field: 'file', to: 'Смета.xlsx' }]), names),
+    ).toBe('Файл «Смета.xlsx» возвращён администратором платформы');
   });
 
   it('добавлена работа — исполнитель по имени, срок — если есть', () => {
