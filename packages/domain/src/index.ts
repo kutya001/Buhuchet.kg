@@ -134,6 +134,7 @@ export * from './datamart/access';
 export * from './datamart/query';
 export * from './datamart/ext';
 export * from './datamart/scope';
+export * from './datamart/editor';
 export * from './kb/catalog';
 export * from './kb/ready';
 export * from './kb/events';

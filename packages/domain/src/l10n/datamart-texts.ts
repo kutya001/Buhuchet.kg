@@ -1,3 +1,4 @@
+import { DATAMART_ADMIN_TEXTS } from './datamart-admin-texts';
 import { DATAMART_OUTPUT_TEXTS } from './datamart-output-texts';
 import type { UiTextDefault } from './texts';
 
@@ -260,4 +261,6 @@ export const DATAMART_TEXTS = {
   'dm.log.col.ms': { ru: 'Время, мс', section: S },
   'dm.log.col.err': { ru: 'Ошибка', section: S },
   'dm.log.col.ip': { ru: 'Адрес', section: S },
+  // Редактор шаблонов Админки (этап 2, П3).
+  ...DATAMART_ADMIN_TEXTS,
 } as const satisfies Record<string, UiTextDefault>;
