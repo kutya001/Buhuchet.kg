@@ -327,6 +327,39 @@ describe.skipIf(!databaseAvailable())(
       }
     });
 
+    it('«Выручка по контрагентам» со «Все» в «Контрагентах», но «Свои» в «Проектах» — только свои контрагенты: в ней суммы проектов и услуг (этап 3, П4; п. К-28); «Плата за обслуживание» — все', async () => {
+      // Роль бухгалтера с платой: «Контрагенты» — «Все», «Проекты» и остальные группы — «Свои».
+      const [feeRole] = await t.admin.db
+        .select({ id: roles.id })
+        .from(roles)
+        .where(and(eq(roles.orgId, DEMO_ORG_ID), eq(roles.name, 'Бухгалтер с платой')));
+      const cpsScope = and(eq(roleScopes.roleId, feeRole!.id), eq(roleScopes.permGroup, 'cps'));
+      await t.admin.db.update(roleScopes).set({ scope: 'all' }).where(cpsScope);
+      try {
+        const own = new Set(
+          (
+            await t.admin.db
+              .select({ id: contractors.id })
+              .from(contractors)
+              .where(eq(contractors.responsibleEmployeeId, demoId('employee', 'e4')))
+          ).map((r) => r.id),
+        );
+        const revenue = await raw('revenue');
+        const ownRows = revenue.filter((r) => r.contractor !== null && own.has(r.contractor));
+        expect(ownRows.length).toBeGreaterThan(0);
+        expect(ownRows.length).toBeLessThan(revenue.length);
+        expect(sorted((await shown(FEE_ACC, 'revenue')).rows)).toEqual(
+          sorted(ownRows.map((r) => r.shown)),
+        );
+        const fee = await raw('service-fee');
+        expect(sorted((await shown(FEE_ACC, 'service-fee')).rows)).toEqual(
+          sorted(fee.map((r) => r.shown)),
+        );
+      } finally {
+        await t.admin.db.update(roleScopes).set({ scope: 'own' }).where(cpsScope);
+      }
+    });
+
     it('«Задачи» — только с «Видеть задачи всех» (п. К-27): с «Просматривать сотрудников» без него шаблона нет, «Показать» — 404; отбор берёт область группы модуля шаблона', async () => {
       expect(await catalog(OWNER)).toContain('tasks');
       expect(await catalog(STAFF_ACC)).toEqual([

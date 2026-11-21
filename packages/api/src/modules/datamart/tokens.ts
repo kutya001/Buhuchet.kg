@@ -404,6 +404,7 @@ async function issueFacts(
         module: isModule(t.module) ? t.module : null,
         needPermission: t.needPermission,
         columns: t.columns,
+        code: t.code,
       },
       sight.subject,
       features,

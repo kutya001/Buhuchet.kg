@@ -2,6 +2,7 @@ import { hasPermission, scopeOf, type AccessSubject } from '../roles/access';
 import {
   PERMISSION_GROUPS,
   PERMISSION_IDS,
+  PERMISSIONS,
   SCOPE_GROUPS,
   type Feature,
   type PermissionId,
@@ -29,6 +30,8 @@ export interface DmTemplateSight {
   needPermission: string | null;
   /** Столбцы шаблона: есть ли «Контрагент» для области «Свои» (`contractor` или вид `cp`). */
   columns: unknown;
+  /** Код шаблона: область второго модуля у готовых (`DM_ALSO_SCOPED`, п. К-28). */
+  code?: string;
 }
 
 /** Есть ли у шаблона столбец «Контрагент» (прототип `cpCol`). */
@@ -48,6 +51,13 @@ export function dmHasContractorColumn(columns: unknown): boolean {
 const GROUP_OF = new Map<string, (typeof PERMISSION_GROUPS)[number]>(
   PERMISSION_GROUPS.map((g) => [g.id, g]),
 );
+/** Модуль права (`PERMISSIONS`): у права из модуля, который выключается, — функция этого модуля. */
+const FEATURE_OF_PERMISSION = new Map<string, Feature>(
+  PERMISSIONS.flatMap(([id, group]) => {
+    const feature = GROUP_OF.get(group)?.feature;
+    return feature ? [[id, feature] as const] : [];
+  }),
+);
 const isScopeGroup = (id: string): id is ScopeGroupId =>
   (SCOPE_GROUPS as readonly string[]).includes(id);
 /** Дополнительное право шаблона: неизвестный код не открывает шаблон никому, кроме владельца. */
@@ -59,9 +69,10 @@ const isPermission = (id: string, subject: AccessSubject): boolean =>
 /**
  * Виден ли шаблон сотруднику (прототип `dmSee`): «Для организаций», не черновик и не выключен; функция
  * модуля шаблона включена (у «Видеть плату за обслуживание» — ещё функция «Плата за обслуживание»);
- * есть просмотр модуля и дополнительное право шаблона; шаблон без столбца «Контрагент» (итоги по всей
- * организации) — только при «Все контрагенты» в группе прав модуля (владельцу — всегда), у модуля без
- * области («Сотрудники») — в группе «Контрагенты», как его отбор «Свои» (`dmOwnScope`).
+ * есть просмотр модуля и дополнительное право шаблона (его модуль, если выключается, — включён: п. К-28);
+ * шаблон без столбца «Контрагент» (итоги по всей организации) — только при «Все контрагенты» в группе
+ * прав модуля (владельцу — всегда), у модуля без области («Сотрудники») — в группе «Контрагенты», как
+ * его отбор «Свои» (`dmOwnScope`).
  */
 export function dmTemplateSeen(
   t: DmTemplateSight,
@@ -72,6 +83,12 @@ export function dmTemplateSeen(
   const group = GROUP_OF.get(t.module);
   if (group?.feature && features[group.feature] !== true) return false;
   if (t.needPermission === 'fee' && features.fee !== true) return false;
+  // Дополнительное право из модуля, выключенного в учётной политике (готовый «Задачи» — «Видеть задачи
+  // всех» модуля «Задачи», п. К-27): шаблона нет, как нет и самого модуля (прототип `dmSee` смотрит
+  // только функцию модуля шаблона).
+  // ОТКЛОНЕНИЕ: docs/deviations.md#К-28
+  const needFeature = t.needPermission ? FEATURE_OF_PERMISSION.get(t.needPermission) : undefined;
+  if (needFeature && features[needFeature] !== true) return false;
   if (group?.view && !hasPermission(subject, group.view)) return false;
   if (t.needPermission && !isPermission(t.needPermission, subject)) return false;
   // ОТКЛОНЕНИЕ: docs/deviations.md#О-95 — модуль без области без «Контрагента» — по «Контрагентам».
@@ -95,5 +112,5 @@ export function dmTemplateTokenable(
   subject: AccessSubject,
   features: Readonly<Partial<Record<Feature, boolean>>>,
 ): boolean {
-  return dmTemplateSeen(t, subject, features) && !dmOwnScope(t.module, subject, t.columns);
+  return dmTemplateSeen(t, subject, features) && !dmOwnScope(t.module, subject, t.columns, t.code);
 }

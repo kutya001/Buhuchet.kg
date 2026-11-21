@@ -34,6 +34,18 @@ const isScopeGroup = (m: string): m is ScopeGroupId =>
   (SCOPE_GROUPS as readonly string[]).includes(m);
 
 /**
+ * Готовые шаблоны, в строках которых — данные ещё одного модуля с областью: отбор «Свои» нужен и тогда,
+ * когда «Свои» — в его группе прав. «Выручка по контрагентам» (модуль «Контрагенты») показывает транши
+ * проектов: как «Аналитика» на «Главной» (п. Г-12), транши — только проектов, которые сотрудник видит
+ * в «Проектах контрагентов»; строки остаются только его контрагентов — их проекты он видит все
+ * (прототип `revenueData` считает проекты всех контрагентов области «Контрагенты»).
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#К-28
+export const DM_ALSO_SCOPED: Readonly<Record<string, readonly ScopeGroupId[]>> = {
+  revenue: ['projects'],
+};
+
+/**
  * Нужен ли отбор «Свои» (прототип: не администратор, шаблон «Для организаций» с модулем с областью и
  * область группы — не «Все»). Владельцу и праву «Видеть всех контрагентов» — нет (`scopeOf`).
  *
@@ -41,15 +53,22 @@ const isScopeGroup = (m: string): m is ScopeGroupId =>
  * контрагентов ни в одном готовом шаблоне): у модуля без области («Сотрудники») шаблон со столбцом
  * «Контрагент» отбирается по области группы «Контрагенты» — строки только контрагентов, за которых
  * сотрудник отвечает. Шаблон модуля без области и без такого столбца такому сотруднику не виден
- * (`dmTemplateSeen`), готовый «Задачи» — ещё и только с «Видеть задачи всех» (п. К-27).
+ * (`dmTemplateSeen`), готовый «Задачи» — ещё и только с «Видеть задачи всех» (п. К-27). `code` — код
+ * шаблона: у готовых из `DM_ALSO_SCOPED` — ещё и область второго модуля (п. К-28).
  */
 export function dmOwnScope(
   module: DmModule | null,
   subject: AccessSubject,
   columns: unknown,
+  code?: string,
 ): boolean {
   if (!module) return false;
-  if (isScopeGroup(module)) return scopeOf(subject, module) === 'own';
+  if (isScopeGroup(module)) {
+    if (scopeOf(subject, module) === 'own') return true;
+    // ОТКЛОНЕНИЕ: docs/deviations.md#К-28 — в строках есть данные ещё одного модуля с областью.
+    const also = code ? (DM_ALSO_SCOPED[code] ?? []) : [];
+    return dmContractorColumn(columns) !== null && also.some((g) => scopeOf(subject, g) === 'own');
+  }
   // ОТКЛОНЕНИЕ: docs/deviations.md#О-95 — модуль без области со столбцом «Контрагент» — по «Контрагентам».
   return dmContractorColumn(columns) !== null && scopeOf(subject, 'cps') === 'own';
 }

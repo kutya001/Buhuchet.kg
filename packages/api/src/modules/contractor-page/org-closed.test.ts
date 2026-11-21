@@ -3,6 +3,7 @@ import { schema } from '@buhuchet/db';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
 import {
   botPressData,
+  CP_TG_ASK_ACTION,
   CP_TG_FILE_TO_ACTION,
   fillTemplate,
   formatText,
@@ -23,7 +24,7 @@ import {
   SubscriptionUploadTicket,
 } from '@buhuchet/shared';
 import { and, asc, eq, sql } from 'drizzle-orm';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   apiRequest,
   createStaffFixture,
@@ -35,6 +36,7 @@ import {
   TEST_PASSWORD,
   TEST_SUBSCRIPTION,
 } from '../../testing';
+import * as subscriptionAccess from '../../subscription-access';
 import { contractorDebtJob } from '../telegram/client/debt';
 
 /*
@@ -674,6 +676,68 @@ describe.skipIf(!databaseAvailable())(
           );
         expect(link!.noDebt).toBe(true);
       } finally {
+        await setSubscription(TEST_SUBSCRIPTION.paidUntil);
+      }
+    });
+
+    it('этап 3, П4: доступ закрылся между проверкой до транзакции и записью — нажатие, вопрос бухгалтеру и «закончить» на странице ничего не записывают (п. К-24)', async () => {
+      const old = await oldMessages();
+      // При открытом доступе: «Вопрос бухгалтеру» нажат — бот ждёт текст вопроса; на странице начато
+      // «Отправить файл» и файл положен по ссылке — осталось «закончить».
+      const ask = old.buttons.find((b) => b.data.startsWith(CP_TG_ASK_ACTION))!;
+      await press(ask.data, ask.chatId, ask.messageId);
+      expect(sentTo(CLIENT_1).at(-1)!.text).toBe(tpl('tgCpAskHow'));
+      const started = await pagePost(`/api/page/org-a/${INN_A}/sent`, grantA, {
+        files: [{ name: 'Выписка.pdf', size: PDF.length }],
+      });
+      expect(started.status, await started.clone().text()).toBe(201);
+      const ticket = PageSentTicket.parse(await started.json());
+      for (const item of ticket.items) {
+        const url = new URL(item.upload.url);
+        await storage.put(url.host + url.pathname, PDF, {
+          contentType: item.upload.headers['content-type']!,
+        });
+      }
+      // Проверка до транзакции ещё видит доступ открытым (её ответ — до полуночи после «Оплачено
+      // до»), а запись идёт уже после закрытия: остаётся только проверка в транзакции записи.
+      const before = vi.spyOn(subscriptionAccess, 'orgClosedNow').mockResolvedValue(false);
+      try {
+        await setSubscription('2026-10-17');
+        await resetLimits();
+        const snap = await snapshot();
+        const sent = tg.sent.length;
+        for (const b of old.buttons) {
+          expect(await press(b.data, b.chatId, b.messageId), b.name).toMatchObject({
+            text: CLOSED,
+            alert: true,
+          });
+        }
+        expect(tg.sent.slice(sent)).toEqual([]);
+        // Текст вопроса после «Вопрос бухгалтеру»: сотрудникам не уходит, клиенту — «доступ закрыт».
+        await toBot('Как оплатить патент за октябрь?', CLIENT_1);
+        expect(tg.sent.slice(sent).map((m) => [m.chatId, m.text])).toEqual([[CLIENT_1, CLOSED]]);
+        // «Я оплатил» и «Отправить файл» на странице: «закончить» — «Страница недоступна».
+        for (const res of [
+          await paidComplete(old.paid),
+          await pagePost(`/api/page/org-a/${INN_A}/sent/complete`, grantA, {
+            ids: ticket.items.map((x) => x.id),
+          }),
+        ]) {
+          expect(res.status, await res.clone().text()).toBe(404);
+          expect((await failure(res)).code).toBe('page_unavailable');
+        }
+        // Подмена сработала: 9 нажатий (у «От какой компании?» проверка только в транзакции), вопрос и
+        // два «закончить» прошли проверку до транзакции как при открытом доступе.
+        expect(before).toHaveBeenCalledTimes(old.buttons.length - 1 + 3);
+        // Ни чека, ни файла, ни истории, ни ответа на вопрос: обе загрузки страницы — незаконченные (их
+        // уберёт задача по расписанию, п. И-10), не «Новые».
+        expect(snap.sentFiles).toEqual([
+          { name: 'Выписка.pdf', state: 'pending', contractorId: cpA },
+          { name: 'Чек.pdf', state: 'pending', contractorId: cpA },
+        ]);
+        expect(await snapshot()).toEqual(snap);
+      } finally {
+        before.mockRestore();
         await setSubscription(TEST_SUBSCRIPTION.paidUntil);
       }
     });

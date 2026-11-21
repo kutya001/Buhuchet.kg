@@ -53,6 +53,14 @@ describe('dmTemplateSeen', () => {
     expect(dmTemplateSeen(fee, owner, { fee: true })).toBe(true);
     expect(dmTemplateSeen(fee, subject(['cpView']), { fee: true })).toBe(false);
     expect(dmTemplateSeen(fee, subject(['cpView', 'fee']), { fee: true })).toBe(true);
+    // Право шаблона из модуля, который выключается (п. К-28): «Видеть задачи всех» — только с функцией
+    // «Задачи», и у владельца.
+    const tasks = tpl({ module: 'staff', needPermission: 'tasksAll' });
+    const tasksAll = subject(['staffView', 'tasksAll'], { cps: 'all' });
+    expect(dmTemplateSeen(tasks, owner, ALL_ON)).toBe(false);
+    expect(dmTemplateSeen(tasks, owner, { ...ALL_ON, tasks: true })).toBe(true);
+    expect(dmTemplateSeen(tasks, tasksAll, ALL_ON)).toBe(false);
+    expect(dmTemplateSeen(tasks, tasksAll, { tasks: true })).toBe(true);
     // Неизвестное право шаблона открывает его только владельцу.
     const odd = tpl({ needPermission: 'nothing' });
     expect(dmTemplateSeen(odd, subject(['repView']), ALL_ON)).toBe(false);
@@ -110,5 +118,17 @@ describe('dmTemplateTokenable', () => {
     expect(dmTemplateTokenable(tasks, subject([], {}, true), ALL_ON)).toBe(true);
     expect(dmTemplateTokenable(tpl(), subject(['dmView']), ALL_ON)).toBe(false);
     expect(dmTemplateTokenable(tpl({ state: 'off' }), subject([], {}, true), ALL_ON)).toBe(false);
+  });
+
+  it('«Выручка по контрагентам» (п. К-28): токен — только при «Все» и в «Контрагентах», и в «Проектах»', () => {
+    const revenue = tpl({ module: 'cps', needPermission: 'fee', code: 'revenue' });
+    const fee = ['cpView', 'fee'] as PermissionId[];
+    expect(
+      dmTemplateTokenable(revenue, subject(fee, { cps: 'all', projects: 'own' }), ALL_ON),
+    ).toBe(false);
+    expect(
+      dmTemplateTokenable(revenue, subject(fee, { cps: 'all', projects: 'all' }), ALL_ON),
+    ).toBe(true);
+    expect(dmTemplateTokenable(revenue, subject([], {}, true), ALL_ON)).toBe(true);
   });
 });
