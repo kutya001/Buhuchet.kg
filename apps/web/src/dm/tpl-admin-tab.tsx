@@ -3,13 +3,15 @@
 import { formatMomentRu, type ListSort } from '@buhuchet/domain';
 import type { DmAdminTemplateRow } from '@buhuchet/shared';
 import { DataGrid, EmptyState, MONO_CLASS, Note, Pill, type GridColumn } from '@buhuchet/ui';
-import { useCallback, useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useEffectEvent, useMemo } from 'react';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { useListExport } from '../lists/export';
 import { useGridLabels } from '../lists/grid-labels';
 import { useListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
+import { dropAddressParam, linkedRecordId } from '../record-link';
 import { useShell } from '../shell/context';
 import { useTemplateActions } from './tpl-actions';
 import {
@@ -125,6 +127,16 @@ export function TemplatesAdminTab() {
   const view = useViewSettings(DM_TPL_GRID);
   const { search, clearSearch } = useShell();
   const tpl = useTemplateActions();
+  // Строка колокольчика «Шаблон перестал работать»: окно шаблона и адрес без `?tpl=`.
+  const tplParam = useSearchParams().get('tpl');
+  const openLinked = useEffectEvent((value: string) => {
+    dropAddressParam('tpl');
+    const id = linkedRecordId(value);
+    if (id) void tpl.open(id);
+  });
+  useEffect(() => {
+    if (tplParam) openLinked(tplParam);
+  }, [tplParam]);
   const list = useListPage({
     gridKey: DM_TPL_GRID,
     columns,

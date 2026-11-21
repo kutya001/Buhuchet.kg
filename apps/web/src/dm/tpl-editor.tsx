@@ -489,6 +489,14 @@ export function TemplateEditor({
               )}
             </Field>
           </FormGrid>
+          {card?.state === 'broken' && card.checkError && !result ? (
+            // Почему сломан (ночная проверка или проверка после выпуска): текст базы — только Админке.
+            <Note tone="bad" icon="alert">
+              <span data-dm-ed-broken="">
+                {t('err.dm_check_failed', { error: card.checkError })}
+              </span>
+            </Note>
+          ) : null}
           <div className="flex flex-wrap items-end gap-2.5">
             {org ? (
               <div className="min-w-0 flex-[1_1_220px]">
