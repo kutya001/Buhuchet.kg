@@ -409,7 +409,16 @@ describe.skipIf(!databaseAvailable())('Витрина данных: «Вывод
     expect((await ok(await run('owner-b', 'out-cps'), 200, DmRunResult)).rows).toEqual([
       ['Гамма', 125050],
     ]);
+    // Свободно одно место — «Показать» Админки (и «глазами организации») берёт ровно одно: второе
+    // место внутри запуска (`poolHeld`) ему не нужно.
+    expect((await ok(await adminRun('out-adm'), 200, DmRunResult)).rows).toHaveLength(1);
+    expect((await ok(await adminRun('out-cps', {}, f.b.orgId), 200, DmRunResult)).rows).toEqual([
+      ['Гамма', 125050],
+    ]);
     await releaseRateLimit(f.t.app.db, DM_RUN_ALL_LIMIT, slots[1]!.subject, slots[1]!.ticket);
+    const again = await takeRateLimit(f.t.app.db, DM_RUN_ALL_LIMIT, 'slot:0');
+    expect(again.ok).toBe(true);
+    if (again.ok) await releaseRateLimit(f.t.app.db, DM_RUN_ALL_LIMIT, 'slot:0', again.ticket);
   });
 
   it('один запрос одновременно: пока идёт прежний — 429 «Предыдущий запрос ещё выполняется»', async () => {

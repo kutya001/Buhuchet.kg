@@ -206,6 +206,20 @@ describe('вкладки и «+ Добавить» по правам и учёт
     expect(ids(visibleTabs('dm', viewer))).not.toContain('tok');
     expect(ids(addActions('dm', viewer))).toEqual(['ask']);
   });
+
+  it('«Витрина данных» → «Журнал запросов» — только у Админки: вкладки Админки ровно «Вывод», «Шаблоны», «API Токены», «Журнал запросов»', () => {
+    expect(ids(visibleTabs('dm', shellAccess(me({ admin: true }))))).toEqual([
+      'out',
+      'tpl',
+      'tok',
+      'log',
+    ]);
+    expect(ids(visibleTabs('dm', shellAccess(me())))).toEqual(['out', 'tpl', 'tok']);
+    const viewer = shellAccess(
+      me({ permissions: PERMISSION_IDS.filter((p) => p !== 'dmTokens') as PermissionId[] }),
+    );
+    expect(ids(visibleTabs('dm', viewer))).toEqual(['out', 'tpl']);
+  });
 });
 
 describe('вошедший для правил формы роли', () => {

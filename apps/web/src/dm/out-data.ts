@@ -103,12 +103,55 @@ export interface DmExportRun {
   orgId: string | null;
 }
 
-/** «В Excel»: сервер выполняет шаблон заново и отдаёт файл с фильтрами и столбцами таблицы. */
+/** Код отказа «ждите очереди» ответа 429 (`dm_busy`, `dm_busy_all`), иначе null; тело ответа не тратится. */
+async function busyCodeOf(res: Response) {
+  if (res.status !== 429) return null;
+  const body: unknown = await res
+    .clone()
+    .json()
+    .catch(() => null);
+  const code = (body as { error?: { code?: unknown } } | null)?.error?.code;
+  return code === 'dm_busy' || code === 'dm_busy_all' ? code : null;
+}
+
+const pause = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Запрос, который ждёт очереди так же, как «Показать» (`runOutQuery`): на 429 `dm_busy` — до 40 раз раз
+ * в 0,5 с, на 429 `dm_busy_all` — до 10 раз раз в 2 с; остальные ответы — как есть.
+ */
+export async function retryBusy<R extends Response>(
+  send: () => Promise<R>,
+  wait: (ms: number) => Promise<void> = pause,
+): Promise<R> {
+  let busy = 0;
+  let pool = 0;
+  for (;;) {
+    const res = await send();
+    const code = await busyCodeOf(res);
+    if (code === 'dm_busy' && busy < BUSY_RETRIES) {
+      busy += 1;
+      await wait(BUSY_DELAY_MS);
+    } else if (code === 'dm_busy_all' && pool < POOL_RETRIES) {
+      pool += 1;
+      await wait(POOL_DELAY_MS);
+    } else {
+      return res;
+    }
+  }
+}
+
+/**
+ * «В Excel»: сервер выполняет шаблон заново и отдаёт файл с фильтрами и столбцами таблицы. Пока идёт
+ * прежний запрос человека или заняты места запуска сайта (п. О-96), выгрузка ждёт очереди, как «Показать».
+ */
 export const exportOut = (run: DmExportRun, list: Record<string, string> & { cols: string }) => {
   const body = { code: run.code, params: run.params, list };
-  return run.side === 'admin'
-    ? api.api.admin.dm.output.export.$post({
-        json: run.orgId ? { ...body, orgId: run.orgId } : body,
-      })
-    : api.api.dm.output.export.$post({ json: body });
+  return retryBusy(() =>
+    run.side === 'admin'
+      ? api.api.admin.dm.output.export.$post({
+          json: run.orgId ? { ...body, orgId: run.orgId } : body,
+        })
+      : api.api.dm.output.export.$post({ json: body }),
+  );
 };

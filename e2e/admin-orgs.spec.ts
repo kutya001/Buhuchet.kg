@@ -312,7 +312,8 @@ test.describe('Админка: организации', () => {
     await expect(report).toContainText(DEMO_CP);
     await expect(report.locator('[data-org-report-history]')).toBeVisible();
     await expect(report).toContainText('Файлы отчёта ·');
-    await expect(report.locator('button')).toHaveCount(0);
+    // Кнопок смены статуса нет: кнопки в окне — только файлы отчёта (открывают окно просмотра).
+    await expect(report.locator('button:not([data-org-report-file])')).toHaveCount(0);
     await expect(win).toContainText('Только просмотр: статус отчёта меняет сама организация');
     await win.getByRole('button', { name: 'Готово' }).click();
     await expect(report).toBeHidden();

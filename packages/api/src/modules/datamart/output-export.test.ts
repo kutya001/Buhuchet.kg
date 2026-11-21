@@ -303,6 +303,28 @@ describe.skipIf(!databaseAvailable())('Витрина данных: «Вывод
     if (again.ok) await releaseRateLimit(f.t.app.db, DM_RUN_ALL_LIMIT, 'slot:0', again.ticket);
   });
 
+  it('«В Excel» берёт ровно одно место пула: свободно одно — выгрузка организации и Админки проходит, место после неё свободно', async () => {
+    const held: { subject: string; ticket: number }[] = [];
+    try {
+      // Занято всё, кроме первого места: второе место внутри выгрузки (`poolHeld`) взять было бы негде.
+      for (let i = 1; i < DM_RUN_SLOTS; i += 1) {
+        const subject = `slot:${i}`;
+        const slot = await takeRateLimit(f.t.app.db, DM_RUN_ALL_LIMIT, subject);
+        if (!slot.ok) throw new Error(`место пула ${subject} свободно`);
+        held.push({ subject, ticket: slot.ticket });
+      }
+      await sheet(await exportOrg('owner-a', { code: 'xl-cps' }));
+      await sheet(await exportAdmin({ code: 'xl-cps', orgId: f.b.orgId }));
+    } finally {
+      for (const h of held) {
+        await releaseRateLimit(f.t.app.db, DM_RUN_ALL_LIMIT, h.subject, h.ticket);
+      }
+    }
+    const again = await takeRateLimit(f.t.app.db, DM_RUN_ALL_LIMIT, 'slot:0');
+    expect(again.ok).toBe(true);
+    if (again.ok) await releaseRateLimit(f.t.app.db, DM_RUN_ALL_LIMIT, 'slot:0', again.ticket);
+  });
+
   it('Админка: шаблон организаций — только «глазами организации», открытие — в её историю', async () => {
     expect((await fail(await exportAdmin({ code: 'xl-cps' }), 400)).code).toBe('dm_org_required');
     const views = () =>
