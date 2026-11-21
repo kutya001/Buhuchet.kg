@@ -78,22 +78,27 @@ test('(доработки 20.11.2026, блок 4, пункт 4; прототип
   test.slow();
   const origin = new URL(baseURL!).origin;
   const owner = await playwright.request.newContext({ baseURL });
-  const ownerLogin = await newOrgOwner(owner, origin);
-  const roles = (await (await owner.get('/api/roles?size=all', { maxRetries: 2 })).json()) as {
-    items: { id: string; name: string }[];
-  };
   const login = uniqueLogin('e2e-closed');
-  const hired = await owner.post('/api/staff', {
-    headers: { origin },
-    data: {
-      fullName: 'Закрытов Сквозной Тестович',
-      login,
-      roleId: roles.items.find((r) => r.name === 'Бухгалтер')!.id,
-    },
-  });
-  expect(hired.status(), await hired.text()).toBe(201);
-  const { temporaryPassword } = (await hired.json()) as { temporaryPassword: string };
-  await owner.dispose();
+  let ownerLogin: string;
+  let temporaryPassword: string;
+  try {
+    ownerLogin = await newOrgOwner(owner, origin);
+    const roles = (await (await owner.get('/api/roles?size=all', { maxRetries: 2 })).json()) as {
+      items: { id: string; name: string }[];
+    };
+    const hired = await owner.post('/api/staff', {
+      headers: { origin },
+      data: {
+        fullName: 'Закрытов Сквозной Тестович',
+        login,
+        roleId: roles.items.find((r) => r.name === 'Бухгалтер')!.id,
+      },
+    });
+    expect(hired.status(), await hired.text()).toBe(201);
+    ({ temporaryPassword } = (await hired.json()) as { temporaryPassword: string });
+  } finally {
+    await owner.dispose();
+  }
 
   // Сотрудник вошёл, пока доступ открыт: вкладка программы открыта.
   const staffContext = await browser.newContext({ baseURL });

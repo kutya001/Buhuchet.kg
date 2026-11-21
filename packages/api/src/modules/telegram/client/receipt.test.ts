@@ -19,7 +19,7 @@ import {
   SentFileList,
   SentFileListPage,
 } from '@buhuchet/shared';
-import { asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   apiRequest,
@@ -562,6 +562,48 @@ describe.skipIf(!databaseAvailable())(
       }
       expect(loads).toBe(0);
       expect(await sentFiles(cpA)).toEqual([]);
+    });
+
+    it('память организации заполнена: чек ответом на «Прислать чек» и файл после «От какой компании?» тоже не скачиваются', async () => {
+      const memory = (baseMb: number, seatMb: number) =>
+        f.t.admin.db.update(schema.subscriptionSettings).set({ baseMb, seatMb });
+      await f.t.admin.db.delete(schema.contractorTelegramMessages);
+      await feeMessage();
+      await press(receiptData, CLIENT_2, lastMessageId(CLIENT_2));
+      const askId = lastMessageId(CLIENT_2);
+      // Вопрос «От какой компании?» задаётся до скачивания — память проверяется при выборе.
+      await sendFile(CLIENT_1, { name: 'Справка.pdf' });
+      const whichId = lastMessageId(CLIENT_1);
+      const [row] = await f.t.admin.db
+        .select({ id: schema.contractorTelegramMessages.id })
+        .from(schema.contractorTelegramMessages)
+        .where(
+          and(
+            eq(schema.contractorTelegramMessages.chatId, CLIENT_1),
+            eq(schema.contractorTelegramMessages.contractorId, cpA),
+            eq(schema.contractorTelegramMessages.kind, 'file'),
+          ),
+        );
+      await memory(0, 0);
+      const load = tg.loadFile.bind(tg);
+      let loads = 0;
+      tg.loadFile = async (fileId, maxBytes) => {
+        loads += 1;
+        return load(fileId, maxBytes);
+      };
+      try {
+        await sendFile(CLIENT_2, { replyTo: askId });
+        expect(lastText(CLIENT_2)).toBe(text('tgCpFileMem'));
+        expect(
+          await press(botPressData(CP_TG_FILE_TO_ACTION, row!.id), CLIENT_1, whichId),
+        ).toMatchObject({ text: text('tgCpFileMem'), alert: true });
+      } finally {
+        tg.loadFile = load;
+        await memory(2000, 200);
+      }
+      expect(loads).toBe(0);
+      expect(await sentFiles(cpA)).toEqual([]);
+      expect(await claims(cpA)).toEqual([]);
     });
 
     it('файл без просьбы от клиента одного контрагента: в «Отправленные файлы» с подписью; тип, размер и 20 в сутки вместе со страницей', async () => {

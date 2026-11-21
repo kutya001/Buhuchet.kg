@@ -160,6 +160,8 @@ test.describe('Доработки 20.11, пакет 2. Админка → «Фа
     baseURL,
     isMobile,
   }) => {
+    // Длинный сценарий: организация и администратор через `pnpm db:*`, чек, окно файла, окно подписки, карточка.
+    test.slow();
     const origin = new URL(baseURL!).origin;
     const tag = uniqueTag();
     const name = `чек-${tag}.pdf`;
@@ -184,16 +186,15 @@ test.describe('Доработки 20.11, пакет 2. Админка → «Фа
     const win = page.getByRole('dialog', { name });
     await expect(win.locator('[data-fv="pdf"]')).toBeVisible();
     await win.locator('[data-afiles-sub]').click();
-    await expect(win).toHaveCount(0);
-    // Окно подписки поверх «Всех файлов», как `subOrgWin` прототипа (общая сборка этапа 1).
+    // Окно подписки поверх окна файла, как `subOrgWin` прототипа (общая сборка этапа 1); закрыли —
+    // окно файла на месте.
     const subWin = page.getByRole('dialog', { name: 'Подписка организации' });
     await expect(subWin.locator(`[data-sub-body="${org.id}"]`)).toBeVisible();
-    await page.keyboard.press('Escape');
+    await subWin.locator('[data-window-close]').first().click();
     await expect(subWin).toHaveCount(0);
+    await expect(win.locator('[data-fv="pdf"]')).toBeVisible();
 
     // «Открыть организацию» в окне файла — вкладка «Файлы» карточки; полоса памяти ведёт на её «Подписку».
-    await row.getByText(name, { exact: true }).click();
-    await expect(win.locator('[data-fv="pdf"]')).toBeVisible();
     await win.locator('[data-afiles-org]').click();
     await expect(win).toHaveCount(0);
     const card = page.locator(`[data-org-card="${org.id}"]`);

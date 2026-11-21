@@ -251,7 +251,9 @@ export function useStorageFileActions({
                   data-afiles-sub=""
                   className={buttonClass('default')}
                   onClick={() => {
-                    closeViewer();
+                    // В карточке — переход на её вкладку «Подписка»; во «Всех файлах» окно подписки
+                    // встаёт поверх окна файла, как `subOrgWin` прототипа.
+                    if (inCard) closeViewer();
                     onSub!(subOf(f.row)!);
                   }}
                 >
