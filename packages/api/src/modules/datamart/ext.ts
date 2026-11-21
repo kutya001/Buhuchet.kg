@@ -49,6 +49,7 @@ import {
 } from '@buhuchet/domain';
 import { ApiError, DmExtAnswer, DmExtCodeParam } from '@buhuchet/shared';
 import type { Context } from 'hono';
+import { HTTPException } from 'hono/http-exception';
 import { clientIpSubject, clientIpText } from '../../client-ip';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
@@ -69,9 +70,9 @@ import { logDmRun, runDmTemplate, type DmRunWho } from './run';
  *      токена (его организация, кто создал): отозван или истёк — 401; шаблон сломан — 503; остановлен
  *      (шаблон выключен, нет доступа, блокировка, подписка, «Внешний доступ по API», функция модуля
  *      выключена) — 403 «Доступ остановлен»;
- *   4. пределы токена `app.dm_ext_take`: один одновременно, 30 в минуту, 5 000 в сутки (429); запусков
- *      по токенам одновременно — 3 на платформу и 2 у организации (п. О-62): занято — запрос ждёт до 2 с,
- *      потом 429;
+ *   4. пределы токена `app.dm_ext_take`: один одновременно, 30 в минуту, 5 000 в сутки (429); запуск
+ *      по токенам на всей платформе — один одновременно (п. О-62): занято — запрос ждёт до 2 с, потом
+ *      429; места запусков всего сайта (`withDmPoolSlot`, п. О-96) заняты «Выводом» — тоже 429;
  *   5. параметры адреса — только свои коды шаблона, по типам (`dmBind`), лишние отбрасываются;
  *   6. запуск — общим путём «Вывода» `runDmTemplate` (этап 2, П4) от имени организации токена и его
  *      создателя: только чтение, 15 с, 50 000 строк; строки всей организации, как у владельца (область
@@ -318,18 +319,27 @@ export function extHandler(deps: ApiDeps): RouteHandler<typeof EXT_ROUTE, AppEnv
         return badParam(req.param);
       }
       given = req.input;
-      const out = await runDmTemplate(deps, {
-        template,
-        query: seen.query,
-        input: req.input,
-        who,
-        ownContractorIds: null,
-        via: 'api',
-        tokenId: target.tokenId,
-        ip,
-        maxRows: DM_ROWS_MAX,
-        today,
-      });
+      let out: Awaited<ReturnType<typeof runDmTemplate>>;
+      try {
+        out = await runDmTemplate(deps, {
+          template,
+          query: seen.query,
+          input: req.input,
+          who,
+          ownContractorIds: null,
+          via: 'api',
+          tokenId: target.tokenId,
+          ip,
+          maxRows: DM_ROWS_MAX,
+          today,
+        });
+      } catch (err) {
+        // Места запусков всего сайта заняты (`withDmPoolSlot`, 429 до запуска): ответ адреса —
+        // «Слишком часто» с Retry-After и строкой журнала, как у своих пределов.
+        if (!(err instanceof HTTPException) || err.status !== 429) throw err;
+        await log('rate', tr('err.dm_ext_rate', { n: 1 }));
+        return rate(1);
+      }
       if (!out.ok) {
         if (out.outcome === 'bad_param') return badParam(out.param);
         if (out.outcome === 'timeout') {

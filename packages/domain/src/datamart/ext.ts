@@ -24,10 +24,11 @@ export const DM_EXT_PER_DAY = 5000;
 export const DM_EXT_LEASE_SECONDS = 30;
 /**
  * Запусков по токенам одновременно — на всю платформу и у одной организации (docs/decisions.md п. О-62,
- * Т-20): запуск держит соединение базы до 15 с, без общего предела токены заняли бы пул сайта.
+ * Т-20): запуск держит соединение базы до 15 с. У всех запусков «Витрины» сайта мест два (`DM_RUN_SLOTS`,
+ * п. О-96) — внешним программам из них одно, второе всегда остаётся «Выводу» на экране.
  */
-export const DM_EXT_RUNS_PLATFORM = 3;
-export const DM_EXT_RUNS_ORG = 2;
+export const DM_EXT_RUNS_PLATFORM = 1;
+export const DM_EXT_RUNS_ORG = 1;
 /** Сколько запрос ждёт свободного запуска, прежде чем ответить «Слишком часто» (мс). */
 export const DM_EXT_QUEUE_MS = 2000;
 /**

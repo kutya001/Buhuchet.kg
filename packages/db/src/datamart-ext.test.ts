@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createDb } from './client';
 import { withOrgContext } from './context';
 import {
   cleanupDmRequests,
@@ -210,6 +211,44 @@ describe.skipIf(!databaseAvailable())('витрина данных: внешни
     const after = await take(tok(a.orgId));
     for (const s of [a2, adm, a3slot, after]) await releaseDmExt(db.app.db, s);
     expect((await runs()).filter((r) => r.busyUntil && r.busyUntil > new Date())).toHaveLength(0);
+  });
+
+  it('очередь запусков под гонкой: 20 токенов разом на пуле из шести соединений — занято ровно 3, у организации — 2', async () => {
+    const pool = createDb(db.appUrl, { max: 6, applicationName: 'buhuchet-test-race' });
+    try {
+      const race = async (tokens: ReturnType<typeof tok>[]) => {
+        const takes = await Promise.all(tokens.map((t) => takeDmExt(pool.db, t, LIMITS)));
+        const slots = takes.flatMap((x) => (x.ok ? [x.slot] : []));
+        expect(takes.filter((x) => !x.ok).every((x) => !x.ok && x.reason === 'run_busy')).toBe(
+          true,
+        );
+        await Promise.all(slots.map((x) => releaseDmExt(pool.db, x)));
+        return slots;
+      };
+      for (let round = 0; round < 3; round++) {
+        // Токены разных организаций и Админки: занято столько, сколько мест на платформе.
+        const mixed = Array.from({ length: 20 }, (_, i) => tok(i % 5 === 0 ? null : randomUUID()));
+        expect(await race(mixed)).toHaveLength(LIMITS.platformRuns);
+        // Токены одной организации: занято столько, сколько мест у организации.
+        const one = Array.from({ length: 20 }, () => tok(a.orgId));
+        expect(await race(one)).toHaveLength(LIMITS.orgRuns);
+      }
+      // Один токен разом: занят один запрос, остальные — «идёт прежний».
+      const same = tok(a.orgId);
+      const takes = await Promise.all(
+        Array.from({ length: 10 }, () => takeDmExt(pool.db, same, LIMITS)),
+      );
+      const won = takes.flatMap((x) => (x.ok ? [x.slot] : []));
+      expect(won).toHaveLength(1);
+      await releaseDmExt(pool.db, won[0]!);
+      const runs = await db.admin.db
+        .select()
+        .from(rateLimits)
+        .where(eq(rateLimits.kind, 'dm_ext_run'));
+      expect(runs.filter((r) => r.busyUntil && r.busyUntil > new Date())).toHaveLength(0);
+    } finally {
+      await pool.close();
+    }
   });
 
   it('известный токен: не больше предела обращений за минуту, и отозванный тоже; в счёт адреса не идёт', async () => {
