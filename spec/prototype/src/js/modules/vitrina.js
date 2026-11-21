@@ -120,7 +120,7 @@ function renderDmOut(body){const L=dmOutList();
   $('#dm-t',body).onchange=e=>{DMV.tpl=e.target.value;DMV.p=null;renderPage()};
   $('#dm-go',body).onclick=()=>{const v=dmParRead(body,t);if(!v)return;store.set('dm.p.'+S.me+'.'+t.code,v);DMV.p={code:t.code,v};
     if(orgSel){DMV.org=val(body,'dm-org');if(DMV.org!==ORG.id)log('porg',DMV.org,`Открыт шаблон витрины данных «${t.name}» глазами организации`)}
-    dmDraw($('#dm-res',body),t,v,orgSel?DMV.org:ORG.id)};
+    dmDraw($('#dm-res',body),t,v,orgSel?DMV.org:ORG.id);if(t.state!=='Сломан')ckHit('dm.run')};
   dmDraw($('#dm-res',body),t,p,orgSel?DMV.org:ORG.id)}
 
 /* Вкладка «Шаблоны»: у организации — каталог, в Админке — список и окно шаблона (блок 3) */
