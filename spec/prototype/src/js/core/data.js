@@ -507,6 +507,15 @@ const t=(e.indicators||[]).find(x=>x.name==='ФОТ');
   // «Помощь» из 9 вопросов и «Словарик» без пунктира у обычных слов — тоже, если администратор платформы их не менял (в истории справочника нет строк «Страница контрагента»)
   if(!db.meta.cpUx17){db.meta.cpUx17=1;const u=db.ref&&db.ref.kbUi,ru=r.kbUi||{};if(u){if(ru.page)u.page=structuredClone(ru.page);
     if(ru.cpHelp&&!(db.ref.dictHistory||[]).some(x=>x.dict==='cppage'))u.cpHelp=structuredClone(ru.cpHelp)}}
+  // v157 (пакет 20.11, этап 3, П3, поток И): урок, статьи и подсказки экранов «Витрины данных» — у данных, сохранённых в браузере раньше, недостающие записи из refDB по коду
+  if(!db.meta.dmKb157){db.meta.dmKb157=1;const R=db.ref;
+    const add=(k,ids)=>{const a=R[k],b=r[k];if(!Array.isArray(a)||!Array.isArray(b))return;b.filter(x=>ids.includes(x.id)&&!a.some(y=>y.id===x.id)).forEach(x=>{const p=b[b.indexOf(x)-1],i=p?a.findIndex(y=>y.id===p.id):-1;a.splice(i>=0?i+1:a.length,0,structuredClone(x))})};
+    add('kbGroups',['dm']);add('kbSteps',['dmshow','dmxl','dmcat','dmtok','a-dm']);add('kbShows',['sh-dmshow','sh-dmxl','sh-dmcat','sh-dmtok']);add('kbArticles',['a_dm','a19_6']);
+    const u=R.kbUi,ru=r.kbUi;if(u&&ru){const mine=(g,n)=>['mods','add','cards','screens'].includes(g)?n==='dm':['tabs','rows'].includes(g)?n.startsWith('dm.'):g==='fields'?/^(dm|dmp|dk|dq|de)-/.test(n)||n==='Выдавать данные внешним программам по API-токенам':
+      ({addItems:['Токен','Попросить шаблон','Шаблон'],forms:['Новый API-токен','Скопируйте токен. Больше он не покажется','Попросить шаблон','Новый шаблон'],buttons:['Отправить запрос','Готово, токен сохранён','Открыть настройки'],acts:['Отозвать','Перевыпустить'],plates:['Запросов сегодня','Ошибок сегодня','Действующих токенов']}[g]||[]).includes(n);
+      ['mods','tabs','add','addItems','forms','buttons','acts','rows','cards','plates','fields','screens'].forEach(g=>{u[g]=u[g]||{};Object.entries(ru[g]||{}).forEach(([n,v])=>{if(mine(g,n)&&!(n in u[g]))u[g][n]=structuredClone(v)})});
+      if(Array.isArray(u.els))(ru.els||[]).forEach(e=>{if(/^dm-/.test(e.id)&&!u.els.some(x=>x.id===e.id))u.els.push(structuredClone(e))});
+      if(Array.isArray(u.artForms)&&!u.artForms.some(f=>f.mod==='dm'))(ru.artForms||[]).filter(f=>f.mod==='dm').forEach(f=>u.artForms.push(structuredClone(f)))}}
   if(db.organization&&db.organization.payFirst==null)db.organization.payFirst=true;
   if(db.organization&&db.organization.repConfirm==null)db.organization.repConfirm=true;
   if(db.organization&&db.organization.taskConfirm==null)db.organization.taskConfirm=true;
