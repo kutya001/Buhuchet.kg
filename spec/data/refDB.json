@@ -25969,10 +25969,44 @@
   },
   {
    "id": "v156",
-   "t": "Версия 156: план",
+   "t": "Версия 156: одна полоса «Подписка оплачена до …»",
    "type": "Обновление",
    "ver": "156",
-   "date": "2026-11-20",
+   "date": "2026-11-21",
+   "short": "У владельца пометка «Подписка оплачена до …» с «Продлить» — одной полосой над экраном, без повтора на экране «Подписка».",
+   "md": "## Изменено\n- **«Подписка оплачена до …» — один раз.** За 7 дней до конца срока владелец видит сверху полосу «Подписка оплачена до … Продлите её» с кнопкой «Продлить». На экране «Моя организация» → «Подписка» эта пометка больше не повторяется под полосой: срок и сколько дней осталось — в карточке «Срок».\n- В Админке, в окне «Подписка организации», полосы нет — пометка по-прежнему стоит в самом окне.",
+   "status": "Опубликовано",
+   "aud": "all",
+   "off": false,
+   "pin": false,
+   "login": true,
+   "link": {
+    "k": "mod",
+    "id": "org"
+   },
+   "hist": [
+    {
+     "at": "2026-11-20 22:40",
+     "to": "Черновик",
+     "who": "admin"
+    },
+    {
+     "at": "2026-11-21 09:45",
+     "to": "Опубликовано",
+     "who": "admin"
+    }
+   ],
+   "_ub": "admin",
+   "_cb": "admin",
+   "_ua": "2026-11-21 09:45",
+   "_ca": "2026-11-20 22:40"
+  },
+  {
+   "id": "v157",
+   "t": "Версия 157: план",
+   "type": "Обновление",
+   "ver": "157",
+   "date": "2026-11-21",
    "short": "Черновик: текст готовится.",
    "md": "## Что нового\n- Черновик: текст готовится",
    "status": "Черновик",
@@ -25983,15 +26017,15 @@
    "link": null,
    "hist": [
     {
-     "at": "2026-11-20 22:40",
+     "at": "2026-11-21 09:45",
      "to": "Черновик",
      "who": "admin"
     }
    ],
    "_ub": "admin",
    "_cb": "admin",
-   "_ua": "2026-11-20 22:40",
-   "_ca": "2026-11-20 22:40"
+   "_ua": "2026-11-21 09:45",
+   "_ca": "2026-11-21 09:45"
   }
  ],
  "videos": [
@@ -36181,6 +36215,12 @@
      "total": false
     },
     {
+     "k": "gb",
+     "label": "Память сверх, ГБ",
+     "type": "num",
+     "total": false
+    },
+    {
      "k": "sum",
      "label": "Сумма",
      "type": "money",
@@ -36199,7 +36239,7 @@
      "total": false
     }
    ],
-   "sql": "-- таблицы подписок — миграция 0165 (доработки 20.11.2026, пакет 2)\nSELECT p.created_at::date AS at, o.name AS org,\n       CASE p.what WHEN 'renew' THEN 'Продление' WHEN 'grow' THEN 'Расширение пакета' WHEN 'mem' THEN 'Память сверх'\n                   WHEN 'free' THEN 'Бесплатный период' ELSE 'Изменено администратором' END AS what,\n       p.pack, p.amount AS sum,\n       CASE p.status WHEN 'wait' THEN 'Ждёт подтверждения' WHEN 'ok' THEN 'Подтверждена' ELSE 'Отклонена' END AS status,\n       p.paid_to\nFROM subscription_payments p\nJOIN organizations o ON o.id = p.org_id\nWHERE p.created_at::date BETWEEN :date_from AND :date_to\nORDER BY p.created_at DESC",
+   "sql": "-- оплаты подписок — таблица миграции 0165 (доработки 20.11.2026, пакет 2); суммы — в тыйынах\nSELECT p.created_at::date AS at, o.name AS org,\n       CASE p.kind WHEN 'renew' THEN 'Продление' WHEN 'grow' THEN 'Расширение пакета' WHEN 'mem' THEN 'Память сверх'\n                   WHEN 'free' THEN 'Бесплатный период' ELSE 'Изменено администратором' END AS what,\n       p.seats AS pack, p.extra_gb AS gb, p.amount AS sum,\n       CASE p.status WHEN 'pending' THEN 'Ждёт подтверждения' WHEN 'confirmed' THEN 'Подтверждена' ELSE 'Отклонена' END AS status,\n       p.paid_until AS paid_to\nFROM subscription_payments p\nJOIN organizations o ON o.id = p.org_id\nWHERE p.created_at::date BETWEEN :date_from AND :date_to\nORDER BY p.created_at DESC",
    "id": "dt15",
    "state": "Опубликован",
    "access": "all",
@@ -36211,6 +36251,11 @@
      "at": "2026-11-20 03:00",
      "who": "system",
      "what": "Готовый шаблон: Опубликован"
+    },
+    {
+     "at": "2026-11-20 23:30",
+     "who": "admin",
+     "what": "Изменено: запрос, столбцы — по таблице оплат подписок миграции 0165"
     }
    ],
    "_cb": "system",

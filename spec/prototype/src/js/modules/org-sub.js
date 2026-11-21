@@ -16,7 +16,8 @@ function subLockMods(){if(!subLock())return null;return me().role==='owner'?BIZ.
 function orgTabs(){const sub={id:'sub',label:'Подписка',icon:'wallet'};if(subLock()&&me().role==='owner')return [sub];
   return [{id:'main',label:'Основное',icon:'landmark'},{id:'policy',label:'Учётная политика',icon:'sliders'},{id:'settings',label:'Настройки',icon:'gauge'},subMine()?sub:null]}
 
-/* ── Экран «Подписка» (блок 5, пункт 2) ── */
+/* ── Экран «Подписка» (блок 5, пункт 2). «Подписка оплачена до …» у владельца — только полоса над экраном (subBanHtml),
+   в окне «Подписка организации» Админки полосы нет — пометка стоит в окне (ТЗ, блок 4, пункт 3, правка ed192) ── */
 const subKindLabel=s=>!s?'Нет подписки':s.free?`Бесплатный период до ${fmtD(s.paidTo)}`:((subKind(s.kind)||{}).name||s.kind);
 const subBarHtml=(used,lim)=>{const p=lim&&isFinite(lim)?Math.round(used/lim*100):0;return `<div class="bar sub-bar ${p>=100?'red':p>=80?'yellow':''}"><i style="width:${Math.min(100,p)}%"></i></div>`};
 const subDays=n=>`${n} ${plural(n,'день','дня','дней')}`;
@@ -24,7 +25,7 @@ function subScreenHtml(orgId,o={}){orgId=orgId||ORG.id;const s=subOf(orgId),st=s
   const add=s&&s.pack>(p.extraOver||150)?s.addDisc||0:0,own=!o.admin&&subMine(),closed=subClosed(orgId),renew=s?subCalc({orgId,what:'renew',kind:s.kind,pack:s.pack,extraGb:s.extraGb}):null;
   const wTxt=w?`${esc(subPayWhatOwn(w))}, ${som(w.sum)} · отправлен ${fmtDT(w.at)}`:'';
   const head=closed&&!w?`<div class="note bad">${ic('lock')}<span>${s?`Подписка закончилась ${fmtD(s.paidTo)}: доступ сотрудников закрыт до оплаты.`:'У организации ещё нет подписки: программа откроется после первой оплаты.'} ${subLastRej(orgId)?'Прошлый чек отклонён, поэтому после нового чека доступ откроется, когда администратор подтвердит оплату.':'Оплатите и прикрепите чек — доступ откроется сразу и останется открытым, пока администратор проверяет оплату.'} Данные не удаляются.</span></div>`
-    :st==='Скоро истекает'?`<div class="note warn">${ic('clock')}<span>Подписка оплачена до ${fmtD(s.paidTo)}. Продлите её, чтобы доступ не закрылся.</span></div>`:'';
+    :st==='Скоро истекает'&&o.admin?`<div class="note warn">${ic('clock')}<span>Подписка оплачена до ${fmtD(s.paidTo)}. Продлите её, чтобы доступ не закрылся.</span></div>`:'';
   const waitBox=w&&!o.admin?`<div class="note">${ic('clock')}<span><b>Чек на проверке:</b> ${wTxt}. ${w.open||!closed?'Доступ открыт, пока администратор проверяет оплату.':'Прошлый чек был отклонён, поэтому доступ откроется после проверки этого чека.'} Новая оплата — после проверки.${own?` <button type="button" class="linkbtn" data-subown="file:${esc(w.id)}">Заменить файл чека</button>`:''}</span></div>`:'';
   const last=subPaysOf(orgId)[0],again=!o.admin&&last&&subAgainOk(last)?`<div class="note bad">${ic('ban')}<span><b>Чек отклонён</b> (${esc(subPayWhatOwn(last))}, ${som(last.sum)}, отправлен ${fmtDT(last.at)}). Причина: ${esc(last.reason||'—')}${own?` <button type="button" class="linkbtn" data-subown="again:${esc(last.id)}">Прикрепить другой чек</button>`:''}</span></div>`:'';
   const cards=`<div class="sub-cards">

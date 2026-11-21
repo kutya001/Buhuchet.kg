@@ -914,6 +914,7 @@ describe.skipIf(!databaseAvailable())('готовые шаблоны «Витр�
         org: 'Организация Витрины Б',
         what: 'Бесплатный период',
         pack: 20,
+        gb: 0,
         sum: 0,
         status: 'Подтверждена',
         paid_to: '2026-12-03',

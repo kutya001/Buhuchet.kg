@@ -70,6 +70,8 @@ function dbFill(db){const miss=[],e=DBSRC.empty.db,r=DBSRC.ref.db;db.meta=db.met
   if(!db.meta.dm1){db.meta.dm1=1;const ps=db.ref.permissions;if(Array.isArray(ps)&&!ps.some(x=>x.id==='dmView')){let i=-1;ps.forEach((x,j)=>{if(x.group==='files')i=j});ps.splice(i<0?ps.length:i+1,0,...(r.permissions||[]).filter(x=>x.group==='dm').map(x=>structuredClone(x)))}
     const ow=(db.roles||[]).find(x=>x.id==='owner');if(ow&&Array.isArray(ow.perms))['dmView','dmTokens'].forEach(p=>{if(!ow.perms.includes(p))ow.perms.push(p)});
     if(db.ref.statuses&&!db.ref.statuses.dmTemplate&&r.statuses&&r.statuses.dmTemplate)db.ref.statuses.dmTemplate=structuredClone(r.statuses.dmTemplate)}
+  // Витрина данных: готовый шаблон «Подписки и оплаты» — запрос и столбцы по таблице оплат подписок миграции 0165 (исправление после v155); свои копии не трогаются
+  if(!db.meta.dm2){db.meta.dm2=1;const n=(r.dmTemplates||[]).find(x=>x.code==='subscriptions'),o=(db.ref.dmTemplates||[]).find(x=>x.code==='subscriptions'&&x.src==='system');if(n&&o&&o.sql!==n.sql){o.sql=n.sql;o.cols=structuredClone(n.cols);(o.hist=o.hist||[]).push(structuredClone(n.hist[n.hist.length-1]))}}
   // Справочник ГКЭД — отдельный файл gkedDB.json; правки администратора платформы хранятся в TemDB (ref.gked)
   if(db.ref.gked==null)db.ref.gked=structuredClone(DBSRC.gked.db.items||[]);
   DB_GK_REF.forEach(([k,get,key])=>{let a,b;try{a=get(db.ref);b=get(r)}catch(e){return}if(!a||!b)return;const m=Object.fromEntries(b.map(x=>[key(x),x]));a.forEach(x=>{if(!('gked' in x)&&m[key(x)]&&m[key(x)].gked)x.gked=structuredClone(m[key(x)].gked)})});

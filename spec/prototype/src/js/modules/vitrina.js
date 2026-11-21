@@ -62,7 +62,7 @@ const DM_RUN={
    const x=by[d+'|'+o.id]=by[d+'|'+o.id]||{day:d,org:o.name,logins:0,us:new Set()};x.logins++;x.us.add(s.u)})});
    return Object.values(by).map(x=>({day:x.day,org:x.org,logins:x.logins,users:x.us.size})).sort((a,b)=>a.day<b.day?1:a.day>b.day?-1:COLL.compare(a.org,b.org))},
  subscriptions:(D,p)=>SUB_PAYS.filter(x=>dmIn(x.at.slice(0,10),p.date_from,p.date_to)).sort((a,b)=>a.at<b.at?1:-1)
-   .map(x=>({at:x.at.slice(0,10),org:subOrgName(x.org),what:SUB_WHAT[x.what]||x.what,pack:x.pack||0,sum:x.sum||0,status:SUB_PAY_ST[x.status]||x.status,paid_to:x.paidTo||''})),
+   .map(x=>({at:x.at.slice(0,10),org:subOrgName(x.org),what:SUB_WHAT[x.what]||x.what,pack:x.pack||0,gb:x.extraGb||0,sum:x.sum||0,status:SUB_PAY_ST[x.status]||x.status,paid_to:x.paidTo||''})),
  leads:(D,p)=>LEADS.filter(l=>dmIn(l.at.slice(0,10),p.date_from,p.date_to)).sort((a,b)=>a.at<b.at?1:-1).map(l=>({at:l.at.slice(0,10),firm:l.firm||'',size:l.size||'',status:l.status})),
  'bot-messages':(D,p)=>{const by={};TG_LOG.forEach(m=>{const d=(m.at||'').slice(0,10);if(!dmIn(d,p.date_from,p.date_to))return;const x=by[d]=by[d]||{day:d,sent:0,errors:0};if(m.st==='Отправлено')x.sent++;else if(m.st==='Ошибка')x.errors++});
    return Object.values(by).sort((a,b)=>a.day<b.day?1:-1)},
@@ -268,8 +268,10 @@ function dmNewDlg(code){const adm=isAdmin();
     foot:'<button class="btn ghost" data-close>Отмена</button><button class="btn cta" id="dk-ok">Создать</button>',
     mount(el,m){$('#dk-t',el).onchange=e=>st.tpl=e.target.value;$$('[data-term]',el).forEach(b=>b.onclick=()=>{st.term=+b.dataset.term;$$('[data-term]',el).forEach(x=>x.classList.toggle('on',x===b))});
       $('#dk-ok',el).onclick=()=>{const n=val(el,'dk-n');if(!setErr(el,'dk-n',!n?'Введите название':DM_TOK.some(k=>mine(k)&&dmLive(k)&&k.name===n)?'Токен с таким названием уже действует':''))return;m.close();dmIssue({tpl:st.tpl,name:n,term:st.term})}}})})}
+// Случайные знаки без смещения: байты от 248 (4×62) отбрасываются, иначе первые знаки алфавита выпадали бы чаще
+function dmRand(A,n){let s='';while(s.length<n)for(const v of crypto.getRandomValues(new Uint8Array(n)))if(v<248&&s.length<n)s+=A[v%62];return s}
 // Выпуск: 32 случайных байта с приставкой bk_ (в прототипе — 43 знака); в базе продукта — только хеш SHA-256, здесь — первые знаки
-function dmIssue(x,prev){const adm=isAdmin(),A='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789',tok='bk_'+[...crypto.getRandomValues(new Uint8Array(43))].map(v=>A[v%62]).join('');
+function dmIssue(x,prev){const adm=isAdmin(),A='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789',tok='bk_'+dmRand(A,43);
   const k={id:'tk'+Date.now().toString(36),org:adm?'adm':ORG.id,tpl:x.tpl,name:x.name,by:S.me,at:nowStamp(),till:addDays(TODAY,x.term),term:x.term,pre:tok.slice(3,9),revoked:null,prev:prev?prev.id:null,next:null,last:null};
   DM_TOK.push(k);if(prev)prev.next=k.id;const t=dmTpl(x.tpl),what=`${prev?'Перевыпущен':'Выпущен'} API-токен «${k.name}» к шаблону «${t?t.name:x.tpl}» на ${x.term} ${plural(x.term,'день','дня','дней')}`;
   if(adm)pdLog('Витрина данных: '+what,'dm');else log('org','api',what);renderPage();dmShowTok(k,tok)}
