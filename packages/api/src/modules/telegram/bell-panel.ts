@@ -31,6 +31,7 @@ import { asSessionUser } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
 import { reportScopeOf } from '../reports/common';
 import { cpScopeOf, taskAccessOf } from '../tasks/common';
+import { dmBellSync } from '../datamart/check-job';
 import { bellSyncPlatform, subNoticeContext } from './subs';
 
 /*
@@ -94,15 +95,15 @@ async function sightOf(c: Context<AppEnv>, tx: Tx): Promise<BellSight> {
 }
 
 /**
- * Тексты строк, которые кладёт чтение: заявка и — администратору платформы — чеки подписок и сверка
- * хранилища (`bellSyncPlatform`). До транзакции.
+ * Тексты строк, которые кладёт чтение: заявка и — администратору платформы — чеки подписок, сверка
+ * хранилища (`bellSyncPlatform`) и сломанные шаблоны «Витрины данных» (`dmBellSync`). До транзакции.
  */
 async function readTimeTexts(deps: ApiDeps, c: Context<AppEnv>) {
   const t = await serverTexts(deps);
   const platform = c.get('session')?.isPlatformAdmin
     ? await subNoticeContext(deps, deps.config.APP_BASE_URL)
     : null;
-  return { lead: t('bell.line.lead'), platform };
+  return { lead: t('bell.line.lead'), dmBroken: t('bell.line.dm_broken'), platform };
 }
 
 /** Новости вошедшего и — администратору платформы — новые заявки, чеки и сверка: до чтения строк. */
@@ -119,6 +120,8 @@ async function syncReadTime(
   if (session?.isPlatformAdmin) {
     await bellSyncLeads(tx, texts.lead, now);
     if (texts.platform) await bellSyncPlatform(tx, texts.platform, session.userId);
+    // Сломанные шаблоны «Витрины данных» (общий план 20.11, этап 2, П4).
+    await dmBellSync(tx, texts.dmBroken, session.userId, now);
   }
 }
 

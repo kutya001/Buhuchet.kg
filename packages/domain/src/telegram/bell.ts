@@ -48,6 +48,9 @@ export const BELL_TARGETS = [
   'sub',
   'sub_check',
   'storage_check',
+  // «Витрина данных» (общий план 20.11, этап 2, П4): администратору платформы — окно шаблона Админки
+  // (номер — шаблон), когда проверка системой его сломала.
+  'dm_template',
 ] as const;
 export type BellTarget = (typeof BELL_TARGETS)[number];
 export const BELL_REPORT_TABS = ['week', 'overdue', 'wait'] as const;

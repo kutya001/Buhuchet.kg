@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { schema, takeRateLimit } from '@buhuchet/db';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
 import { UI_TEXTS } from '@buhuchet/domain';
@@ -286,9 +287,7 @@ describe.skipIf(!databaseAvailable())('Витрина данных: «Вывод
     const all = await ok(await adminRun('out-adm'), 200, DmRunResult);
     expect(Number(all.rows[0]![0])).toBeGreaterThanOrEqual(2);
     expect((await fail(await adminRun('out-cps'), 400)).code).toBe('dm_org_required');
-    expect(
-      (await fail(await adminRun('out-cps', {}, f.b.orgId.replace(/.$/, '0')), 404)).code,
-    ).toBe('not_found');
+    expect((await fail(await adminRun('out-cps', {}, randomUUID()), 404)).code).toBe('not_found');
     const eyes = await ok(await adminRun('out-cps', {}, f.b.orgId), 200, DmRunResult);
     expect(eyes.rows).toEqual([['Гамма', 125050]]);
     expect(eyes.orgName).toBe('Организация Б');
