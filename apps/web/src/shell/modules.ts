@@ -450,7 +450,15 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
     ],
     add: [
       { id: 'tpl', icon: 'layers', label: 'add.dm.tpl', when: (a) => a.admin },
-      { id: 'tok', icon: 'key', label: 'add.dm.tok', when: (a) => a.admin || a.can('dmTokens') },
+      // В демо-организации «Токена» нет (прототип v155 `dmAdd`: `!dmDemo()`): о демо «кто я» говорит
+      // владельцу статусом подписки; сотруднику с правом в демо (в стандартных ролях его нет) отвечает
+      // отказом окно (docs/deviations.md п. И-16).
+      {
+        id: 'tok',
+        icon: 'key',
+        label: 'add.dm.tok',
+        when: (a) => a.admin || (a.can('dmTokens') && a.subscription?.status !== 'demo'),
+      },
       { id: 'ask', icon: 'send', label: 'add.dm.ask', when: (a) => !a.admin },
     ],
   },

@@ -63,13 +63,19 @@ export function createTestDeps(overrides: Partial<ApiDeps> = {}): ApiDeps {
  * Приложение с теми же настройками на своём пуле из четырёх соединений — для теста одновременных
  * запросов (гонка, взаимная блокировка). Пул тестов в CI — одно соединение (`TEST_DATABASE_POOL_MAX=1`,
  * п. О-53): на нём транзакции идут строго по очереди, и гонку тест бы не увидел. Словарь — на
- * соединении словаря основного пула. После теста — `await race.close()`.
+ * соединении словаря основного пула. `max` — другой размер пула (тест нагрузки — как у сайта, 5);
+ * `deps` ответа — те же настройки на этом пуле. После теста — `await race.close()`.
  */
-export function createRaceApp(appUrl: string, deps: ApiDeps) {
-  const pool = createDb(appUrl, { max: 4, applicationName: 'buhuchet-test-race' });
+export function createRaceApp(
+  appUrl: string,
+  deps: ApiDeps,
+  { max = 4, applicationName = 'buhuchet-test-race' } = {},
+) {
+  const pool = createDb(appUrl, { max, applicationName });
   const textsDb = deps.textsDb ?? testTextsDbOf(deps.db);
-  const app = createApp({ ...deps, db: pool.db, ...(textsDb ? { textsDb } : {}) });
-  return { app, close: () => pool.close() };
+  const raceDeps: ApiDeps = { ...deps, db: pool.db, ...(textsDb ? { textsDb } : {}) };
+  const app = createApp(raceDeps);
+  return { app, deps: raceDeps, close: () => pool.close() };
 }
 
 /** Origin, с которым тесты шлют изменяющие запросы (`app.request` идёт на http://localhost). */

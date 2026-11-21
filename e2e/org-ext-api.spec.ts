@@ -1,6 +1,12 @@
 import { randomBytes } from 'node:crypto';
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
-import { DEMO_PASSWORD, signIn } from './helpers';
+import {
+  expect,
+  test,
+  type APIRequestContext,
+  type APIResponse,
+  type Page,
+} from '@playwright/test';
+import { DEMO_PASSWORD, signIn, stillElement } from './helpers';
 import { orgWithTypes } from './orgs';
 
 // «Моя организация» → «Настройки» → «Внешний доступ по API» и модуль «Витрина данных» в меню
@@ -32,10 +38,14 @@ const policySaved = (page: Page) =>
   );
 
 test.describe('Витрина данных: «Внешний доступ по API» и модуль в меню организации', () => {
-  test('(Витрина данных, «Токены и внешний адрес») «Внешний доступ по API» выключен — выпуск токенов недоступен; владелец включает его в «Моя организация» — выпуск доступен; выключение при действующем токене — с вопросом, токен остановлен', async ({
+  test('(Витрина данных, «Токены и внешний адрес») «Внешний доступ по API» выключен — выпуск токенов недоступен; владелец включает его в «Моя организация» — выпуск доступен; выключение при действующем токене — с вопросом, токен остановлен; после включения снова отвечает', async ({
     page,
     baseURL,
+    playwright,
   }) => {
+    // Длинный сценарий: своя организация (вход администратора, создание, смена пароля), шесть
+    // переходов по страницам и три обращения к внешнему адресу.
+    test.slow();
     const origin = new URL(baseURL!).origin;
     await orgWithTypes(page.request, origin, false);
     const tx = await dictionary(page.request);
@@ -70,40 +80,100 @@ test.describe('Витрина данных: «Внешний доступ по A
     const form = (await (await page.request.get('/api/dm/tokens/form')).json()) as {
       refusal: string | null;
       apiOff: boolean;
-      templates: { id: string }[];
+      templates: { id: string; code: string }[];
     };
     expect(form).toMatchObject({ refusal: null, apiOff: false });
     expect(form.templates.length).toBeGreaterThan(0);
+    // Готовый шаблон «Контрагенты» — без параметров и функций учётной политики.
+    const template = form.templates.find((x) => x.code === 'contractors')!;
+    expect(template, 'готовый шаблон «contractors»').toBeTruthy();
     const issued = await page.request.post('/api/dm/tokens', {
       headers: { origin },
-      data: { templateId: form.templates[0]!.id, name: uniqueWord('Токен'), term: 30 },
+      data: { templateId: template.id, name: uniqueWord('Токен'), term: 30 },
     });
     expect(issued.status(), await issued.text()).toBe(201);
-    const tokenId = ((await issued.json()) as { item: { id: string } }).item.id;
-
-    // Подпись — с числом действующих токенов; выключение спрашивает.
-    await page.reload();
-    await expect(box).toContainText(tx['dm.api.live']!.replace('{n}', '1'));
-    await toggle.click();
-    const ask = page.getByRole('dialog', { name: tx['dm.api.off_title'] });
-    await expect(ask).toContainText(tx['dm.api.off_text']!.replace('{n}', '1'));
-    const off = policySaved(page);
-    await ask.getByRole('button', { name: tx['dm.api.off_ok'] }).click();
-    expect((await off).status()).toBe(200);
-    await expect(
-      page.getByRole('status').filter({ hasText: tx['dm.api.off_done']! }),
-    ).toBeVisible();
-    await expect(toggle).not.toBeChecked();
-    await expect(box).not.toContainText(tx['dm.api.live']!.replace('{n}', '1'));
-
-    // Токен остановлен, а не отозван; «API Токены» — снова красная строка.
-    const card = (await (await page.request.get(`/api/dm/tokens/${tokenId}`)).json()) as {
-      state: string;
-      stop: string | null;
+    const { token, item } = (await issued.json()) as { token: string; item: { id: string } };
+    const tokenId = item.id;
+    // Внешняя программа — без cookie входа, токен в заголовке.
+    const ext = await playwright.request.newContext({ baseURL });
+    // У внешнего адреса одно место на всю платформу (`DM_EXT_RUNS_PLATFORM`): занято запросом другого
+    // теста — 429 после ожидания очереди, тогда спрашиваем снова; любой другой ответ — итог.
+    const askExt = async () => {
+      let res!: APIResponse;
+      await expect
+        .poll(
+          async () => {
+            res = await ext.get(`/api/ext/v1/${template.code}`, {
+              headers: { authorization: `Bearer ${token}` },
+            });
+            return res.status();
+          },
+          { timeout: 20_000 },
+        )
+        .not.toBe(429);
+      return res;
     };
-    expect(card).toMatchObject({ state: 'stopped', stop: 'api_off' });
-    await page.goto('/app/dm/tok');
-    await expect(apiOff).toBeVisible();
+    const tokenState = async () =>
+      (await (await page.request.get(`/api/dm/tokens/${tokenId}`)).json()) as {
+        state: string;
+        stop: string | null;
+      };
+    try {
+      const answered = await askExt();
+      expect(answered.status(), await answered.text()).toBe(200);
+
+      // Токен выпущен мимо экрана, страница не перезагружалась: число действующих токенов
+      // перечитывается в момент нажатия — выключение спрашивает с «1».
+      await toggle.click();
+      const ask = page.getByRole('dialog', { name: tx['dm.api.off_title'] });
+      await expect(ask).toContainText(tx['dm.api.off_text']!.replace('{n}', '1'));
+      await page.keyboard.press('Escape');
+      await expect(ask).toBeHidden();
+      await expect(toggle).toBeChecked();
+      // Подпись — с тем же числом; второе нажатие — снова вопрос, «Выключить».
+      await expect(box).toContainText(tx['dm.api.live']!.replace('{n}', '1'));
+      await toggle.click();
+      await expect(ask).toContainText(tx['dm.api.off_text']!.replace('{n}', '1'));
+      const offButton = ask.getByRole('button', { name: tx['dm.api.off_ok'] });
+      // На телефоне окно въезжает шторкой: нажатие по движущейся кнопке теряется (№ 34).
+      await stillElement(offButton);
+      const off = policySaved(page);
+      await offButton.click();
+      expect((await off).status()).toBe(200);
+      await expect(
+        page.getByRole('status').filter({ hasText: tx['dm.api.off_done']! }),
+      ).toBeVisible();
+      await expect(toggle).not.toBeChecked();
+      await expect(box).not.toContainText(tx['dm.api.live']!.replace('{n}', '1'));
+
+      // Токен остановлен, а не отозван: внешний адрес — «Доступ остановлен»; «API Токены» — снова
+      // красная строка.
+      expect(await tokenState()).toMatchObject({ state: 'stopped', stop: 'api_off' });
+      const stopped = await askExt();
+      expect(stopped.status()).toBe(403);
+      expect(
+        ((await stopped.json()) as { error: { code: string; message: string } }).error,
+      ).toMatchObject({
+        code: 'dm_ext_stopped',
+        message: tx['err.dm_ext_stopped'],
+      });
+      await page.goto('/app/dm/tok');
+      await expect(apiOff).toBeVisible();
+
+      // Владелец включает снова — тот же токен «Действует» и отвечает.
+      await page.getByRole('button', { name: tx['dm.tok.api_off_open'] }).click();
+      await expect(page).toHaveURL(/\/app\/org\/settings$/);
+      await expect(toggle).not.toBeChecked();
+      const again = policySaved(page);
+      await toggle.click();
+      expect((await again).status()).toBe(200);
+      await expect(toggle).toBeChecked();
+      expect(await tokenState()).toMatchObject({ state: 'active', stop: null });
+      const back = await askExt();
+      expect(back.status(), await back.text()).toBe(200);
+    } finally {
+      await ext.dispose();
+    }
   });
 
   test('(Витрина данных, «Права и вывод») «Витрина данных» — в меню организации у владельца, без права «Смотреть витрину данных» модуля нет; в демо-организации выключатель недоступен', async ({
@@ -121,8 +191,8 @@ test.describe('Витрина данных: «Внешний доступ по A
     await expect(box).toContainText(tx['dm.api.demo']!);
     await expect(box.locator('[data-ext-api-switch]').getByRole('switch')).toBeDisabled();
 
-    // Бухгалтер (в стандартной роли права на витрину нет): модуля нет в меню, блок — только для
-    // просмотра, адрес модуля — не открывается.
+    // Бухгалтер (в стандартной роли права на витрину нет): модуля нет в меню и в «кто я», блок —
+    // только для просмотра (отказ методов витрины без права — тесты API `datamart/output.test.ts`).
     await page.goto('about:blank');
     await signIn(page.request, origin, 'alisher', DEMO_PASSWORD);
     await page.goto('/app/org/settings');

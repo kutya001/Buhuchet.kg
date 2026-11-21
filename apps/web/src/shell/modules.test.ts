@@ -452,6 +452,16 @@ describe('подписка в оболочке', () => {
   });
   const orgTabs = (m: MeResponse) => ids(visibleTabs('org', shellAccess(m)));
 
+  it('«+ Добавить» «Витрины данных»: в демо-организации «Токена» нет (прототип v155 `dmAdd`)', () => {
+    const adds = (m: MeResponse) => ids(addActions('dm', shellAccess(m)));
+    expect(adds(withSub(true, sub('active')))).toEqual(['tok', 'ask']);
+    expect(adds(withSub(true, sub('demo')))).toEqual(['ask']);
+    // Без права «Управлять API-токенами» — только «Попросить шаблон»; Админка — «Шаблон» и «Токен».
+    const noTokens = PERMISSION_IDS.filter((p) => p !== 'dmTokens') as PermissionId[];
+    expect(adds(withSub(false, sub('active'), { permissions: noTokens }))).toEqual(['ask']);
+    expect(ids(addActions('dm', shellAccess(me({ admin: true }))))).toEqual(['tpl', 'tok']);
+  });
+
   it('«Подписка» — только владельцу, не в демо-организации и не администратору', () => {
     expect(orgTabs(withSub(true, sub('active')))).toEqual(['main', 'policy', 'settings', 'sub']);
     expect(orgTabs(withSub(false, sub('active')))).toEqual(['main', 'policy', 'settings']);

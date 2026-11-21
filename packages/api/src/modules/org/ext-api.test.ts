@@ -113,7 +113,8 @@ describe.skipIf(!databaseAvailable())('Моя организация: «Внеш
   });
 
   it('выключение останавливает действующие токены и выпуск, включение — возвращает; число действующих — в блоке', async () => {
-    // Доступ включён предыдущим тестом.
+    // Доступ включается здесь же: тест не опирается на предыдущий (запуск одного теста через `-t`).
+    if (!(await policy()).extApi) await ok(await setExtApi(true), 200, OrgPolicy);
     const issued = await ok(
       await call('owner-a', 'POST', '/api/dm/tokens', {
         templateId: template,
@@ -159,6 +160,7 @@ describe.skipIf(!databaseAvailable())('Моя организация: «Внеш
 
   it('в демо-организации выключатель не меняется — 400; остальные настройки сохраняются', async () => {
     const db = f.t.admin.db;
+    const aOn = (await policy('owner-a')).extApi;
     await db.update(organizations).set({ isDemo: true }).where(eq(organizations.id, f.b.orgId));
     try {
       expect(await extApi('owner-b')).toEqual({ demo: true, activeTokens: 0 });
@@ -173,7 +175,8 @@ describe.skipIf(!databaseAvailable())('Моя организация: «Внеш
         overdueRepeat: false,
       });
       expect(other.status, await other.clone().text()).toBe(200);
-      expect((await policy('owner-a')).extApi).toBe(true);
+      // У другой организации выключатель не тронут.
+      expect((await policy('owner-a')).extApi).toBe(aOn);
     } finally {
       await db.update(organizations).set({ isDemo: false }).where(eq(organizations.id, f.b.orgId));
     }

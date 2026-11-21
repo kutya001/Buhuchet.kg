@@ -37,6 +37,7 @@ describe('модули новости — как NEWS_MODS и newsModOk прот
       'kpi',
       'tasks',
       'files',
+      'dm',
       'staff',
       'dicts',
       'org',
