@@ -68,6 +68,7 @@ function bellGo(x){const o=x.open;bellRead(x.id);closePop();bellPaint();if(!o)re
     case 'tasks_tab':return feat('tasks')?go('tasks',id):gone();
     case 'employee':{const e=EM[id];return e?empCard(e):gone()}
     case 'sub':case 'sub_check':return subBellGo(o);
+    case 'dm_token':return dmBellGo(o);
     case 'news':{const n=NEWS.find(y=>y.id===id);return n?newsOpen(n):gone()}
     case 'lead':{const l=LEADS.find(y=>String(y.id)===String(id));return l?openLead(l):gone()}
   }}

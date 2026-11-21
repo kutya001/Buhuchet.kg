@@ -417,6 +417,8 @@ export async function queueStaffNotice(
 
 type PressOutcome =
   | { refusal: TelegramTemplateKey; values?: Readonly<Record<string, string>> }
+  /** Доступ организации закрылся после проверки до транзакции: ничего не записано (п. К-24). */
+  | { closed: true }
   | {
       reply?: string;
       after: BotMessage | null;
@@ -537,6 +539,10 @@ export async function clientPress(deps: ApiDeps, press: BotPress): Promise<boole
           return { refusal: 'tgActStale' };
         }
         if (!current.linked) return { refusal: 'tgCpNotLinked' };
+        // Доступ могли закрыть между проверкой выше и этой транзакцией (полночь после «Оплачено до»,
+        // отклонённый чек): проверка — и здесь, где нажатие записывается (п. К-24).
+        // ОТКЛОНЕНИЕ: docs/deviations.md#К-24
+        if (await orgAccessClosed(tx, bishkekDate(deps.clock.now()))) return { closed: true };
 
         // «Оплатил» под напоминанием об оплате за обслуживание (доработки 14.11.2026, блок 4, пункт 5;
         // прототип v110 tgAct('cp-feepaid')): сумма — из записи сообщения (долг на момент отправки).
@@ -758,6 +764,10 @@ export async function clientPress(deps: ApiDeps, press: BotPress): Promise<boole
     await refuse('tgActFailed');
     return true;
   }
+  if ('closed' in outcome) {
+    await answer((await serverTexts(deps))('cppage.tg.org_closed'), true);
+    return true;
+  }
   if ('refusal' in outcome) {
     await refuse(outcome.refusal, outcome.values);
     return true;
@@ -843,11 +853,13 @@ export async function clientQuestion(deps: ApiDeps, raw: unknown): Promise<boole
   const result = await withOrgContext(
     deps.db,
     { orgId: target.orgId, userId: null },
-    async (tx): Promise<{ staff: string[] } | 'unlinked' | null> => {
+    async (tx): Promise<{ staff: string[] } | 'unlinked' | 'closed' | null> => {
       const current = await lockContractorTelegramMessage(tx, target.id, chat.id);
       if (!current || current.answered) return null;
       // Раздел «Telegram» страницы скрыт или функция выключена — вопрос не принимается.
       if (!current.linked) return 'unlinked';
+      // Доступ закрыли после проверки до транзакции — вопрос не записывается и не уходит (п. К-24).
+      if (await orgAccessClosed(tx, bishkekDate(deps.clock.now()))) return 'closed';
       if (!(await answerContractorTelegramAsk(tx, target.id))) return null;
       await logContractorTelegramPay(tx, target.contractorId, 'page_tg_question', [
         { field: 'tgQuestion', to: { name: current.name, text: cpTgQuestionForHistory(question) } },
@@ -877,6 +889,10 @@ export async function clientQuestion(deps: ApiDeps, raw: unknown): Promise<boole
     },
   );
   if (!result) return false;
+  if (result === 'closed') {
+    await send(t('cppage.tg.org_closed'));
+    return true;
+  }
   if (result === 'unlinked') {
     if (replyTo === null) return false;
     await send(await templateText(deps.db, 'tgCpNotLinked'));

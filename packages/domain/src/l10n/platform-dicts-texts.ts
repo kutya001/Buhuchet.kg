@@ -332,6 +332,9 @@ const SYSTEM_TEXTS = {
   'pdicts.tpl.label.tg_sub_mem_full': { ru: 'Telegram: память заполнена', section: S },
   'pdicts.tpl.label.tg_sub_check_new': { ru: 'Telegram: новый чек на проверку', section: S },
   'pdicts.tpl.label.tg_sub_check_wait': { ru: 'Telegram: чек ждёт проверки', section: S },
+  'pdicts.tpl.label.tg_dm_tok_new': { ru: 'Telegram: API-токен создан', section: S },
+  'pdicts.tpl.label.tg_dm_tok_revoked': { ru: 'Telegram: API-токен отозван', section: S },
+  'pdicts.tpl.label.tg_dm_tok_soon': { ru: 'Telegram: API-токен истекает', section: S },
   'pdicts.tpl.label.tg_act_no_link': {
     ru: 'Telegram: скрытый ответ — Telegram не привязан',
     section: S,

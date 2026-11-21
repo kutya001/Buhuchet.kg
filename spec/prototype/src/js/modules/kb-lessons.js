@@ -82,6 +82,13 @@ const CKG=[
  {id:'files',feat:()=>feat('files'),items:[
   {id:'upload',done:()=>FILES.length>0,go:G('files',null,'#add-btn','#fab',()=>uploadDlg())},
   {id:'ffind',learn:1,at:['files'],go:G('files',null,'#mbody')}]},
+ // «Витрина данных» (пакет 20.11, этап 3, П3): «Показать» — первое использование; «Выпустить API-токен» — не в демо-организации (там токены не выпускаются),
+ // «Перейти» при выключенном «Внешнем доступе по API» подсвечивает полосу с «Открыть настройки», а не открывает окно, которое всё равно откажет
+ {id:'dm',items:[
+  {id:'dmshow',go:G('dm','out','#dm-go')},
+  {id:'dmxl',learn:1,at:['dm.out'],go:G('dm','out','#dm-res')},
+  {id:'dmcat',learn:1,at:['dm.tpl'],go:G('dm','tpl','#mbody .dm-cards')},
+  {id:'dmtok',feat:()=>!dmDemo(),go:G('dm','tok','#add-btn','#fab',()=>{if(ORG.apiOn)dmNewDlg();else ckFlash('#mbody .note.red')})}]},
  {id:'home',items:[
   {id:'today',learn:1,at:['home.today'],go:G('home','today','#mbody .plates')},
   {id:'anl',learn:1,perm:'fee',feat:()=>feat('fee'),at:['home.analytics'],go:G('home','analytics','#mbody')}]},
@@ -99,6 +106,7 @@ const CKA=[{id:'adm',items:[
   {id:'a-cal',at:['pdicts.calendar'],go:G('pdicts','calendar','#mbody')},
   {id:'a-tpl',at:['pdicts.templates','pdicts.roletpl'],go:G('pdicts','templates','#mbody')},
   {id:'a-l10n',at:['l10n'],go:G('l10n',null,'#mbody')},
+  {id:'a-dm',at:['dm.tpl'],go:G('dm','tpl','#mbody')},
   {id:'a-org',star:1,done:()=>ORGS.some(o=>o._cb===S.me&&String(o._ca||'').startsWith(TODAY)),go:G('orgs',null,'#add-btn','#fab',()=>addOrgDlg())}]}];
 const KB_ARTS=DB.ref.kbArticles;
 // Every step is personal: it counts only for the user who did the action himself (history under his name).
@@ -140,8 +148,9 @@ const KB_EV={
  'k.xls':['показатели загружены из Excel',h=>h.ent==='kimp'&&/^Ввод показателей из Excel/.test(h.what)],
  'k.check':['месяц показателей проверен',h=>h.ent==='km'&&/→ Проверено/.test(h.what)],
  'f.upload':['загружен файл вручную',h=>h.ent==='cp'&&/^Загружены файлы/.test(h.what)],
+ 'dm.tok':['выпущен API-токен',h=>h.ent==='org'&&h.id==='api'&&/^(Выпущен|Перевыпущен) API-токен/.test(h.what)],
  'open':['«Перейти» и 3 секунды на экране шага, показ «Показать как» до конца или статья шага (Посмотреть)'],'use':['первое использование функции (раздел «Работа со списками»)'],'state':['выполнено условие в данных пользователя'],'hand':['только показом или статьёй']};
-const KB_MAP={profile:'org.main',accs:'org.acc',policy:'org.policy',settings:'org.settings',nmode:'emp.notify',types:'type.on',typecfg:'type.cfg',roles:'role.save',emps:'emp.new',cp1:'cp.new',import:'cp.import',resp:'cp.resp',tariff:'cp.tariff',oneoff:'cp.oneoff',cppage:'cp.page',assign:'r.assign',submit:'r.sub',accept:'r.acc',ver:'r.ver',na:'r.na',in:'in.new',split:'in.split',pay:'r.pay',svc:'s.new',feepay:'fee.pay',mtask:'t.new',tdone:'t.done',tconf:'t.conf',proj:'p.new',works:'p.work',tranche:'p.pay',kset:'k.setup',kwho:'k.who',kval:'k.val',kxls:'k.xls',kchk:'k.check',upload:'f.upload'};
+const KB_MAP={profile:'org.main',accs:'org.acc',policy:'org.policy',settings:'org.settings',nmode:'emp.notify',types:'type.on',typecfg:'type.cfg',roles:'role.save',emps:'emp.new',cp1:'cp.new',import:'cp.import',resp:'cp.resp',tariff:'cp.tariff',oneoff:'cp.oneoff',cppage:'cp.page',assign:'r.assign',submit:'r.sub',accept:'r.acc',ver:'r.ver',na:'r.na',in:'in.new',split:'in.split',pay:'r.pay',svc:'s.new',feepay:'fee.pay',mtask:'t.new',tdone:'t.done',tconf:'t.conf',proj:'p.new',works:'p.work',tranche:'p.pay',kset:'k.setup',kwho:'k.who',kval:'k.val',kxls:'k.xls',kchk:'k.check',upload:'f.upload',dmtok:'dm.tok'};
 const KB_KEEP={profile:1,resp:1}; // the data condition stays in addition to the event
 const KB_FEAT={money:'taxpay',fee:'fee',tasks:'tasks',projects:'projects',kpi:'indicators',files:'files'},KB_IFEAT={tariff:'fee',bonus:'accounts',journal:'finops',svc:'finops',anl:'fee'};
 const KBG=DB.ref.kbGroups;
@@ -209,7 +218,8 @@ function ckEval(){const fresh=CK.q.splice(0);
   // Feedback right at the moment of the action: the lesson step first, then other actions; «Посмотреть»-hits only toast.
   const a=CK.active&&ckFind(CK.active);const act=fresh.filter(i=>!i.at);
   const pick=act.find(i=>i===a&&!i.soft&&!i.learn)||act.find(i=>!i.learn&&!i.soft);
-  if(pick&&CK.active){CK.active=pick.id;CK.bar=true;setTimeout(()=>ckDoneDlg(pick),MODALS.length?250:50)}
+  // Окно, которое нельзя потерять (токен «Витрины данных» показывается один раз), «Шаг выполнен» не перекрывает: ждёт, пока его закроют
+  if(pick&&CK.active){CK.active=pick.id;CK.bar=true;const show=()=>MODALS.some(m=>m.o&&m.o.sticky)?setTimeout(show,400):ckDoneDlg(pick);setTimeout(show,MODALS.length?250:50)}
   {const rest=act.filter(i=>!(CK.active&&i===pick));if(rest.length&&CK.active){CK.quiet++;toast(rest.length===1?`Шаг выполнен: «${rest[0].t}»`:`Выполнено шагов: ${rest.length}`,'grad');CK.quiet--}}
   const before=ckU().max;kbSync(false);if(ckU().max!==before||fresh.length){if(S.mod==='kb')renderPage();renderSide();if(typeof renderSheetDot==='function')renderSheetDot()}
   ckBar()}

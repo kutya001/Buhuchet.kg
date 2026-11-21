@@ -150,6 +150,10 @@ export function bellGoOf(
     // «Шаблоны» с окном шаблона.
     case 'dm_template':
       return record ? { kind: 'href', href: `${tabHref('dm', 'tpl')}?tpl=${id}` } : null;
+    // API-токен «Витрины данных» (общий план 20.11, этап 3, П5; прототип v158 `dmBellGo`): владельцу —
+    // вкладка «API Токены» с окном токена.
+    case 'dm_token':
+      return record ? { kind: 'href', href: `${tabHref('dm', 'tok')}?tok=${id}` } : null;
     default:
       return null;
   }

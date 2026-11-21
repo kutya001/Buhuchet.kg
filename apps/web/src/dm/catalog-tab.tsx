@@ -37,7 +37,8 @@ export function CatalogTab({
       </Note>
     );
   }
-  if (!catalog.data) return null;
+  // Пока каталог грузится — заглушка `aria-busy`: «Показать как» ждёт её, а не пустой экран.
+  if (!catalog.data) return <div className="min-h-[200px]" aria-busy="true" data-dm-loading="" />;
   const { items, canTokens } = catalog.data;
   const groups = catalogGroups(items);
   const show = (code: string) => {
@@ -72,7 +73,10 @@ export function CatalogTab({
               {t(`dm.mod.${g.module}`)}
               <span className="font-normal text-faint">{g.items.length}</span>
             </h3>
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(min(320px,100%),1fr))] gap-3">
+            <div
+              className="grid grid-cols-[repeat(auto-fill,minmax(min(320px,100%),1fr))] gap-3"
+              data-dm-cards=""
+            >
               {g.items.map((x) => (
                 <TemplateCard
                   key={x.code}

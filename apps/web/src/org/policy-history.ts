@@ -58,6 +58,10 @@ function changeLines(change: HistoryChange, t: Translate): string[] {
     // «Контрагент может отправлять файлы» (доработки 14.11.2026, блок 2; прототип v112 `pol-cpup`).
     case 'cpFilesUpload':
       return [t('files.sent.hist.upload', { state: state(change.to) })];
+    // «Внешний доступ по API» (доработки 20.11.2026: Витрина данных, блок 5, пункт 9; прототип v155
+    // `dmApiMount`: «Внешний доступ по API: включён»).
+    case 'extApi':
+      return [t(change.to ? 'dm.api.hist_on' : 'dm.api.hist_off')];
     // Было → стало (ТЗ «История изменений учётной политики»; прототип пишет только новое значение).
     case 'confirmWaitDays':
       return [

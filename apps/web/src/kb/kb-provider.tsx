@@ -1,6 +1,6 @@
 'use client';
 
-import { type Feature, type MenuModuleId } from '@buhuchet/domain';
+import { KB_HIT_STEPS, type Feature, type MenuModuleId } from '@buhuchet/domain';
 import type { KbMarkResult, KbState, KbStep } from '@buhuchet/shared';
 import { buttonClass, Icon, iconButtonClass, Modal, useToast, useWindow } from '@buhuchet/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -52,6 +52,22 @@ const LOOK_ARM_MS = 3000;
 const SYNC_DELAY_MS = 250;
 /** Сколько видно «Новый уровень». */
 const CONGRATS_MS = 4200;
+/** Как часто окно «Готово» проверяет, закрыто ли окно, которое не закрывается нажатием мимо. */
+const STICKY_POLL_MS = 400;
+
+/**
+ * Показать окно «Готово», когда закроют окно, которое не закрывается нажатием мимо (прототип ckEval,
+ * `o.sticky`): токен витрины виден один раз, и окно урока не должно его заслонять. Возвращает отмену.
+ */
+function afterStickyWindows(show: () => void): () => void {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const check = () => {
+    if (document.querySelector('[data-window-sticky]')) timer = setTimeout(check, STICKY_POLL_MS);
+    else show();
+  };
+  check();
+  return () => clearTimeout(timer);
+}
 
 export interface KbControls {
   /** «Перейти» у шага; `replace` — из открытого окна (его запись истории заменяется). */
@@ -198,6 +214,9 @@ export function useKbRuntime(shell: KbShellInfo): { controls: KbControls; overla
   } | null>(null);
   const shown = useRef(new Set<string>());
   const hits = useRef(new Set<string>());
+  /** Отмена ожидания окна «Готово» за окном токена (`afterStickyWindows`). */
+  const doneWait = useRef<(() => void) | null>(null);
+  useEffect(() => () => doneWait.current?.(), []);
   // Отклик на ответ и «Перейти» читают урок и программу на момент события.
   const lessonRef = useRef(lesson);
   const stateRef = useRef(state);
@@ -233,7 +252,11 @@ export function useKbRuntime(shell: KbShellInfo): { controls: KbControls; overla
       if (pick && !shown.current.has(pick.id)) {
         shown.current.add(pick.id);
         setLesson({ id: pick.id, bar: true, off: false });
-        setDone(openSlot<DoneDialog>({ id: pick.id, title: pick.title, look: false }));
+        doneWait.current?.();
+        doneWait.current = afterStickyWindows(() => {
+          doneWait.current = null;
+          setDone(openSlot<DoneDialog>({ id: pick.id, title: pick.title, look: false }));
+        });
       }
       // Остальные шаги — коротким уведомлением и только во время урока (прототип v138 `ckEval`): вне
       // урока работа идёт без сообщений «Базы знаний».
@@ -288,9 +311,11 @@ export function useKbRuntime(shell: KbShellInfo): { controls: KbControls; overla
     (name: string) => {
       // Первое использование отмечает шаг «Работы со списками» с тем же кодом: уже засчитанный или
       // шаг не своей программы — запрос не нужен; за открытие страницы — один раз. Отмеченный вручную
-      // шаг меняет способ на «первым использованием» (прототип v74 ckMark).
+      // шаг меняет способ на «первым использованием» (прототип v74 ckMark). Функция под другим именем
+      // («Показать» витрины — `dm.run`) ищет свой шаг по `KB_HIT_STEPS`.
       const current = stateRef.current;
-      const step = stepsOf(current).find((s) => s.id === name);
+      const own = Object.hasOwn(KB_HIT_STEPS, name) ? KB_HIT_STEPS[name]! : name;
+      const step = stepsOf(current).find((s) => s.id === own);
       const counted = !!step?.done && step.done.how !== 'hand';
       if (hits.current.has(name) || (current && (!step || counted))) return;
       hits.current.add(name);
@@ -319,6 +344,8 @@ export function useKbRuntime(shell: KbShellInfo): { controls: KbControls; overla
       const step = stepsOf(stateRef.current).find((s) => s.id === id);
       if (!step) return;
       setLesson({ id, bar: true, off: false });
+      doneWait.current?.();
+      doneWait.current = null;
       setDone(closeSlot);
       setArticle(closeSlot);
       if (step.learn && step.screens.length && !step.done) {

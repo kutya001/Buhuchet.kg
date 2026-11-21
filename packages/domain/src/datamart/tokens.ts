@@ -1,3 +1,4 @@
+import { bishkekDate, diffDays, formatDateRu } from '../common/dates';
 import { DM_TOKEN_MAX_DAYS } from './datamart';
 
 /*
@@ -188,4 +189,55 @@ export function dmTokenNameProblem(
   if (!n) return 'dm_token_name_required';
   if (n.length > DM_TOKEN_NAME_MAX) return 'dm_token_name_long';
   return liveNames.includes(n) ? 'dm_token_name_taken' : null;
+}
+
+/*
+ * Сообщения владельцам организации о токене — Telegram и колокольчик (блок 5, пункт 10; общий план 20.11,
+ * этап 3, П5; прототип v158 `dmTell`, `dmDaily`): создан (выпуск и перевыпуск), отозван (и администратором
+ * платформы), до конца срока 7 дней. Что и когда сказать — здесь; кому и куда — модуль telegram API.
+ */
+
+/** Что сообщается владельцам (шаблоны `tgDmTok*`). */
+export const DM_TOKEN_EVENTS = ['new', 'revoked', 'soon'] as const;
+export type DmTokenEvent = (typeof DM_TOKEN_EVENTS)[number];
+
+/** Шаблон сообщения бота по событию. */
+export const DM_TOKEN_EVENT_TEMPLATES = {
+  new: 'tgDmTokNew',
+  revoked: 'tgDmTokRevoked',
+  soon: 'tgDmTokSoon',
+} as const satisfies Record<DmTokenEvent, string>;
+
+/** За сколько дней до конца срока напоминать (блок 5, пункт 10). */
+export const DM_TOKEN_SOON_DAYS = 7;
+
+/**
+ * Сколько дней до конца срока, если сегодня (по Бишкеку) — время напомнить: от 1 до 7 дней. Токен на
+ * 7 дней и короче не напоминает: срок уже есть в сообщении «создан», а напоминание пришло бы в день
+ * выпуска (прототип `dmDaily`). Отозванный, истёкший и перевыпущенный отсекает вызывающий.
+ */
+export function dmTokenSoonDays(t: { createdAt: Date; expiresAt: Date }, now: Date): number | null {
+  if (dmTokenTermOf(t.createdAt, t.expiresAt) <= DM_TOKEN_SOON_DAYS) return null;
+  if (t.expiresAt.getTime() <= now.getTime()) return null;
+  const days = diffDays(bishkekDate(t.expiresAt), bishkekDate(now));
+  return days >= 1 && days <= DM_TOKEN_SOON_DAYS ? days : null;
+}
+
+/** Событие для владельцев: что случилось и данные токена. */
+export type DmTokenNotice =
+  | { event: 'new'; org: string; name: string; template: string; expiresAt: Date; who: string }
+  | { event: 'revoked'; org: string; name: string; template: string; who: string }
+  | { event: 'soon'; org: string; name: string; template: string; expiresAt: Date; days: number };
+
+/** Подстановки шаблона `tgDmTok*` (прототип v158 `dmTell`): «Действует до» — день по Бишкеку. */
+export function dmTokenNoticeValues(n: DmTokenNotice): Record<string, string | number> {
+  const base = { организация: n.org, название: n.name, шаблон: n.template };
+  switch (n.event) {
+    case 'new':
+      return { ...base, дата: formatDateRu(bishkekDate(n.expiresAt)), кто: n.who };
+    case 'revoked':
+      return { ...base, кто: n.who };
+    case 'soon':
+      return { ...base, дата: formatDateRu(bishkekDate(n.expiresAt)), дней: n.days };
+  }
 }

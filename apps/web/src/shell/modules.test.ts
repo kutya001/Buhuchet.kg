@@ -14,6 +14,7 @@ import {
   addActions,
   lockedMe,
   MODULES,
+  moduleDesc,
   moduleHref,
   parseAppPath,
   phoneModules,
@@ -219,6 +220,16 @@ describe('вкладки и «+ Добавить» по правам и учёт
       me({ permissions: PERMISSION_IDS.filter((p) => p !== 'dmTokens') as PermissionId[] }),
     );
     expect(ids(visibleTabs('dm', viewer))).toEqual(['out', 'tpl']);
+  });
+
+  it('описание под заголовком «Витрины данных» у организации — своё, у Админки — своё (прототип v155: BIZ и ADM)', () => {
+    expect(moduleDesc('dm', shellAccess(me()))).toBe('nav.desc.dm_org');
+    expect(moduleDesc('dm', shellAccess(me({ admin: true })))).toBe('nav.desc.dm');
+    expect(UI_TEXTS['nav.desc.dm_org'].ru).toBe(
+      'Отчёты по готовым шаблонам в таблице как в Excel и выдача тех же данных внешним программам по API-токену.',
+    );
+    // У остальных модулей описание одно.
+    expect(moduleDesc('files', shellAccess(me()))).toBe(MODULES.files.desc);
   });
 });
 
@@ -440,6 +451,16 @@ describe('подписка в оболочке', () => {
     subscription,
   });
   const orgTabs = (m: MeResponse) => ids(visibleTabs('org', shellAccess(m)));
+
+  it('«+ Добавить» «Витрины данных»: в демо-организации «Токена» нет (прототип v155 `dmAdd`)', () => {
+    const adds = (m: MeResponse) => ids(addActions('dm', shellAccess(m)));
+    expect(adds(withSub(true, sub('active')))).toEqual(['tok', 'ask']);
+    expect(adds(withSub(true, sub('demo')))).toEqual(['ask']);
+    // Без права «Управлять API-токенами» — только «Попросить шаблон»; Админка — «Шаблон» и «Токен».
+    const noTokens = PERMISSION_IDS.filter((p) => p !== 'dmTokens') as PermissionId[];
+    expect(adds(withSub(false, sub('active'), { permissions: noTokens }))).toEqual(['ask']);
+    expect(ids(addActions('dm', shellAccess(me({ admin: true }))))).toEqual(['tpl', 'tok']);
+  });
 
   it('«Подписка» — только владельцу, не в демо-организации и не администратору', () => {
     expect(orgTabs(withSub(true, sub('active')))).toEqual(['main', 'policy', 'settings', 'sub']);

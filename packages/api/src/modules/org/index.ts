@@ -1,5 +1,6 @@
 import type { ApiDeps } from '../../deps';
 import { createModuleApp } from '../../module';
+import { orgExtApiHandler, orgExtApiRoute } from './ext-api';
 import {
   deleteLogoHandler,
   deleteLogoRoute,
@@ -61,6 +62,7 @@ export function orgModule(deps: ApiDeps) {
     .openapi(orgPolicyHistoryRoute, orgPolicyHistoryHandler(deps))
     .openapi(orgRoleOptionsRoute, orgRoleOptionsHandler(deps))
     .openapi(orgWaitingReportsRoute, orgWaitingReportsHandler(deps))
+    .openapi(orgExtApiRoute, orgExtApiHandler(deps))
     .openapi(orgSubscriptionRoute, orgSubscriptionHandler(deps))
     .openapi(subPayStartRoute, subPayStartHandler(deps))
     .openapi(subPayCompleteRoute, subPayCompleteHandler(deps))

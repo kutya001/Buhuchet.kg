@@ -69,7 +69,7 @@ const TG_ACTS={};
 // def: {change — меняет данные (выключается владельцем), prev — работает и в отвязанном чате, noLink — свой шаблон отказа «не привязан» (общий чат фирмы, задача Т8), perm — право, scope(u,arg) — запись в области, stale(u,arg) — запись уже изменена, run(u,arg,m,b) → {eph, msg, done}}
 function tgAct(id,def){TG_ACTS[id]=def}
 // «Отмена» под просьбой бота: бот перестаёт ждать ответ, запись не меняется
-tgAct('askCancel',{run:(u,arg,m)=>{if(!tgAskLive(m))return {eph:tplFill('tgActStale',{})};tgAskClose(m);return {done:'Отменено',eph:tplFill('tgActCancelled',{})}}});
+tgAct('askCancel',{run:(u,arg,m)=>{if(!tgAskLive(m))return {eph:tplFill('tgActStale',{})};if(/^cp-/.test(m.ask.act||'')&&typeof pubOrgClosed==='function'&&pubOrgClosed())return {eph:'Доступ организации закрыт'};tgAskClose(m);return {done:'Отменено',eph:tplFill('tgActCancelled',{})}}});
 function tgRefusal(u,a,arg){
   if(!a)return tplFill('tgActStale',{});
   if(!u||(!u.tg&&!a.prev))return tplFill(a.noLink||'tgActNoLink',{});

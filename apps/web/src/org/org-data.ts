@@ -1,6 +1,12 @@
 'use client';
 
-import { OrgPolicy, OrgPolicyHistory, OrgProfile, OrgRoleOptions } from '@buhuchet/shared';
+import {
+  OrgExtApi,
+  OrgPolicy,
+  OrgPolicyHistory,
+  OrgProfile,
+  OrgRoleOptions,
+} from '@buhuchet/shared';
 import { queryOptions, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useCallback } from 'react';
@@ -28,6 +34,15 @@ export const orgProfileQuery = queryOptions({
 export const policyQuery = queryOptions({
   queryKey: ['org', 'policy'],
   queryFn: async () => json(await api.api.org.policy.$get(), (v) => OrgPolicy.parse(v)),
+});
+
+/**
+ * «Внешний доступ по API» вкладки «Настройки»: демо-организация и сколько токенов «Действует» (сам
+ * выключатель — `extApi` учётной политики). Ключ — под `org`: `useOrgRefresh` перечитывает и его.
+ */
+export const extApiQuery = queryOptions({
+  queryKey: ['org', 'ext-api'],
+  queryFn: async () => json(await api.api.org['ext-api'].$get(), (v) => OrgExtApi.parse(v)),
 });
 
 /** «История изменений учётной политики»: сначала новые. */

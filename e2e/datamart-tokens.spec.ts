@@ -325,4 +325,47 @@ test.describe('Витрина данных: API Токены', () => {
       await demo.dispose();
     }
   });
+
+  test('(доработки 20.11.2026, Витрина данных, блок 5, пункт 10) ссылка на окно токена из колокольчика и кнопки «Открыть» бота: «API Токены» с ?tok= открывает окно этого токена и убирает номер из адреса', async ({
+    page,
+    baseURL,
+  }) => {
+    // Строка колокольчика и «Открыть» в сообщении владельцам ведут на `/app/dm/tok?tok=<номер>`
+    // (общий план 20.11, этап 3, П5). У Админки та же вкладка — проверяется на своём токене; цепочку
+    // от строки владельца организации — `e2e/org-ext-api.spec.ts` (модуль в меню организации, этап 3, П2).
+    const origin = new URL(baseURL!).origin;
+    await platformAdmin(page.request, origin);
+    const texts = await dictionary(page.request);
+    const form = await tokenForm(page.request, '/api/admin/dm/tokens');
+    const tpl = form.templates.find((x) => x.code === ADMIN_TEMPLATE)!;
+    expect(tpl, `готовый шаблон Админки «${ADMIN_TEMPLATE}»`).toBeTruthy();
+    const name = uniqueWord('Ссылка');
+    const mine: string[] = [];
+    try {
+      const res = await page.request.post('/api/admin/dm/tokens', {
+        headers: { origin },
+        data: { templateId: tpl.id, name, term: form.defaultTerm },
+      });
+      expect(res.status(), await res.text()).toBe(201);
+      const issued = (await res.json()) as Issued;
+      mine.push(issued.item.id);
+
+      await page.goto(`/app/dm/tok?tok=${issued.item.id}`);
+      const card = page.getByRole('dialog', { name });
+      await expect(card.locator('[data-dm-card]')).toBeVisible();
+      await expect(card).toContainText(`${issued.item.prefix}…`);
+      await expect(page).not.toHaveURL(/[?&]tok=/);
+      await expect(page.locator('[data-dm-tokens="admin"]')).toContainText(
+        texts['dm.tok.note_admin']!,
+      );
+    } finally {
+      for (const id of mine) {
+        const res = await page.request.post(`/api/admin/dm/tokens/${id}/revoke`, {
+          headers: { origin },
+          maxRetries: 2,
+        });
+        expect([200, 409]).toContain(res.status());
+      }
+    }
+  });
 });

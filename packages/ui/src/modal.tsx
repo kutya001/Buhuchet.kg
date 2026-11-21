@@ -477,6 +477,7 @@ export function Modal({
         phoneFull={phoneFull}
         touch={touch}
         quick={quick}
+        sticky={sticky}
         phone={phone}
         labels={windows.labels}
         tabs={tabs}
@@ -593,6 +594,11 @@ export interface WindowFrameProps {
   touch?: boolean;
   /** Короткое подтверждение: без выезда. */
   quick?: boolean;
+  /**
+   * Не закрывается нажатием мимо (`data-window-sticky`): окно «Готово» «Базы знаний» ждёт, пока его
+   * закроют (прототип ckEval, `o.sticky`).
+   */
+  sticky?: boolean;
   phone: boolean;
   labels: WindowLabels;
   tabs?: ModalProps['tabs'];
@@ -626,6 +632,7 @@ export function WindowFrame({
   phoneFull = false,
   touch = false,
   quick = false,
+  sticky = false,
   phone,
   labels,
   tabs,
@@ -668,6 +675,7 @@ export function WindowFrame({
         tabIndex={-1}
         data-window
         data-window-kind={kind}
+        data-window-sticky={sticky ? '' : undefined}
         data-overlay
         data-max={max}
         data-leave="animate-sink max-md:animate-sheet-out"

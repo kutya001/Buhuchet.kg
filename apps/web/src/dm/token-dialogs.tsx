@@ -490,9 +490,13 @@ export function useTokenActions(side: DmSide) {
 
   const open = useCallback((id: string) => setCard(openSlot(id)), []);
 
-  /** «+ Токен» (`templateId` — выбрать шаблон сразу, как «Выпустить токен» в каталоге шаблонов). */
+  /**
+   * «+ Токен» (`templateId` — выбрать шаблон сразу, как «Выпустить токен» в каталоге шаблонов).
+   * `onApiOff` — вместо уведомления при выключенном «Внешнем доступе по API»: «Перейти» урока
+   * подсвечивает красную плашку вкладки (прототип kb-lessons `dmtok`).
+   */
   const issue = useCallback(
-    async (templateId?: string) => {
+    async (templateId?: string, onApiOff?: () => void) => {
       let data: DmTokenForm;
       try {
         data = await client.fetchQuery({ ...tokenFormQuery(side), staleTime: 0 });
@@ -501,6 +505,7 @@ export function useTokenActions(side: DmSide) {
           bad: true,
         });
       }
+      if (data.refusal === 'dm_token_api_off' && onApiOff) return onApiOff();
       if (data.refusal) {
         return toast(errorText({ code: data.refusal, message: '', details: { max: data.max } }), {
           icon: data.refusal === 'dm_token_limit' ? 'alert' : 'lock',

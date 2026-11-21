@@ -23,6 +23,8 @@ const pgTgToClient=(c,x)=>tgSvc({short:c.name},PG_TG_KIND,{chat:x.name});
 // Запрос из бота: клиент открыл ссылку со страницы и нажал «Старт». Возвращает ответ бота клиенту и сообщение сотруднику
 function pgTgRequest(c,name){name=String(name||'').replace(/\s+/g,' ').trim().slice(0,32);const v={контрагент:c.name,телеграм:name};
   if(!pgTgOn(c)||!name)return {bot:tplFill('tgCpLinkBad',v)};
+  // Доступ закрыт по подписке: ссылка не тратится, запроса бухгалтеру нет
+  if(pubOrgClosed())return {bot:PG_ORG_CLOSED};
   const was=pgTgs(c).find(x=>x.name===name&&(x.st==='on'||x.st==='wait'));
   if(was)return {bot:tplFill(was.st==='on'?'tgCpAlready':'tgCpAsk',v),x:was};
   if(pgTgBusy(c)>=PG_TG_MAX)return {bot:tplFill('tgCpLimit',v)};
@@ -155,9 +157,12 @@ function pgPaySend(c,m){const p=rmToPay(c,m),to=(c.tgs||[]).filter(x=>x.st==='on
   log('cp',c.id,`«К оплате» ${rmTitle(m).toLowerCase()} отправлено в Telegram: ${som(p.total)}, получателей — ${to.length}`,c.id);return {p,to}}
 // Кнопки клиента. Клиент — не сотрудник: прав и области у него нет, поэтому каждое нажатие само проверяет, что этот Telegram подключён к этому контрагенту
 const pgTgLinked=a=>{const c=CPM[a&&a.cp],x=c&&(c.tgs||[]).find(y=>y.id===a.tg);return c&&x&&x.st==='on'&&!c.archived?{c,x}:null};
+// Доступ организации закрыт по подписке (доработки 20.11.2026, блок 4, пункт 4; пакет 20.11, этап 3, П4): кнопки старых сообщений, вопрос, файл и чек клиента
+// отвечают «Доступ организации закрыт» и ничего не меняют — только подключённому чату (бывшему клиенту — как прежде «не подключён»); «Отключить» и «Напоминать» работают
+const PG_ORG_CLOSED='Доступ организации закрыт';
 // Куда в макете показать сообщение сотруднику (чат бухгалтера в окне переписки)
 let pgTgStaffOut=null,pgTgAskOn=null;
-tgAct('cp-paid',{run:(u,a)=>{const l=pgTgLinked(a);if(!l)return {eph:tplFill('tgCpNotLinked',{})};const{c,x}=l,to=pgTgStaff(c);
+tgAct('cp-paid',{run:(u,a)=>{const l=pgTgLinked(a);if(!l)return {eph:tplFill('tgCpNotLinked',{})};if(pubOrgClosed())return {eph:PG_ORG_CLOSED};const{c,x}=l,to=pgTgStaff(c);
   pgTgClientLog(c,`Контрагент сообщил в Telegram об оплате налогов ${rmTitle(a.m).toLowerCase()}: ${som(a.sum)} («${x.name}»)`);
   bellCp(c,{kind:'money',ev:'cp_paid',open:{k:'cp_money',id:c.id},text:`Сообщил в Telegram об оплате налогов ${rmTitle(a.m).toLowerCase()}: ${som(a.sum)}`,key:bellOnce('cp_paid:'+c.id)});
   if(to){tgSvc(to,PG_TG_KIND);pgTgStaffOut&&pgTgStaffOut({h:'Контрагент сообщил об оплате',t:tplFill('tgCpPaidStaff',{контрагент:c.name,телеграм:x.name,месяц:rmMonthTxt(a.m),сумма:som(a.sum)}),at:bishkekNow().hm})}
@@ -179,10 +184,10 @@ function pgFileIn(c,x,fs,note,pay){if(!pgFileOn(c))return tplFill('tgCpFileOff',
   pgTgClientLog(c,`Контрагент отправил через Telegram («${x.name}») ${pay?'чек':fs.length>1?'файлы':'файл'}: ${fs.map(f=>f.name).join(', ')}${n?'. Комментарий: '+n:''}`);sntNotify(c,fs.length);return ''}
 // Файл, присланный боту без просьбы: подпись к нему — комментарий. Telegram подключён к нескольким контрагентам — бот спрашивает «От какой компании?» кнопками с названиями
 const pgTgAllLinks=name=>CPS.filter(c=>!c.archived).flatMap(c=>(c.tgs||[]).filter(x=>x.st==='on'&&x.name===name).map(x=>({c,x})));
-function pgFileFromTg(c,x,f,cap){const at=bishkekNow().hm,bad=pgFileBad(f);if(bad)return {t:bad,at};const ls=pgTgAllLinks(x.name);
+function pgFileFromTg(c,x,f,cap){const at=bishkekNow().hm,bad=pgFileBad(f);if(bad)return {t:bad,at};if(pubOrgClosed())return {t:PG_ORG_CLOSED,at};const ls=pgTgAllLinks(x.name);
   if(ls.length>1)return {t:tplFill('tgCpFileWhich',{}),at,btns:ls.map(l=>[{t:l.c.name,act:'cp-file-to',arg:{cp:l.c.id,tg:l.x.id,f,cap},icon:'building'}])};
   return {t:pgFileIn(c,x,[f],cap)||tplFill('tgCpFileOk',{}),at}}
-tgAct('cp-file-to',{run:(u,a)=>{const l=pgTgLinked(a);if(!l)return {eph:tplFill('tgCpNotLinked',{})};const no=pgFileIn(l.c,l.x,[a.f],a.cap);
+tgAct('cp-file-to',{run:(u,a)=>{const l=pgTgLinked(a);if(!l)return {eph:tplFill('tgCpNotLinked',{})};if(pubOrgClosed())return {eph:PG_ORG_CLOSED};const no=pgFileIn(l.c,l.x,[a.f],a.cap);
   return no?{eph:no}:{done:'✓ '+l.c.name,off:['cp-file-to'],msg:{t:tplFill('tgCpFileOk',{}),at:bishkekNow().hm}}}});
 // «Прислать чек» — после «Оплатил» под «К оплате» и прямо под «Оплата за обслуживание до …»; необязателен: «Оплатил» работает и без него.
 // Чек — фото или PDF; он относится к контрагенту оплаченного сообщения, без вопроса «От какой компании?», комментарий — «Чек к «К оплате» за <месяц>»
@@ -190,9 +195,9 @@ const PG_RCPT_EXT=new Set(['pdf','jpg','jpeg','png','heic','heif','webp']);
 const pgRcptBtn=a=>({t:tgBtnT('tgBtnCpReceipt','Прислать чек'),act:'cp-receipt',arg:a,icon:'clip'});
 const pgRcptOffer=(c,a)=>pgFileOn(c)?{t:tplFill('tgCpReceiptOffer',{}),at:bishkekNow().hm,btns:[[pgRcptBtn(a)]]}:null;
 const pgRcptNote=a=>a.kind==='fee'?`Чек к «Оплата за обслуживание» за ${ymLabel(a.m).toLowerCase()}`:`Чек к «К оплате» за ${rmMonthTxt(a.m)}`;
-tgAct('cp-receipt',{run:(u,a)=>{const l=pgTgLinked(a);if(!l)return {eph:tplFill('tgCpNotLinked',{})};if(!pgFileOn(l.c))return {eph:tplFill('tgCpFileOff',{})};
+tgAct('cp-receipt',{run:(u,a)=>{const l=pgTgLinked(a);if(!l)return {eph:tplFill('tgCpNotLinked',{})};if(pubOrgClosed())return {eph:PG_ORG_CLOSED};if(!pgFileOn(l.c))return {eph:tplFill('tgCpFileOff',{})};
     return {ask:{act:'cp-receipt',arg:a,kind:'file',re:pgRcptNote(a),t:tplFill('tgCpReceiptAsk',{})}}},
-  reply:(u,a,p)=>{const l=pgTgLinked(a);if(!l)return {say:tplFill('tgCpNotLinked',{})};if(!p.file)return {again:tplFill('tgAskNeedFile',{})};
+  reply:(u,a,p)=>{const l=pgTgLinked(a);if(!l)return {say:tplFill('tgCpNotLinked',{})};if(pubOrgClosed())return {again:PG_ORG_CLOSED};if(!p.file)return {again:tplFill('tgAskNeedFile',{})};
     const bad=tgFileWhy(p.file),i=p.file.name.lastIndexOf('.');if(bad)return {again:bad};if(i<1||!PG_RCPT_EXT.has(p.file.name.slice(i+1).toLowerCase()))return {again:tplFill('tgCpReceiptType',{})};
     const no=pgFileIn(l.c,l.x,[p.file],pgRcptNote(a)+(p.cap?'. '+p.cap:''),{kind:a.kind,m:a.m,sum:a.sum});if(no)return {say:no};
     // Чек — к последнему «Оплатил» за этот месяц без чека; такого нет — чек сам становится сообщением об оплате
@@ -217,7 +222,7 @@ function pgRcptSave(pre,keep,to,what){const x=pre&&pre.sent;if(!x)return {file:k
 // После «Убрать» (16.11, блок 1, пункт 4) — строка «не прикрепится» и «Вернуть»: при сохранении чек принимается только в файлы контрагента, «Отменить» — чек остаётся «Новый»
 function rcptFileRow(n,id,off){return n?`<div class="row" id="${id}" style="gap:6px;margin-bottom:6px;flex-wrap:wrap">${ic('clip','sm')}<b>${esc(n)}</b><span class="faint">— чек контрагента, прикрепится при сохранении</span><span class="grow"></span><button class="btn sm ghost" type="button" id="${id}-x" title="Не прикреплять чек">${ic('x','sm')}Убрать</button></div>`
   :off?`<div class="row" id="${id}" style="gap:6px;margin-bottom:6px;flex-wrap:wrap"><span class="faint">Чек «${esc(off)}» не прикрепится: при сохранении он будет принят только в файлы контрагента</span><span class="grow"></span><button class="btn sm ghost" type="button" id="${id}-back">${ic('refresh','sm')}Вернуть</button></div>`:''}
-tgAct('cp-ask',{run:(u,a)=>{const l=pgTgLinked(a);if(!l)return {eph:tplFill('tgCpNotLinked',{})};pgTgAskOn&&pgTgAskOn(l);return {msg:{t:tplFill('tgCpAskHow',{}),at:bishkekNow().hm}}}});
+tgAct('cp-ask',{run:(u,a)=>{const l=pgTgLinked(a);if(!l)return {eph:tplFill('tgCpNotLinked',{})};if(pubOrgClosed())return {eph:PG_ORG_CLOSED};pgTgAskOn&&pgTgAskOn(l);return {msg:{t:tplFill('tgCpAskHow',{}),at:bishkekNow().hm}}}});
 // Вопрос клиента уходит ответственному бухгалтеру с названием контрагента; ответ бухгалтера возвращается клиенту
 function pgTgAsk(c,x,q){const to=pgTgStaff(c);pgTgClientLog(c,`Вопрос бухгалтеру из Telegram («${x.name}»): ${q.slice(0,200)}`);
   bellCp(c,{kind:'other',ev:'cp_question',open:{k:'contractor',id:c.id},text:`Вопрос из Telegram: ${q.replace(/\s+/g,' ').slice(0,200)}`,key:bellOnce('cp_question:'+c.id)});if(to)tgSvc(to,PG_TG_KIND);pgTgToClient(c,x);
@@ -239,7 +244,7 @@ function pgChatDlg(c,x,first,o){const A=[{day:'Сегодня'},first],B=[{day:'
       $('#pc-code',el).onclick=()=>{A.push({me:true,t:tgBtnT('tgCmdCpCode','Код от страницы'),at:bishkekNow().hm});pgCodeCmd(x.name).forEach(mm=>A.push(mm));CA.jump=true;m.draw();refreshAll()};
       const q=$('#pc-q',el),qs=$('#pc-qs',el),r=$('#pc-r',el),rs=$('#pc-rs',el);
       if(qs){const go=()=>{const t=q.value.replace(/\s+/g,' ').trim();if(!t){q.focus();return}A.push({t,me:true});const l=pgTgLinked({cp:c.id,tg:x.id});
-          if(!l)A.push({eph:tplFill('tgCpNotLinked',{})});else{const a=pgTgAsk(c,x,t);if(a.staff)B.push(a.staff);A.push({t:a.bot,at:bishkekNow().hm});asked=true}ask=false;m.draw();refreshAll()};
+          if(!l)A.push({eph:tplFill('tgCpNotLinked',{})});else if(pubOrgClosed())A.push({t:PG_ORG_CLOSED,at:bishkekNow().hm});else{const a=pgTgAsk(c,x,t);if(a.staff)B.push(a.staff);A.push({t:a.bot,at:bishkekNow().hm});asked=true}ask=false;m.draw();refreshAll()};
         qs.onclick=go;q.onkeydown=e=>{if(e.key==='Enter')go()};q.focus()}
       if(rs){const go=()=>{const t=r.value.replace(/\s+/g,' ').trim();if(!t){r.focus();return}B.push({t,me:true});A.push(pgTgAnswer(c,x,t,to));asked=false;m.draw();refreshAll()};
         rs.onclick=go;r.onkeydown=e=>{if(e.key==='Enter')go()}}
@@ -263,11 +268,11 @@ function pgDebtMsg(c,x){const d=pgDebt(c),fa=d.fee?orgMain('fee'):null,ta=d.shor
       [{t:tgBtnT('tgBtnCpNoDebt','Не напоминать'),act:'cp-nodebt',arg:{cp:c.id,tg:x.id},icon:'ban'}]]}}
 // «Показать реквизиты для перевода» (доработки 14.11.2026, блок 4, пункт 3): одна кнопка на оба вида; бот присылает реквизиты по каждой сумме долга из напоминания —
 // для налогов и для обслуживания — с подписью, чьи они, и кнопкой копирования. Реквизиты берутся на момент нажатия
-tgAct('cp-req',{run:(u,a)=>{const l=pgTgLinked(a);if(!l)return {eph:tplFill('tgCpNotLinked',{})};const{c}=l,at=bishkekNow().hm,ms=[];
+tgAct('cp-req',{run:(u,a)=>{const l=pgTgLinked(a);if(!l)return {eph:tplFill('tgCpNotLinked',{})};if(pubOrgClosed())return {eph:PG_ORG_CLOSED};const{c}=l,at=bishkekNow().hm,ms=[];
   const one=(acc,sub)=>{if(acc)ms.push({h:sub,sub:c.name,t:pgRqText(c,acc),at,btns:[[pgRqBtn(acc)]]})};
   if(a.tax)one(pgTaxAcc(c),'Для налогов');if(a.fee)one(pgFeeAcc(),'Для обслуживания');
   return ms.length?{msgs:ms}:{eph:tplFill('tgCpNoReq',{контрагент:c.name})}}});
-tgAct('cp-nodebt',{run:(u,a)=>{const l=pgTgLinked(a);if(!l)return {eph:tplFill('tgCpNotLinked',{})};const{c,x}=l;x.noDebt=true;
+tgAct('cp-nodebt',{run:(u,a)=>{const l=pgTgLinked(a);if(!l)return {eph:tplFill('tgCpNotLinked',{})};if(pubOrgClosed())return {eph:PG_ORG_CLOSED};const{c,x}=l;x.noDebt=true;
   pgTgClientLog(c,`Напоминания о долге в Telegram выключены контрагентом («${x.name}»)`);return {done:'✓ Напоминания выключены',eph:tplFill('tgCpNoDebtOk',{})}}});
 // Карточка контрагента: «Напоминать о долге в Telegram» у этого контрагента и макет напоминания
 const pgDebtWhy=c=>!can('cpPage')?'Нужно право «Управлять страницей контрагента»':!ORG.tgCpDebt?'Напоминания о долге выключены для всей организации: «Моя организация» → «Настройки» → «Telegram-уведомления» → «Оплата за обслуживание»':'';
@@ -311,7 +316,7 @@ function pgFeeTgDlg(c){const w=pgFeeTgWhy(c);if(w){toast(w,'lock',true);return}c
       pgChatDlg(c,r.to[0],pgFeeMsg(c,r.to[0],t),{title:'Прототип: «Оплата за обслуживание» в Telegram клиента',sub:esc(c.name),note:'Так напоминание об оплате за обслуживание выглядит у клиента.'})}}})})}
 function pgFeeSend(c,t){const to=pgFeeTo(c);c.tgFeeAt=nowStamp();to.forEach(x=>tgSvc({short:c.name},PG_TG_MSG,{chat:x.name}));
   log('cp',c.id,`Напоминание об оплате за обслуживание отправлено в Telegram: ${som(c.feeDebt)}, получателей — ${to.length}`,c.id);return {to,t}}
-tgAct('cp-feepaid',{run:(u,a)=>{const l=pgTgLinked(a);if(!l)return {eph:tplFill('tgCpNotLinked',{})};const{c,x}=l,to=pgTgStaff(c);
+tgAct('cp-feepaid',{run:(u,a)=>{const l=pgTgLinked(a);if(!l)return {eph:tplFill('tgCpNotLinked',{})};if(pubOrgClosed())return {eph:PG_ORG_CLOSED};const{c,x}=l,to=pgTgStaff(c);
   pgTgClientLog(c,`Контрагент сообщил в Telegram об оплате за обслуживание: ${som(a.sum)} («${x.name}»)`);pgPaidMark(c,'fee',a.m,a.sum);
   bellCp(c,{kind:'money',ev:'fee_paid',need:'fee',open:{k:'cp_fee',id:c.id},text:`Сообщил в Telegram об оплате за обслуживание: ${som(a.sum)}`,key:bellOnce('fee_paid:'+c.id)});
   if(to){tgSvc(to,PG_TG_KIND);pgTgStaffOut&&pgTgStaffOut({h:'Контрагент сообщил об оплате',t:tplFill('tgCpFeePaidStaff',{контрагент:c.name,телеграм:x.name,сумма:som(a.sum)}),at:bishkekNow().hm})}

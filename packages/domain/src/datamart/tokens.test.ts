@@ -1,14 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { DM_TOKEN_PREFIX_RE } from './datamart';
+import { fillTemplate, TELEGRAM_TEMPLATE_DEFAULTS } from '../telegram/messages';
 import {
+  DM_TOKEN_EVENT_TEMPLATES,
+  DM_TOKEN_EVENTS,
   DM_TOKEN_RE,
+  DM_TOKEN_SOON_DAYS,
   dmTokenExpiresAt,
   dmTokenFromBytes,
   dmTokenGraceUntil,
   dmTokenIssueRefusal,
   dmTokenLive,
   dmTokenNameProblem,
+  dmTokenNoticeValues,
   dmTokenPrefix,
+  dmTokenSoonDays,
   dmTokenState,
   dmTokenTermOf,
   type DmTokenFacts,
@@ -150,5 +156,67 @@ describe('выпуск: отказы и название', () => {
     expect(dmTokenNameProblem('x'.repeat(101), [])).toBe('dm_token_name_long');
     expect(dmTokenNameProblem('Power BI', ['Power BI'])).toBe('dm_token_name_taken');
     expect(dmTokenNameProblem(' Power BI ', ['Excel'])).toBeNull();
+  });
+});
+
+describe('сообщения владельцам о токене (блок 5, пункт 10; прототип v158 `dmTell`, `dmDaily`)', () => {
+  // Выпущен 26.10.2026 в 10:00 по Бишкеку на 30 дней — до 25.11.2026, 10:00.
+  const at = (s: string) => new Date(`${s}+06:00`);
+  const t30 = { createdAt: at('2026-10-26T10:00:00'), expiresAt: at('2026-11-25T10:00:00') };
+
+  it('напоминание — за 7 дней и ближе по дню Бишкека, но не в день конца и не после', () => {
+    expect(DM_TOKEN_SOON_DAYS).toBe(7);
+    expect(dmTokenSoonDays(t30, at('2026-11-17T09:00:00'))).toBeNull();
+    expect(dmTokenSoonDays(t30, at('2026-11-18T09:00:00'))).toBe(7);
+    // Сутки по Бишкеку начинаются в 00:00 по его времени, а не по UTC.
+    expect(dmTokenSoonDays(t30, at('2026-11-18T00:30:00'))).toBe(7);
+    expect(dmTokenSoonDays(t30, at('2026-11-20T09:00:00'))).toBe(5);
+    expect(dmTokenSoonDays(t30, at('2026-11-24T23:59:00'))).toBe(1);
+    expect(dmTokenSoonDays(t30, at('2026-11-25T09:00:00'))).toBeNull();
+    expect(dmTokenSoonDays(t30, at('2026-11-25T10:00:00'))).toBeNull();
+    expect(dmTokenSoonDays(t30, at('2026-11-26T09:00:00'))).toBeNull();
+    // Через конец месяца и года: до 03.01.2027 с 29.12.2026 — 5 дней.
+    const ny = { createdAt: at('2026-12-04T10:00:00'), expiresAt: at('2027-01-03T10:00:00') };
+    expect(dmTokenSoonDays(ny, at('2026-12-29T09:00:00'))).toBe(5);
+    expect(dmTokenSoonDays(ny, at('2027-01-02T09:00:00'))).toBe(1);
+  });
+
+  it('токен на 7 дней не напоминает: срок есть в «создан», напоминание пришло бы в день выпуска', () => {
+    const t7 = { createdAt: at('2026-11-20T10:00:00'), expiresAt: at('2026-11-27T10:00:00') };
+    for (const day of ['2026-11-20T11:00:00', '2026-11-21T09:00:00', '2026-11-26T09:00:00']) {
+      expect(dmTokenSoonDays(t7, at(day)), day).toBeNull();
+    }
+    // На 8 дней — уже напоминает, но не в день выпуска (8 дней до конца).
+    const t8 = { createdAt: at('2026-11-20T10:00:00'), expiresAt: at('2026-11-28T10:00:00') };
+    expect(dmTokenSoonDays(t8, at('2026-11-20T11:00:00'))).toBeNull();
+    expect(dmTokenSoonDays(t8, at('2026-11-21T09:00:00'))).toBe(7);
+  });
+
+  it('подстановки шаблонов: «действует до» — день по Бишкеку; после подстановки нет ни одной «{…}»', () => {
+    const base = { org: 'ОсОО «Бухгалтер Плюс»', name: 'Power BI', template: 'Отчёты к сдаче' };
+    // 24.11.2026 в 20:00 UTC — по Бишкеку уже 25.11.
+    const late = new Date('2026-11-24T20:00:00Z');
+    const values = {
+      new: dmTokenNoticeValues({ event: 'new', ...base, expiresAt: late, who: 'Эркин С.' }),
+      revoked: dmTokenNoticeValues({ event: 'revoked', ...base, who: 'Администратор платформы' }),
+      soon: dmTokenNoticeValues({ event: 'soon', ...base, expiresAt: late, days: 5 }),
+    };
+    expect(values.new).toEqual({
+      организация: base.org,
+      название: 'Power BI',
+      шаблон: 'Отчёты к сдаче',
+      дата: '25.11.2026',
+      кто: 'Эркин С.',
+    });
+    expect(values.revoked).toMatchObject({ кто: 'Администратор платформы' });
+    expect(values.soon).toMatchObject({ дата: '25.11.2026', дней: 5 });
+    for (const event of DM_TOKEN_EVENTS) {
+      const text = fillTemplate(
+        TELEGRAM_TEMPLATE_DEFAULTS[DM_TOKEN_EVENT_TEMPLATES[event]],
+        values[event],
+      );
+      expect(text, event).not.toMatch(/\{[^{}]+\}/);
+      expect(text, event).toContain('«Power BI»');
+    }
   });
 });

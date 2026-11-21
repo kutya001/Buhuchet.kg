@@ -125,6 +125,9 @@ const DemoFile = z.object({
     // «Telegram контрагентов» в настройках организации (прототип v94 ORG.tgCpPay, ORG.tgCpDebt).
     tgCpPay: z.boolean().optional(),
     tgCpDebt: z.boolean().optional(),
+    // «Внешний доступ по API» (прототип v155 `ORG.apiOn`): в демо он только показан — токены там не
+    // выпускаются, выключатель недоступен.
+    apiOn: z.boolean().optional(),
     types: z.record(z.string(), DemoReportType).default({}),
   }),
   roles: z.array(
@@ -316,9 +319,19 @@ export async function seedDemoOrganization(
       payBeforeSubmit: org.payFirst ?? defaults.payBeforeSubmit,
       cpTgPay: org.tgCpPay ?? defaults.cpTgPay,
       cpTgDebt: org.tgCpDebt ?? defaults.cpTgDebt,
+      extApi: org.apiOn ?? false,
       pageSections: defaults.pageSections,
     })
     .onConflictDoNothing();
+  if (options.update) {
+    // «Внешний доступ по API» в демо-организации меняет только наполнение (выключатель там только для
+    // просмотра, 400 `ext_api_demo`): у демо-организации, наполненной до этапа 3 (стенд), столбец
+    // остался выключенным по умолчанию миграции 0165, а в прототипе он включён.
+    await db
+      .update(orgSettings)
+      .set({ extApi: org.apiOn ?? false })
+      .where(eq(orgSettings.orgId, orgId));
+  }
 
   // Виды отчётов демо-организации (модуль «Справочники», задача 2.02): автор — демо-сотрудник.
   const userOf = (protoId: string) =>
