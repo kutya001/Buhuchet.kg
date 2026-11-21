@@ -1,4 +1,4 @@
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page, type Route } from '@playwright/test';
 import { newOrgOwner, stillElement, uniqueLogin } from './helpers';
 import { connectAllTypes } from './orgs';
 import { manualReport } from './reports';
@@ -337,8 +337,21 @@ test.describe('Этап 2: База знаний — «Показать как»
     baseURL,
   }) => {
     await newOrgOwner(page.request, new URL(baseURL!).origin);
+    // Профиль отвечает медленно (так бывает на загруженной машине CI): показ ждёт заглушку загрузки
+    // экрана и собирает облачка по готовой форме, а не по пустому экрану (типовая ошибка № 81). Это
+    // медленная сеть, а не ожидание состояния: показ начинает искать элементы через ~0,4 с.
+    const slowProfile = async (route: Route) => {
+      await new Promise((resolve) => setTimeout(resolve, 1_200));
+      await route.continue();
+    };
+    const profileUrl = (url: URL) => url.pathname === '/api/org';
+    await page.route(profileUrl, slowProfile);
     await showStep(page, 'profile');
-    await toEnd(page, ['Сделать сейчас']);
+    const profile = await toEnd(page, ['Сделать сейчас']);
+    await page.unroute(profileUrl, slowProfile);
+    expect(profile.titles).toEqual(
+      expect.arrayContaining(['Профиль организации', 'Кнопка «Сохранить»']),
+    );
     await endShow(page);
     await expect(bubble(page)).toHaveCount(0);
     // Показ профиля пройден: его элементы стали знакомыми на сервере.

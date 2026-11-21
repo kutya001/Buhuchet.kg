@@ -75,7 +75,10 @@ export function OrgMain() {
   if (profile.isError || policy.isError || codes.isError) {
     return <Note tone="bad">{t('org.load_error')}</Note>;
   }
-  if (!profile.data || !policy.data || !codes.data) return null;
+  // Пока данные грузятся — заглушка `aria-busy`: «Показать как» ждёт её, а не пустой экран
+  // (docs/typical-mistakes.md № 81).
+  if (!profile.data || !policy.data || !codes.data)
+    return <div className="min-h-[200px]" aria-busy="true" data-org-loading="" />;
   const cppage = policy.data.features.cppage;
   if (!access.can('org')) {
     return (

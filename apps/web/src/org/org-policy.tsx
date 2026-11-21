@@ -61,7 +61,8 @@ export function OrgPolicyTab() {
   const { access } = useShell();
   const policy = useQuery(policyQuery);
   if (policy.isError) return <Note tone="bad">{t('org.load_error')}</Note>;
-  if (!policy.data) return null;
+  // Заглушка `aria-busy`: «Показать как» ждёт её, а не пустой экран (docs/typical-mistakes.md № 81).
+  if (!policy.data) return <div className="min-h-[200px]" aria-busy="true" data-org-loading="" />;
   return <PolicyEdit policy={policy.data} readOnly={!access.can('org')} />;
 }
 
