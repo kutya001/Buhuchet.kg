@@ -277,7 +277,8 @@ function OutBody({
           </span>
         ) : null}
       </section>
-      {below}
+      {/* Место результата (прототип `#dm-res`): его подсвечивает «Перейти» урока «Изучить результат». */}
+      {below ? <div data-dm-res="">{below}</div> : null}
     </div>
   );
 }

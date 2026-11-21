@@ -132,8 +132,8 @@ export const KB_GO: Readonly<Record<string, KbTarget>> = {
   // кнопка «Показать», «Как читать отчёт» — результат, «Каталог шаблонов» — карточки; «Выпустить
   // API-токен» — сразу «Новый API-токен», при выключенном API — красная плашка вкладки.
   dmshow: { module: 'dm', tab: 'out', flash: '[data-dm-out-show]' },
-  dmxl: { module: 'dm', tab: 'out', flash: '[data-dm-out-result]' },
-  dmcat: { module: 'dm', tab: 'tpl', flash: '[data-dm-catalog]' },
+  dmxl: { module: 'dm', tab: 'out', flash: '[data-dm-res]' },
+  dmcat: { module: 'dm', tab: 'tpl', flash: '[data-dm-cards]' },
   dmtok: {
     module: 'dm',
     tab: 'tok',

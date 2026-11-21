@@ -57,6 +57,11 @@ describe('«Показать как»: элементы прототипа на 
     // Поля «Вывода» и окон витрины — по кодам полей прототипа.
     expect(fieldForm({ screen: 'dm.out' }, t)).toBe('dm|dmp');
     expect(fieldForm({ title: 'Новый API-токен' }, t)).toBe('dk');
+    // Открытый шаблон в Админке: в заголовке — его название, форма — по метке редактора в окне.
+    const editor = (sel: string) => sel === '[data-dm-editor]';
+    expect(fieldForm({ title: 'Отчёты к сдаче', has: editor }, t)).toBe('de');
+    expect(fieldForm({ title: 'Отчёты к сдаче', has: () => false }, t)).toBeUndefined();
+    expect(fieldForm({ title: 'Новый шаблон', has: editor }, t)).toBe('de');
     const dm = {
       'dm-t': { n: 'Шаблон', x: 'Какой отчёт показать.' },
       'dk-t': { n: 'Шаблон', x: 'Шаблон токена.' },

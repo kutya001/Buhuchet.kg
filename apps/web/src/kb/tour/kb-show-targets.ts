@@ -185,14 +185,22 @@ const KB_FIELD_WINDOWS: Readonly<Partial<Record<UiTextKey, string>>> = {
   'dm.ed.new': 'de',
 };
 
+/**
+ * Окна, у которых в заголовке — только название записи (открытый шаблон «Витрины данных» в Админке):
+ * форма — по метке внутри окна. Проверяется раньше заголовка.
+ */
+const KB_FIELD_MARKS: Readonly<Record<string, string>> = {
+  '[data-dm-editor]': 'de',
+};
+
 /** Заголовок окна формы без названия записи в кавычках: «Показатель «Выручка»» → «Показатель «…»». */
 export function formTitle(title: string): string {
   return title.replace(/«[^»]*»/gu, '«…»');
 }
 
-/** Форма прототипа для полей: экран формы на странице или заголовок окна. */
+/** Форма прототипа для полей: экран формы на странице, метка в окне или заголовок окна. */
 export function fieldForm(
-  where: { screen: string | null } | { title: string },
+  where: { screen: string | null } | { title: string; has?: (selector: string) => boolean },
   t: Translate,
 ): string | undefined {
   if ('screen' in where) {
@@ -200,6 +208,9 @@ export function fieldForm(
       ? KB_FIELD_SCREENS[where.screen]
       : undefined;
   }
+  const { has } = where;
+  const marked = has && Object.entries(KB_FIELD_MARKS).find(([sel]) => has(sel));
+  if (marked) return marked[1];
   const title = formTitle(where.title);
   for (const [key, prefix] of Object.entries(KB_FIELD_WINDOWS)) {
     if (formTitle(t(key as UiTextKey)) === title) return prefix;
