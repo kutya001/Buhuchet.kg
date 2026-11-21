@@ -5,6 +5,9 @@
 -- Откат: новая миграция с прежним списком — только после того, как код перестал создавать `dm` и строки с
 -- `dm` убраны (иначе ADD CONSTRAINT упадёт с 23514 и выпуск откатится целиком). Откату кода миграция не
 -- мешает: прежний код `dm` не шлёт.
+-- Порядок блокировок в пачке выпуска: 0172 раньше берёт `platform_audit_log`, а ответ администратора на
+-- запрос — сначала `dict_change_requests`, потом `platform_audit_log`. Совпади они в доли секунды —
+-- PostgreSQL прервёт одну транзакцию (deadlock), данные не страдают: выпуск перезапустить.
 SET LOCAL lock_timeout = '5s';--> statement-breakpoint
 ALTER TABLE "dict_change_requests" DROP CONSTRAINT "dict_change_requests_dict_check";--> statement-breakpoint
 ALTER TABLE "dict_change_requests" ADD CONSTRAINT "dict_change_requests_dict_check" CHECK ("dict_change_requests"."dict" in ('types', 'regimes', 'forms', 'organs', 'benefits', 'banks', 'cats', 'reasons', 'ugns', 'bases', 'dm'));--> statement-breakpoint
