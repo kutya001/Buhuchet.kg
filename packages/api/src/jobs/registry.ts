@@ -57,6 +57,8 @@ export const cleanupSchedulerRuns: Job = {
       .where(lt(schedulerRuns.slot, new Date(now - RUN_KEEP_DAYS * DAY_MS)))
       .returning({ job: schedulerRuns.job });
     const inbox = await cleanupTelegramInbox(ctx.db, new Date(now - JOURNAL_DAYS * DAY_MS));
+    // Журнал запросов «Витрины данных» — 90 дней, по часам базы (своей задачи у него нет).
+    // ОТКЛОНЕНИЕ: docs/deviations.md#Т-29
     const requests = await cleanupDmRequests(ctx.db, DM_REQUEST_KEEP_DAYS);
     return runs.length + inbox + requests;
   },

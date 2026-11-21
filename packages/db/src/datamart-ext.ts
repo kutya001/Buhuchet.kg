@@ -5,9 +5,9 @@ import type { DmTemplateColumn, DmTemplateParam } from './datamart-output';
 /*
  * Внешний адрес «Витрины данных» (доработки 20.11.2026: Витрина данных, блок 6; блок 8, пункт 6; поток Т,
  * этап 2, П11; миграция 0174, docs/decisions.md п. Т-20). Запрос приходит без входа: найти токен по
- * хешу, счёт неизвестных токенов с адреса и пределы токена — функции SECURITY DEFINER
- * (`app.dm_ext_target`, `app.dm_ext_take`), они зовутся на `db`, вне транзакции модуля: каждая держит
- * блокировку своего субъекта до конца своей транзакции. Состояние токена (`dmTokenFacts`), шаблон и его
+ * хешу, счёт неизвестных токенов с адреса, обращения токена, его пределы и запуски платформы — функции
+ * SECURITY DEFINER (`app.dm_ext_target`, `app.dm_ext_take`, `app.dm_ext_release`), они зовутся на `db`,
+ * вне транзакции модуля: каждая держит блокировку своего субъекта до конца своей транзакции. Состояние токена (`dmTokenFacts`), шаблон и его
  * текст (`dmOutputTemplate`, `dmTemplateQuery`), запуск и строка журнала (`logDmRequest`) — уже в
  * контексте токена (его организация и кто создал).
  */
@@ -18,6 +18,8 @@ export type DmExtTarget =
   | { outcome: 'ip_wait'; waitSeconds: number }
   /** Такого токена нет (строка счёта адреса уже записана). */
   | { outcome: 'unknown' }
+  /** Известный токен обращается слишком часто (и с отказами) — ждёт `waitSeconds`. */
+  | { outcome: 'token_wait'; waitSeconds: number }
   | {
       outcome: 'ok';
       tokenId: string;
@@ -31,11 +33,19 @@ export type DmExtTarget =
 
 /**
  * Найти токен по хешу SHA-256 (hex); `ip` — SHA-256 адреса с приставкой (`clientIpSubject`). Предел
- * адреса — `badMax` неизвестных токенов за `badWindowSeconds`.
+ * адреса — `badMax` неизвестных токенов за `badWindowSeconds`; известного токена — `tryMax` обращений
+ * за `tryWindowSeconds`.
  */
 export async function dmExtTarget(
   db: Db,
-  q: { tokenHash: string; ip: string; badMax: number; badWindowSeconds: number },
+  q: {
+    tokenHash: string;
+    ip: string;
+    badMax: number;
+    badWindowSeconds: number;
+    tryMax: number;
+    tryWindowSeconds: number;
+  },
 ): Promise<DmExtTarget> {
   const [row] = await db.execute<{
     outcome: string;
@@ -46,9 +56,11 @@ export async function dmExtTarget(
     template_id: string | null;
     template_code: string | null;
   }>(sql`select * from app.dm_ext_target(${q.tokenHash}, ${q.ip}, ${q.badMax}::integer,
-    ${q.badWindowSeconds}::integer)`);
+    ${q.badWindowSeconds}::integer, ${q.tryMax}::integer, ${q.tryWindowSeconds}::integer)`);
   if (!row || row.outcome === 'unknown') return { outcome: 'unknown' };
-  if (row.outcome === 'ip_wait') return { outcome: 'ip_wait', waitSeconds: row.wait_seconds ?? 1 };
+  if (row.outcome === 'ip_wait' || row.outcome === 'token_wait') {
+    return { outcome: row.outcome, waitSeconds: row.wait_seconds ?? 1 };
+  }
   return {
     outcome: 'ok',
     tokenId: row.token_id!,
@@ -59,35 +71,59 @@ export async function dmExtTarget(
   };
 }
 
-/** Пределы токена (блок 6, пункт 4): одновременно один, за минуту и за сутки. */
+/**
+ * Пределы токена (блок 6, пункт 4): одновременно один, за минуту и за сутки; запусков по токенам
+ * одновременно — `platformRuns` на платформу и `orgRuns` у организации (п. О-62).
+ */
 export interface DmExtLimits {
   perMinute: number;
   perDay: number;
   leaseSeconds: number;
+  orgRuns: number;
+  platformRuns: number;
+}
+
+/** Занятый запрос: номера строк токена и запуска для `releaseDmExt`. */
+export interface DmExtSlot {
+  tokenId: string;
+  /** null — токен Админки. */
+  orgId: string | null;
+  ticket: number;
+  run: number;
 }
 
 export type DmExtTake =
-  { ok: true; ticket: number } | { ok: false; reason: 'busy' | 'limited'; waitSeconds: number };
+  | { ok: true; slot: DmExtSlot }
+  | { ok: false; reason: 'busy' | 'run_busy' | 'limited'; waitSeconds: number };
 
 /** Занять запрос токена; после запроса — `releaseDmExt`, иначе следующий ждёт `leaseSeconds`. */
-export async function takeDmExt(db: Db, tokenId: string, l: DmExtLimits): Promise<DmExtTake> {
+export async function takeDmExt(
+  db: Db,
+  token: { tokenId: string; orgId: string | null },
+  l: DmExtLimits,
+): Promise<DmExtTake> {
   const [row] = await db.execute<{
     outcome: string;
     ticket: number | string | null;
+    run_ticket: number | string | null;
     wait_seconds: number | null;
-  }>(sql`select * from app.dm_ext_take(${tokenId}::uuid, ${l.perMinute}::integer,
-    ${l.perDay}::integer, ${l.leaseSeconds}::integer)`);
-  if (row?.outcome === 'ok' && row.ticket !== null) return { ok: true, ticket: Number(row.ticket) };
-  return {
-    ok: false,
-    reason: row?.outcome === 'busy' ? 'busy' : 'limited',
-    waitSeconds: Math.max(1, row?.wait_seconds ?? 1),
-  };
+  }>(sql`select * from app.dm_ext_take(${token.tokenId}::uuid, ${token.orgId}::uuid,
+    ${l.perMinute}::integer, ${l.perDay}::integer, ${l.leaseSeconds}::integer,
+    ${l.orgRuns}::integer, ${l.platformRuns}::integer)`);
+  if (row?.outcome === 'ok' && row.ticket !== null && row.run_ticket !== null) {
+    return {
+      ok: true,
+      slot: { ...token, ticket: Number(row.ticket), run: Number(row.run_ticket) },
+    };
+  }
+  const reason = row?.outcome === 'busy' || row?.outcome === 'run_busy' ? row.outcome : 'limited';
+  return { ok: false, reason, waitSeconds: Math.max(1, row?.wait_seconds ?? 1) };
 }
 
 /** Запрос токена закончился: можно следующий (в счёте за минуту и сутки он остаётся). */
-export async function releaseDmExt(db: Db, tokenId: string, ticket: number): Promise<void> {
-  await db.execute(sql`select app.rate_limit_release(${ticket}, 'dm_ext', ${tokenId})`);
+export async function releaseDmExt(db: Db, s: DmExtSlot): Promise<void> {
+  await db.execute(sql`select app.dm_ext_release(${s.tokenId}::uuid, ${s.orgId}::uuid,
+    ${s.ticket}::bigint, ${s.run}::bigint)`);
 }
 
 /** Удалить строки журнала запросов старше `days` дней (задача «Очистка журналов»). */

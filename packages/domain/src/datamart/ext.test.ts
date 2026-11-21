@@ -176,6 +176,18 @@ describe('dmExtCsv', () => {
       `'@SUM(A1),0,'-x`,
     ]);
   });
+
+  it('формула текстом в числовом столбце — тоже с апострофом (вид столбца задаёт администратор)', () => {
+    const cols = [
+      { key: 'n', title: 'Число', type: 'num' },
+      { key: 'm', title: 'Сумма', type: 'money' },
+    ];
+    const csv = dmExtCsv(cols, [
+      { n: '=cmd|"/c calc"!A1', m: '-2+3' },
+      { n: '-5', m: '+1.5' },
+    ]);
+    expect(csv.split('\r\n').slice(1, 3)).toEqual([`"'=cmd|""/c calc""!A1",'-2+3`, `-5,+1.5`]);
+  });
 });
 
 describe('dmExtUrl', () => {

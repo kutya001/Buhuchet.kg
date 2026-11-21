@@ -9,9 +9,12 @@ import {
   orgMenuSettings,
   releaseDmExt,
   takeDmExt,
+  takeRateLimit,
   withOrgContext,
   withUserContext,
+  type DmExtTake,
   type DmRequestEntry,
+  type RateLimit,
   type Tx,
 } from '@buhuchet/db';
 import {
@@ -23,6 +26,11 @@ import {
   DM_EXT_PATH,
   DM_EXT_PER_DAY,
   DM_EXT_PER_MINUTE,
+  DM_EXT_QUEUE_MS,
+  DM_EXT_REFUSAL_LOGS_PER_MINUTE,
+  DM_EXT_RUNS_ORG,
+  DM_EXT_RUNS_PLATFORM,
+  DM_EXT_TRY_PER_MINUTE,
   DM_MODULES,
   DM_TOKEN_RE,
   dmExtColumns,
@@ -55,18 +63,22 @@ import { logDmRun, runDmTemplate, type DmRunWho } from './run';
  * заголовке `Authorization: Bearer bk_…`. По порядку:
  *   1. токен в адресе не принимается (400), заголовок не похож на токен — «Токен не подходит» без базы;
  *   2. `app.dm_ext_target` (0174): адрес, приславший 20 неизвестных токенов за 10 минут, ждёт (429);
- *      токен ищется по хешу; другой код шаблона — «Токен не подходит или истёк»;
+ *      токен ищется по хешу; известный токен — не больше 60 обращений в минуту, и с отказами (429 без
+ *      строки журнала); другой код шаблона — «Токен не подходит или истёк»;
  *   3. состояние — тем же правилом `dmTokenState`, что вкладка «API Токены», по фактам в контексте
  *      токена (его организация, кто создал): отозван или истёк — 401; шаблон сломан — 503; остановлен
  *      (шаблон выключен, нет доступа, блокировка, подписка, «Внешний доступ по API», функция модуля
  *      выключена) — 403 «Доступ остановлен»;
- *   4. пределы токена `app.dm_ext_take`: один одновременно, 30 в минуту, 5 000 в сутки (429);
+ *   4. пределы токена `app.dm_ext_take`: один одновременно, 30 в минуту, 5 000 в сутки (429); запусков
+ *      по токенам одновременно — 3 на платформу и 2 у организации (п. О-62): занято — запрос ждёт до 2 с,
+ *      потом 429;
  *   5. параметры адреса — только свои коды шаблона, по типам (`dmBind`), лишние отбрасываются;
  *   6. запуск — общим путём «Вывода» `runDmTemplate` (этап 2, П4) от имени организации токена и его
  *      создателя: только чтение, 15 с, 50 000 строк; строки всей организации, как у владельца (область
  *      «Свои» — у сотрудника, у токена её нет: выпуск строже, docs/deviations.md п. Т-26);
  *   7. строка журнала (`app.dm_request_log`) — у каждого известного токена, с итогом и адресом: исходы
- *      запуска пишет `runDmTemplate`, отказы до него — этот метод (`logDmRun`).
+ *      запуска пишет `runDmTemplate`, отказы до него — этот метод (`logDmRun`), не больше 10 в минуту
+ *      у токена: дальше отказ отвечается, но не пишется.
  * Ответ — JSON прототипа (столбцы, строки, всего, следующая страница) или CSV.
  */
 
@@ -107,6 +119,36 @@ const ORG_AS_OWNER: AccessSubject = {
   permissions: new Set(),
   scopes: {},
 };
+
+/** Строки журнала об отказах до запуска: у токена не больше 10 в минуту. */
+const REFUSAL_LOG: RateLimit = {
+  kind: 'dm_ext_log',
+  max: DM_EXT_REFUSAL_LOGS_PER_MINUTE,
+  windowSeconds: 60,
+};
+/** Шаг ожидания свободного запуска платформы. */
+const QUEUE_STEP_MS = 200;
+const pause = (ms: number) => new Promise<void>((done) => setTimeout(done, ms));
+
+/** Занять запрос токена; запуски платформы или организации заняты — подождать до `DM_EXT_QUEUE_MS`. */
+async function takeQueued(
+  deps: ApiDeps,
+  token: { tokenId: string; orgId: string | null },
+): Promise<DmExtTake> {
+  const limits = {
+    perMinute: DM_EXT_PER_MINUTE,
+    perDay: DM_EXT_PER_DAY,
+    leaseSeconds: DM_EXT_LEASE_SECONDS,
+    orgRuns: DM_EXT_RUNS_ORG,
+    platformRuns: DM_EXT_RUNS_PLATFORM,
+  };
+  const until = Date.now() + DM_EXT_QUEUE_MS;
+  for (;;) {
+    const take = await takeDmExt(deps.db, token, limits);
+    if (take.ok || take.reason !== 'run_busy' || Date.now() + QUEUE_STEP_MS > until) return take;
+    await pause(QUEUE_STEP_MS);
+  }
+}
 
 const isModule = (m: string | null): m is DmModule =>
   m !== null && (DM_MODULES as readonly string[]).includes(m);
@@ -154,8 +196,12 @@ export function extHandler(deps: ApiDeps): RouteHandler<typeof EXT_ROUTE, AppEnv
       ip: clientIpSubject(c, deps, 'dm_ext'),
       badMax: DM_EXT_BAD_MAX,
       badWindowSeconds: DM_EXT_BAD_WINDOW_SECONDS,
+      tryMax: DM_EXT_TRY_PER_MINUTE,
+      tryWindowSeconds: 60,
     });
-    if (target.outcome === 'ip_wait') return rate(target.waitSeconds);
+    if (target.outcome === 'ip_wait' || target.outcome === 'token_wait') {
+      return rate(target.waitSeconds);
+    }
     if (target.outcome === 'unknown') return denied();
 
     const now = deps.clock.now();
@@ -165,18 +211,22 @@ export function extHandler(deps: ApiDeps): RouteHandler<typeof EXT_ROUTE, AppEnv
       ? { kind: 'org', orgId: target.orgId, userId: target.createdBy }
       : { kind: 'admin', adminId: target.createdBy };
     let given: Record<string, string> = {};
-    const log = (outcome: Outcome, error: string) =>
-      logDmRun(deps, who, {
-        via: 'api',
-        templateId: target.templateId,
-        tokenId: target.tokenId,
-        params: given,
-        rows: null,
-        ms: null,
-        outcome,
-        error,
-        ip,
-      });
+    const entry = (outcome: Outcome, error: string): DmRequestEntry => ({
+      via: 'api',
+      templateId: target.templateId,
+      tokenId: target.tokenId,
+      params: given,
+      rows: null,
+      ms: null,
+      outcome,
+      error,
+      ip,
+    });
+    // Отказ до запуска — в журнал не больше 10 в минуту у токена (запрос в запуске — всегда).
+    const log = async (outcome: Outcome, error: string) => {
+      const take = await takeRateLimit(deps.db, REFUSAL_LOG, target.tokenId);
+      if (take.ok) await logDmRun(deps, who, entry(outcome, error));
+    };
 
     // Токен другого шаблона — тот же ответ, что неизвестный (адрес шаблона не подтверждается).
     if (target.templateCode !== code) {
@@ -195,6 +245,7 @@ export function extHandler(deps: ApiDeps): RouteHandler<typeof EXT_ROUTE, AppEnv
       return { now: facts.now, fact, features, template, query };
     });
     // Токен Админки, чей создатель больше не администратор платформы: фактов в его контексте нет.
+    // ОТКЛОНЕНИЕ: docs/deviations.md#Т-28
     const stopped = tr('err.dm_ext_stopped');
     if (!seen) return fail(c, 403, 'dm_ext_stopped', stopped);
     const { fact, template } = seen;
@@ -221,6 +272,8 @@ export function extHandler(deps: ApiDeps): RouteHandler<typeof EXT_ROUTE, AppEnv
       await log('broken', broken);
       return fail(c, 503, 'dm_ext_broken', broken);
     }
+    // Функция модуля шаблона выключена — остановлен и без причины в списке токенов.
+    // ОТКЛОНЕНИЕ: docs/deviations.md#Т-28
     const offByFeature =
       fact.orgId !== null &&
       (!template ||
@@ -244,14 +297,10 @@ export function extHandler(deps: ApiDeps): RouteHandler<typeof EXT_ROUTE, AppEnv
       return fail(c, 503, 'dm_ext_broken', broken);
     }
 
-    const slot = await takeDmExt(deps.db, target.tokenId, {
-      perMinute: DM_EXT_PER_MINUTE,
-      perDay: DM_EXT_PER_DAY,
-      leaseSeconds: DM_EXT_LEASE_SECONDS,
-    });
-    if (!slot.ok) {
-      await log('rate', tr('err.dm_ext_rate', { n: slot.waitSeconds }));
-      return rate(slot.waitSeconds);
+    const take = await takeQueued(deps, { tokenId: target.tokenId, orgId: target.orgId });
+    if (!take.ok) {
+      await log('rate', tr('err.dm_ext_rate', { n: take.waitSeconds }));
+      return rate(take.waitSeconds);
     }
     try {
       const req = dmExtRequest(
@@ -261,7 +310,7 @@ export function extHandler(deps: ApiDeps): RouteHandler<typeof EXT_ROUTE, AppEnv
       const badParam = (param: string) =>
         fail(c, 400, 'dm_ext_param', tr('err.dm_ext_param', { param }));
       if (!req.ok) {
-        await log('bad_param', tr('err.dm_ext_param', { param: req.param }));
+        await logDmRun(deps, who, entry('bad_param', tr('err.dm_ext_param', { param: req.param })));
         return badParam(req.param);
       }
       given = req.input;
@@ -282,8 +331,9 @@ export function extHandler(deps: ApiDeps): RouteHandler<typeof EXT_ROUTE, AppEnv
         if (out.outcome === 'timeout') {
           return fail(c, 504, 'dm_ext_timeout', tr('err.dm_ext_timeout'));
         }
+        // Текст базы может содержать значения строк — в журнал сайта не пишется (только «Проверить»).
         deps.logger.warn(
-          { requestId: c.get('requestId'), template: code, db: out.adminDetail },
+          { requestId: c.get('requestId'), template: code, tokenId: target.tokenId },
           'Витрина: шаблон не выполнился по токену',
         );
         return fail(c, 503, 'dm_ext_broken', broken);
@@ -303,7 +353,7 @@ export function extHandler(deps: ApiDeps): RouteHandler<typeof EXT_ROUTE, AppEnv
         shown,
       });
     } finally {
-      await releaseDmExt(deps.db, target.tokenId, slot.ticket);
+      await releaseDmExt(deps.db, take.slot);
     }
   };
 }

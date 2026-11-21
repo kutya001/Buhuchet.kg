@@ -165,9 +165,10 @@ export function requestHandlers(deps: ApiDeps) {
   };
 
   const summary: RouteHandler<R['summary'], AppEnv> = async (c) => {
+    const now = deps.clock.now();
     const res = await inAdmin(c, async (tx) => ({
       ...(await dmRequestsToday(tx)),
-      tokens: await activeTokenCount(tx, deps),
+      tokens: await activeTokenCount(tx, now),
     }));
     return c.json(res, 200);
   };

@@ -27,7 +27,8 @@ import { jobsFor } from './registry';
  * исполнитель повторяет упавший или зависший слот, а первая попытка успела часть работы. Второй запуск
  * не добавляет ни сообщений Telegram (сразу и через очередь), ни строк колокольчика, ни сообщений
  * клиентам, ни отчётов, ни записей истории. Задачи, которым в этом наборе есть что отправить, первый
- * запуск отправляет — проверка не пустая. Новая задача расписания попадает в один из списков ниже,
+ * запуск отправляет — проверка не пустая. Потом следующий запуск того же дня (у задач «каждые 5 минут»
+ * — через 5 минут) на тех же данных тоже ничего не добавляет. Новая задача расписания попадает в один из списков ниже,
  * иначе тест красный: так её повтор тоже проверяется.
  */
 
@@ -299,6 +300,10 @@ describe.skipIf(!databaseAvailable())(
       const extra = `org/${a}/files/${randomUUID()}`;
       await storage.put(extra, new Uint8Array(5), { contentType: 'application/pdf' });
       storage.setModified(extra, new Date('2026-10-15T05:00:00Z'));
+      // Строки колокольчика подготовки (привязка клиента) записаны по постоянным часам теста, а
+      // `app.bell_cleanup` убирает строки старше 90 дней по часам базы: без этого через 90 дней после
+      // 18.10.2026 уборка удалила бы их и попала в «отправляет» (docs/typical-mistakes.md № 52, 57).
+      await f.t.admin.db.update(schema.bellNotifications).set({ createdAt: sql`now()` });
       tg.sent.length = 0;
     });
 
@@ -350,6 +355,32 @@ describe.skipIf(!databaseAvailable())(
       // И сообщения действительно дошли: сотрудникам, клиенту и администратору платформы.
       const chats = new Set(tg.sent.map((m) => m.chatId));
       for (const chat of Object.values(CHAT)) expect(chats.has(chat), `чат ${chat}`).toBe(true);
+
+      // Соседний запуск того же дня (у задач «каждые 5 минут» — 09:05 после 09:00): данные те же —
+      // ничего нового. Первые запуски уже прошли, поэтому берётся следующая минута после самого
+      // позднего из них.
+      const last = Math.max(...slots.keys());
+      const again = new Set<string>();
+      for (const job of all) {
+        const cron = parseCron(job.cron);
+        const next = minutes.find((m) => m.getTime() > last && cron.matches(m));
+        if (!next) continue;
+        clock.set(next.toISOString());
+        const before = await effects();
+        await job.run(run, next);
+        expect(await effects(), `${job.name}, соседний запуск ${next.toISOString()}`).toEqual(
+          before,
+        );
+        again.add(job.name);
+      }
+      for (const name of [
+        'telegram.reminders',
+        'contractor-page.telegram-pay',
+        'contractor-page.telegram-debt',
+        'subs.reminders',
+      ]) {
+        expect(again.has(name), name).toBe(true);
+      }
     });
   },
 );

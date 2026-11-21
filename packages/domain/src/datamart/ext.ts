@@ -22,6 +22,21 @@ export const DM_EXT_PER_DAY = 5000;
  * запроса (15 с) с запасом на чтение токена и журнал.
  */
 export const DM_EXT_LEASE_SECONDS = 30;
+/**
+ * Запусков по токенам одновременно — на всю платформу и у одной организации (docs/decisions.md п. О-62,
+ * Т-20): запуск держит соединение базы до 15 с, без общего предела токены заняли бы пул сайта.
+ */
+export const DM_EXT_RUNS_PLATFORM = 3;
+export const DM_EXT_RUNS_ORG = 2;
+/** Сколько запрос ждёт свободного запуска, прежде чем ответить «Слишком часто» (мс). */
+export const DM_EXT_QUEUE_MS = 2000;
+/**
+ * Обращений одного известного токена за минуту — все, и отказы (отозван, истёк, остановлен): больше —
+ * «Слишком часто» без чтения фактов и без строки журнала. Вдвое больше предела запросов.
+ */
+export const DM_EXT_TRY_PER_MINUTE = 60;
+/** Строк журнала об отказах до запуска у одного токена за минуту: дальше отказ не пишется. */
+export const DM_EXT_REFUSAL_LOGS_PER_MINUTE = 10;
 /** Неизвестных токенов с одного адреса за окно — дальше адрес ждёт (блок 8, пункт 6: 20 за 10 минут). */
 export const DM_EXT_BAD_MAX = 20;
 export const DM_EXT_BAD_WINDOW_SECONDS = 600;
@@ -150,20 +165,22 @@ export function dmExtPage(
 }
 
 const NUMERIC = new Set(['num', 'money', 'int']);
+/** Число как есть («-5», «1250.5»): минус впереди у него — не формула. */
+const PLAIN_NUMBER = /^[-+]?\d+(?:\.\d+)?(?:e[-+]?\d+)?$/i;
 
-/** Ячейка CSV: кавычки по RFC 4180; текст, похожий на формулу Excel, — с апострофом впереди. */
+/**
+ * Ячейка CSV: кавычки по RFC 4180; значение, похожее на формулу Excel, — с апострофом впереди. В
+ * числовом столбце без апострофа — только число: вид столбца задаёт администратор, а база может вернуть
+ * в «числе» текст.
+ */
 function csvCell(type: string, v: unknown): string {
   if (v === null || v === undefined) return '';
   let s = typeof v === 'object' ? JSON.stringify(v) : String(v);
-  if (!NUMERIC.has(type) && /^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  if (/^[=+\-@\t\r]/.test(s) && !(NUMERIC.has(type) && PLAIN_NUMBER.test(s))) s = `'${s}`;
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-/**
- * Таблица CSV для Excel и Google Таблиц (`format=csv`): первая строка — названия столбцов, разделитель —
- * запятая, строки — CRLF, в начале — метка UTF-8 (BOM), чтобы Excel узнал кириллицу. Текст, который
- * начинается с «=», «+», «-» или «@», Excel принял бы за формулу — перед ним апостроф.
- */
+/** CSV страницы: метка UTF-8, строка названий, CRLF. */
 export function dmExtCsv(
   cols: readonly DmExtColumn[],
   rows: readonly Record<string, unknown>[],

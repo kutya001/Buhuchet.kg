@@ -92,7 +92,9 @@ describe.skipIf(!databaseAvailable())('витрина данных: журнал
         }),
       )
     ).id;
-    const at = (minutes: number) => sql`now() - make_interval(mins => ${minutes})`;
+    // Сдвиги — в миллисекундах: порядок строк задан, а «сегодня» по Бишкеку не кончится между ними
+    // (сдвиг в минутах около 00:00 по Бишкеку унёс бы часть строк во «вчера»).
+    const at = (ms: number) => sql`now() - make_interval(secs => ${ms}::numeric / 1000)`;
     await db.admin.db.insert(dmRequests).values([
       {
         orgId: a.orgId,
@@ -130,6 +132,15 @@ describe.skipIf(!databaseAvailable())('витрина данных: журнал
       },
       // «Вывод» сотрудника — не запрос по токену: в журнал Админки не идёт.
       { orgId: a.orgId, userId: a.ownerUserId, templateId, via: 'screen', outcome: 'ok' },
+      // Позавчерашняя ошибка по токену А: в плашки «сегодня» не идёт, в списке — последней.
+      {
+        orgId: a.orgId,
+        tokenId: tokenA,
+        templateId,
+        via: 'api',
+        outcome: 'error',
+        at: sql`now() - interval '2 days'`,
+      },
     ]);
   });
 
@@ -139,11 +150,12 @@ describe.skipIf(!databaseAvailable())('витрина данных: журнал
 
   it('только запросы по токенам, сначала новые: организация, токен, шаблон, параметры строкой', async () => {
     const page = await asAdmin((tx) => listDmRequestsPage(tx, query(), texts));
-    expect(page.total).toBe(3);
+    expect(page.total).toBe(4);
     expect(page.rows.map((x) => [x.orgName, x.tokenName, x.prefix, x.tplName, x.outcome])).toEqual([
       ['Администратор платформы', 'Power BI', 'bk_bbbbbb', 'Организации', 'ok'],
       ['Организация А', 'Excel', 'bk_aaaaaa', 'Отчёты', 'rate'],
       ['Организация А', 'Excel', 'bk_aaaaaa', 'Отчёты', 'ok'],
+      ['Организация А', 'Excel', 'bk_aaaaaa', 'Отчёты', 'error'],
     ]);
     expect(page.rows[2]).toMatchObject({
       tokenId: tokenA,
@@ -163,7 +175,7 @@ describe.skipIf(!databaseAvailable())('витрина данных: журнал
     const errors = await asAdmin((tx) =>
       listDmRequestsPage(tx, query({ filters: { res: { type: 'enum', vals: ['err'] } } }), texts),
     );
-    expect(errors.rows.map((x) => x.outcome)).toEqual(['rate']);
+    expect(errors.rows.map((x) => x.outcome)).toEqual(['rate', 'error']);
     const found = await asAdmin((tx) =>
       listDmRequestsPage(tx, query({ search: { q: 'bk_bbb', keys: ['tok'] } }), texts),
     );
@@ -174,19 +186,10 @@ describe.skipIf(!databaseAvailable())('витрина данных: журнал
       'Организация А',
     ]);
     const file = await asAdmin((tx) => exportDmRequests(tx, query(), ['at', 'res', 'tok'], texts));
-    expect(file.rows).toHaveLength(3);
+    expect(file.rows).toHaveLength(4);
   });
 
-  it('плашки «сегодня» по Бишкеку: запросов и ошибок; вчерашние не считаются', async () => {
-    expect(await asAdmin((tx) => dmRequestsToday(tx))).toEqual({ today: 3, errors: 1 });
-    await db.admin.db.insert(dmRequests).values({
-      orgId: a.orgId,
-      tokenId: tokenA,
-      templateId,
-      via: 'api',
-      outcome: 'error',
-      at: sql`now() - interval '2 days'`,
-    });
+  it('плашки «сегодня» по Бишкеку: запросов и ошибок; позавчерашние не считаются', async () => {
     expect(await asAdmin((tx) => dmRequestsToday(tx))).toEqual({ today: 3, errors: 1 });
   });
 
@@ -194,7 +197,7 @@ describe.skipIf(!databaseAvailable())('витрина данных: журнал
     const own = await withOrgContext(db.app.db, { orgId: a.orgId, userId: a.ownerUserId }, (tx) =>
       listDmRequestsPage(tx, query(), texts),
     );
-    // Две строки из начала и вчерашняя из теста плашек — все по токену организации.
+    // Две сегодняшние и позавчерашняя — все по токену организации.
     expect(own.rows.map((x) => x.tokenId)).toEqual([tokenA, tokenA, tokenA]);
     const stranger = await withUserContext(db.app.db, randomUUID(), (tx) =>
       listDmRequestsPage(tx, query(), texts),

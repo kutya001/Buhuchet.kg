@@ -188,7 +188,7 @@ test.describe('Витрина данных: API Токены', () => {
     }
   });
 
-  test('(доработки 20.11.2026, Витрина данных) внешний адрес по токену: токен только в заголовке, ответ JSON; запрос — в «Журнале запросов» Админки, строка открывает окно токена с «Как подключить»', async ({
+  test('(доработки 20.11.2026, Витрина данных) внешний адрес по токену: токен только в заголовке, ответ JSON и CSV; запрос — в «Журнале запросов» Админки, строка открывает окно токена с «Как подключить»; отозванный — «Токен не подходит»', async ({
     page,
     baseURL,
     isMobile,
@@ -226,7 +226,8 @@ test.describe('Витрина данных: API Токены', () => {
       expect(answer.status(), await answer.text()).toBe(200);
       const body = (await answer.json()) as { columns: unknown[]; rows: unknown[]; total: number };
       expect(body.columns.length).toBeGreaterThan(0);
-      expect(body.total).toBe(body.rows.length);
+      // Строка на организацию: на долгой базе стенда их может быть больше страницы (1 000).
+      expect(body.rows.length).toBe(Math.min(body.total, 1000));
 
       // «Журнал запросов»: строка этого запроса — по названию токена.
       await page.goto('/app/dm/log');
@@ -253,6 +254,24 @@ test.describe('Витрина данных: API Токены', () => {
         `Authorization: Bearer ${issued.item.prefix}…`,
       );
       await expect(page.locator('body')).not.toContainText(issued.token);
+
+      // С `?format=csv` — таблица с названиями столбцов (метка UTF-8 впереди).
+      const csv = await ext.get(`/api/ext/v1/${ADMIN_TEMPLATE}?format=csv`, {
+        headers: { authorization: `Bearer ${issued.token}` },
+      });
+      expect(csv.status(), await csv.text()).toBe(200);
+      expect(csv.headers()['content-type']).toContain('text/csv');
+      expect((await csv.text()).startsWith('\uFEFF')).toBe(true);
+      // «Отозвать» — следующий запрос «Токен не подходит или истёк».
+      const revoked = await page.request.post(`/api/admin/dm/tokens/${issued.item.id}/revoke`, {
+        headers: { origin },
+      });
+      expect(revoked.status(), await revoked.text()).toBe(200);
+      const after = await ext.get(`/api/ext/v1/${ADMIN_TEMPLATE}`, {
+        headers: { authorization: `Bearer ${issued.token}` },
+      });
+      expect(after.status()).toBe(401);
+      expect(((await after.json()) as { error: { code: string } }).error.code).toBe('dm_ext_token');
     } finally {
       await ext.dispose();
       for (const id of mine) {

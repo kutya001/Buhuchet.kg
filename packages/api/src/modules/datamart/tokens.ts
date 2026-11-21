@@ -156,10 +156,11 @@ interface Moment {
   since: Date;
   today: IsoDate;
 }
-const momentOf = (deps: ApiDeps): Moment => {
-  const now = deps.clock.now();
-  return { since: new Date(now.getTime() - 30 * DAY_MS), today: bishkekDate(now) };
-};
+const momentAt = (now: Date): Moment => ({
+  since: new Date(now.getTime() - 30 * DAY_MS),
+  today: bishkekDate(now),
+});
+const momentOf = (deps: ApiDeps): Moment => momentAt(deps.clock.now());
 
 const trOf =
   (t: Texts): Tr =>
@@ -267,9 +268,8 @@ function viewOf(f: DmTokenFact, now: Date, side: Side, tr: Tr): TokenView {
  * Действующих токенов в контексте (плашка «Действующих токенов» «Журнала запросов» Админки, прототип
  * `DM_TOK.filter(dmLive)`: состояние «Действует»).
  */
-export async function activeTokenCount(tx: Tx, deps: ApiDeps): Promise<number> {
-  const m = momentOf(deps);
-  const { now, items } = await dmTokenFacts(tx, { since: m.since, today: m.today });
+export async function activeTokenCount(tx: Tx, at: Date): Promise<number> {
+  const { now, items } = await dmTokenFacts(tx, momentAt(at));
   return items.filter((f) => stateOf(f, now).state === 'active').length;
 }
 

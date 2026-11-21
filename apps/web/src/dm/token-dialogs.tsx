@@ -507,6 +507,15 @@ export function useTokenActions(side: DmSide) {
           bad: true,
         });
       }
+      // «Выпустить токен» у шаблона, к которому вошедшему токен не выпустить (область «Свои»):
+      // не подставлять молча другой шаблон, а сказать почему.
+      // ОТКЛОНЕНИЕ: docs/deviations.md#Т-26
+      if (templateId && !data.templates.some((x) => x.id === templateId)) {
+        return toast(errorText({ code: 'dm_token_template', message: '' }), {
+          icon: 'lock',
+          bad: true,
+        });
+      }
       setForm(openSlot({ form: data, templateId }));
     },
     [client, side, toast, errorText, t],

@@ -1,10 +1,19 @@
 import { schema } from '@buhuchet/db';
 import { databaseAvailable } from '@buhuchet/db/testing';
-import { bishkekDate, DM_EXT_PER_MINUTE, UI_TEXTS } from '@buhuchet/domain';
 import {
+  bishkekDate,
+  DM_EXT_PER_MINUTE,
+  DM_EXT_REFUSAL_LOGS_PER_MINUTE,
+  DM_EXT_RUNS_PLATFORM,
+  DM_EXT_TRY_PER_MINUTE,
+  UI_TEXTS,
+} from '@buhuchet/domain';
+import {
+  ApiError,
   DmExtAnswer,
   DmRequestList,
   DmRequestSummary,
+  DmRunResult,
   DmTokenCard,
   DmTokenIssued,
 } from '@buhuchet/shared';
@@ -17,11 +26,13 @@ import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../tes
  * блок 8, пункты 1, 5, 6; поток Т, этап 2, П11; приёмка «Токены и внешний адрес»): ответ JSON и CSV,
  * страницы, токен только в заголовке, другой шаблон, изменение по токену, пределы, отзыв и перевыпуск,
  * «Внешний доступ по API», подписка, блокировка, сломанный шаблон, токен Админки, 20 неверных токенов
- * с адреса, журнал запросов и изоляция организаций.
+ * с адреса, автор уволен, запуски платформы заняты, обращения известного токена, журнал запросов и
+ * изоляция организаций.
  */
 
 type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
-const { dmRequests, dmTemplates, dmTemplateSql, dmTokens, organizations, orgSettings } = schema;
+const { dmRequests, dmTemplates, dmTemplateSql, dmTokens, organizations, orgSettings, rateLimits } =
+  schema;
 const txt = (key: keyof typeof UI_TEXTS) => UI_TEXTS[key].ru;
 
 describe.skipIf(!databaseAvailable())('Витрина данных: внешний адрес по токену', () => {
@@ -86,11 +97,24 @@ describe.skipIf(!databaseAvailable())('Витрина данных: внешни
 
   beforeAll(async () => {
     f = await createStaffFixture();
-    for (const login of ['owner-a', 'owner-b', 'platform-admin']) {
+    for (const login of ['owner-a', 'owner-b', 'senior-a', 'platform-admin']) {
       cookies[login] = await signIn(f.app, login, TEST_PASSWORD);
     }
     const db = f.t.admin.db;
     await db.update(orgSettings).set({ extApi: true });
+    // «Старшему» в А — витрина с правом на токены, области — «Все» (токен выпускается только к шаблону,
+    // который «Вывод» не отбирает по «Свои», п. Т-26): его токен — для «автор уволен».
+    await db.insert(schema.rolePermissions).values(
+      ['dmView', 'dmTokens'].map((permissionId) => ({
+        orgId: f.a.orgId,
+        roleId: f.roleIds.senior,
+        permissionId,
+      })),
+    );
+    await db
+      .update(schema.roleScopes)
+      .set({ scope: 'all' })
+      .where(eq(schema.roleScopes.roleId, f.roleIds.senior));
     // Функция «Проекты» включена: шаблон модуля «Проекты» виден владельцу.
     await db
       .update(orgSettings)
@@ -119,6 +143,10 @@ describe.skipIf(!databaseAvailable())('Витрина данных: внешни
     });
     await add('ext-proj', 'SELECT 1 AS n', {
       module: 'projects',
+      columns: [{ code: 'n', name: 'Номер', type: 'num', total: false, contractor: false }],
+    });
+    await add('ext-rep', 'SELECT 1 AS n', {
+      module: 'cps',
       columns: [{ code: 'n', name: 'Номер', type: 'num', total: false, contractor: false }],
     });
     await add('ext-adm', 'SELECT count(*)::integer AS orgs FROM organizations', {
@@ -172,6 +200,15 @@ describe.skipIf(!databaseAvailable())('Витрина данных: внешни
     expect(ofB.rows.map((r) => r.name)).not.toContain(
       body.rows.find((r) => !ofB.rows.some((x) => x.name === r.name))?.name ?? '—',
     );
+    // Те же строки, что владелец видит в «Выводе» этого шаблона.
+    const shown = await apiRequest(f.app, 'POST', '/api/dm/output/run', cookies['owner-a'], {
+      code: 'ext-staff',
+      params: { month: '2026-11' },
+    });
+    expect(shown.status, await shown.clone().text()).toBe(200);
+    const out = DmRunResult.parse(await shown.json());
+    const at = out.columns.findIndex((c) => c.code === 'name');
+    expect(body.rows.map((r) => r.name)).toEqual(out.rows.map((r) => r[at]));
     // Без параметра — значение по умолчанию (текущий месяц), лишние параметры отбрасываются.
     const def = await answer(await ext('ext-staff?zzz=1', { token: a.token }));
     expect(def.rows[0]!.month).toMatch(/^\d{4}-\d{2}$/);
@@ -397,6 +434,77 @@ describe.skipIf(!databaseAvailable())('Витрина данных: внешни
     expect((await ext('ext-proj', { token: a.token, ip: ip2 })).status).toBe(200);
   });
 
+  it('автор уволен — токен работает: строки организации, в журнале «Успешно» (блок 5, пункт 7)', async () => {
+    const made = await issue('senior-a', 'ext-rep', 'Токен уволенного');
+    const db = f.t.admin.db;
+    const senior = f.people['senior-a']!;
+    await db
+      .update(schema.employees)
+      .set({ active: false })
+      .where(eq(schema.employees.id, senior.employeeId));
+    try {
+      const body = await answer(await ext('ext-rep', { token: made.token }));
+      expect(body.rows).toEqual([{ n: 1 }]);
+      expect((await logOf(made.item.id)).map((r) => r.outcome)).toEqual(['ok']);
+    } finally {
+      await db
+        .update(schema.employees)
+        .set({ active: true })
+        .where(eq(schema.employees.id, senior.employeeId));
+    }
+  });
+
+  it(`запуски по токенам платформы заняты (${DM_EXT_RUNS_PLATFORM}) — запрос ждёт, потом «Слишком часто»; освободились — работает`, async () => {
+    const a = await issue('owner-a', 'ext-proj', 'Очередь');
+    const db = f.t.admin.db;
+    // Три чужих запуска идут (строки запусков платформы, как их ставит app.dm_ext_take).
+    const busy = await db
+      .insert(rateLimits)
+      .values(
+        Array.from({ length: DM_EXT_RUNS_PLATFORM }, (_, i) => ({
+          kind: 'dm_ext_run',
+          subject: `admin:busy-${i}`,
+          busyUntil: sql`now() + interval '1 minute'`,
+        })),
+      )
+      .returning({ id: rateLimits.id });
+    try {
+      const started = Date.now();
+      const res = await ext('ext-proj', { token: a.token });
+      const e = await expectErr(res, 429, 'dm_ext_rate');
+      expect(Date.now() - started).toBeGreaterThanOrEqual(1500);
+      expect(res.headers.get('retry-after')).toBe('1');
+      expect(e.message).toBe('Слишком часто, повторите через 1 секунд');
+      expect((await logOf(a.item.id)).map((r) => r.outcome)).toEqual(['rate']);
+    } finally {
+      for (const r of busy) await db.delete(rateLimits).where(eq(rateLimits.id, r.id));
+    }
+    expect((await ext('ext-proj', { token: a.token })).status).toBe(200);
+    // Свой запуск отпущен: строк запусков не осталось.
+    const left = await db.select().from(rateLimits).where(eq(rateLimits.kind, 'dm_ext_run'));
+    expect(left).toHaveLength(0);
+  });
+
+  it(`известный токен: ${DM_EXT_TRY_PER_MINUTE + 1}-е обращение за минуту — «Слишком часто» и без отказа; в журнале — ${DM_EXT_REFUSAL_LOGS_PER_MINUTE} отказов`, async () => {
+    const gone = await issue('owner-a', 'ext-proj', 'Отозванный часто');
+    await apiRequest(f.app, 'POST', `/api/dm/tokens/${gone.item.id}/revoke`, cookies['owner-a']);
+    const ip = nextIp();
+    for (let i = 0; i < DM_EXT_TRY_PER_MINUTE; i++) {
+      await expectErr(await ext('ext-proj', { token: gone.token, ip }), 401, 'dm_ext_token');
+    }
+    const res = await ext('ext-proj', { token: gone.token, ip });
+    await expectErr(res, 429, 'dm_ext_rate');
+    const wait = Number(res.headers.get('retry-after'));
+    expect(wait).toBeGreaterThanOrEqual(1);
+    expect(wait).toBeLessThanOrEqual(60);
+    const log = await logOf(gone.item.id);
+    expect(log).toHaveLength(DM_EXT_REFUSAL_LOGS_PER_MINUTE);
+    expect(log.every((r) => r.outcome === 'denied')).toBe(true);
+    // Адрес при этом не ждёт: у другого токена с него — ответ.
+    const a = await issue('owner-a', 'ext-proj', 'Сосед');
+    expect((await ext('ext-proj', { token: a.token, ip })).status).toBe(200);
+  });
+
   it('журнал: адрес, строки, время и итог; «Последний запрос» токена; окно токена — только своей организации', async () => {
     const a = await issue('owner-a', 'ext-staff', 'Журнал');
     const ip = nextIp();
@@ -427,6 +535,11 @@ describe.skipIf(!databaseAvailable())('Витрина данных: внешни
       .where(and(eq(dmTokens.id, a.item.id)));
     expect(token).toMatchObject({ lastIp: ip });
     expect(token!.lastUsedAt).not.toBeNull();
+    // Мусор в X-Forwarded-For в журнал не попадает: адреса нет.
+    for (const junk of ['<script>alert(1)</script>', '1'.repeat(500)]) {
+      await answer(await ext('ext-staff?month=2026-10', { token: a.token, ip: junk }));
+    }
+    expect((await logOf(a.item.id)).slice(1).map((r) => r.ip)).toEqual([null, null]);
   });
   it('«Как подключить»: адрес с параметрами по умолчанию и столбцы без «Контрагента» — у своего живого токена', async () => {
     const a = await issue('owner-a', 'ext-staff', 'Как подключить');
@@ -466,6 +579,11 @@ describe.skipIf(!databaseAvailable())('Витрина данных: внешни
     const a = await issue('owner-a', 'ext-staff', 'Журнал Админки');
     const ip = nextIp();
     await answer(await ext('ext-staff?month=2026-09', { token: a.token, ip }));
+    // Свои запросы Б и Админки — в этом же тесте: журнал не держится на соседних.
+    const b = await issue('owner-b', 'ext-proj', 'Журнал Админки Б');
+    await answer(await ext('ext-proj', { token: b.token, ip }));
+    const adm = await issue('platform-admin', 'ext-adm', 'Журнал Админки', '/api/admin/dm');
+    await answer(await ext('ext-adm', { token: adm.token, ip }));
     await expectErr(await ext('ext-staff?page=0', { token: a.token, ip }), 400, 'dm_ext_param');
     const list = async (q = '') => {
       const res = await apiRequest(
@@ -513,6 +631,17 @@ describe.skipIf(!databaseAvailable())('Витрина данных: внешни
       cookies['platform-admin'],
     );
     expect(file.status).toBe(200);
+    // Неизвестный столбец в сортировке, значениях или файле — неверный запрос.
+    for (const path of ['?sort=secret.asc', '/values?col=secret', '/export?cols=secret']) {
+      const res = await apiRequest(
+        f.app,
+        'GET',
+        `/api/admin/dm/requests${path}`,
+        cookies['platform-admin'],
+      );
+      expect(res.status, path).toBe(400);
+      expect(ApiError.parse(await res.json()).error.code).toBe('validation_failed');
+    }
     for (const path of ['', '/summary', '/values?col=res', '/export?cols=at']) {
       const res = await apiRequest(
         f.app,
