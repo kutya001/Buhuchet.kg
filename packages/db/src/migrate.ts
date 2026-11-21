@@ -15,12 +15,14 @@ export const noticeLine = (notice: { severity?: string; message?: string }): str
 /**
  * Применить все новые миграции. Только от имени владельца схемы (DATABASE_ADMIN_URL). `onNotice` —
  * сообщения миграций (`RAISE NOTICE` с итогом переноса данных, например 0159 `file_copies_merge`):
- * команда `db:migrate` печатает их в журнал стенда и выпуска, тесты — нет.
+ * команда `db:migrate` печатает их в журнал стенда и выпуска, тесты — нет. `folder` — другая папка
+ * миграций (тест «база до выпуска»: только миграции до нужной, `createTestDatabaseAt`).
  */
 export async function runMigrations(
   adminUrl: string,
   caCert?: string,
   onNotice?: (line: string) => void,
+  folder: string = MIGRATIONS_FOLDER,
 ): Promise<void> {
   const { db, close } = createDb(adminUrl, {
     max: 1,
@@ -29,7 +31,7 @@ export async function runMigrations(
     onNotice: onNotice ? (notice) => onNotice(noticeLine(notice)) : undefined,
   });
   try {
-    await migrate(db, { migrationsFolder: MIGRATIONS_FOLDER });
+    await migrate(db, { migrationsFolder: folder });
   } finally {
     await close();
   }
