@@ -8,7 +8,12 @@ import {
   cleanupTelegramInbox,
   schema,
 } from '@buhuchet/db';
-import { DM_REQUEST_KEEP_DAYS, formatMomentRu, JOURNAL_DAYS, RUN_KEEP_DAYS } from '@buhuchet/domain';
+import {
+  DM_REQUEST_KEEP_DAYS,
+  formatMomentRu,
+  JOURNAL_DAYS,
+  RUN_KEEP_DAYS,
+} from '@buhuchet/domain';
 import { lt } from 'drizzle-orm';
 import type { Job } from '../deps';
 import { purgeLeadDocsJob } from '../modules/admin/lead-purge';

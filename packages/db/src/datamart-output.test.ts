@@ -78,13 +78,11 @@ describe.skipIf(!databaseAvailable())('витрина данных: «Вывод
         .insert(dmTemplates)
         .values({ code, name: `Шаблон ${code}`, module: 'reports', state: 'published', ...over })
         .returning({ id: dmTemplates.id });
-      await db.admin.db
-        .insert(dmTemplateSql)
-        .values({
-          templateId: t!.id,
-          query: `select '${code}' as n`,
-          checkError: `ошибка ${code}`,
-        });
+      await db.admin.db.insert(dmTemplateSql).values({
+        templateId: t!.id,
+        query: `select '${code}' as n`,
+        checkError: `ошибка ${code}`,
+      });
       return t!.id;
     };
     tpl.all = await add('dmo-all', {});
