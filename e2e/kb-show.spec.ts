@@ -9,7 +9,9 @@ import { manualReport } from './reports';
 // «Новый контрагент» (2.09); тот же механизм — на «Сотрудниках», «Ролях» и «Задачах».
 
 async function stepDone(api: APIRequestContext, id: string) {
-  const res = await api.get('/api/kb/me');
+  // Чтение — повтор безопасен: после долгого показа сайт мог закрыть простаивающее соединение
+  // (docs/typical-mistakes.md № 26).
+  const res = await api.get('/api/kb/me', { maxRetries: 2 });
   expect(res.status(), await res.text()).toBe(200);
   const me = (await res.json()) as {
     lessons: { steps: { id: string; done: { how: string } | null }[] }[];
@@ -510,6 +512,36 @@ test.describe('Этап 2: База знаний — «Показать как»
       page.getByRole('dialog', { name: 'Готово: шаг «Добавить сотрудников» выполнен' }),
     ).toBeVisible();
     expect(await stepDone(page.request, 'emps')).toMatchObject({ how: 'action' });
+  });
+
+  test('(показы «Настройки» и «Хранилище», задача 2.29) «Показать как» у шага «Проверить часовой пояс и час напоминаний» показывает кнопку «Сохранить настройки», «Сделать сейчас» подсвечивает её; у шага «Посмотреть занятый объём хранилища» — облачко «Хранилище», «Готово» засчитывает шаг', async ({
+    page,
+    baseURL,
+  }) => {
+    await newOrgOwner(page.request, new URL(baseURL!).origin);
+    // До первого облачка — переход с «Уроков» и загрузка «Настроек» (политика, роли, объём хранилища).
+    await showStep(page, 'settings');
+    await expect(nextButton(page)).toBeEnabled({ timeout: 15_000 });
+    const settings = await toEnd(page, ['Сделать сейчас']);
+    expect(settings.label).toBe('Сделать сейчас');
+    expect(settings.titles).toContain('Кнопка «Сохранить настройки»');
+    await nextButton(page).click();
+    await expect(bubble(page)).toHaveCount(0);
+    await expect(page).toHaveURL(/\/app\/org\/settings/);
+    await expect(page.locator('main [data-org-settings-save][data-ck-flash]')).toBeVisible();
+
+    await showStep(page, 'storage');
+    await expect(nextButton(page)).toBeEnabled({ timeout: 15_000 });
+    const storage = await toEnd(page);
+    expect(storage.titles).toContain('Хранилище');
+    await nextButton(page).click();
+    await expect(bubble(page)).toHaveCount(0);
+    await expect(
+      page.getByRole('dialog', {
+        name: 'Шаг выполнен: вы посмотрели «Посмотреть занятый объём хранилища»',
+      }),
+    ).toBeVisible();
+    expect(await stepDone(page.request, 'storage')).toMatchObject({ how: 'show' });
   });
 
   test('(проверка задачи #87) «Сделать сейчас» у шага без формы: показ заканчивается, «Моя организация» открыта и нужное место подсвечено', async ({

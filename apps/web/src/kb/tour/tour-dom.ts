@@ -8,6 +8,7 @@ import {
 import type { KbShowUi } from '@buhuchet/shared';
 import { FIELD_LABEL_SELECTOR } from '@buhuchet/ui';
 import type { Translate } from '../../l10n/translate';
+import { SCREEN_BUSY } from '../kb-go';
 import {
   fieldForm,
   fieldText,
@@ -215,10 +216,7 @@ export class TourDom {
   async settle(min = 180) {
     await wait(min);
     for (let k = 0; k < 25; k++) {
-      const busy = document.querySelector(
-        'main [aria-busy="true"]:not(button), [data-window] [aria-busy="true"]:not(button)',
-      );
-      if (!busy) return;
+      if (!document.querySelector(SCREEN_BUSY)) return;
       await wait(80);
     }
   }

@@ -217,6 +217,10 @@ export function useKbRuntime(shell: KbShellInfo): { controls: KbControls; overla
   /** Отмена ожидания окна «Готово» за окном токена (`afterStickyWindows`). */
   const doneWait = useRef<(() => void) | null>(null);
   useEffect(() => () => doneWait.current?.(), []);
+  // Подсветка места шага от «Перейти»: новое «Перейти» отменяет прежнюю — иначе на медленной связи
+  // два ожидания нажали бы кнопку шага дважды.
+  const flashStop = useRef<(() => void) | null>(null);
+  useEffect(() => () => flashStop.current?.(), []);
   // Отклик на ответ и «Перейти» читают урок и программу на момент события.
   const lessonRef = useRef(lesson);
   const stateRef = useRef(state);
@@ -355,19 +359,20 @@ export function useKbRuntime(shell: KbShellInfo): { controls: KbControls; overla
       }
       const target = KB_GO[id];
       const module = target ? target.module : (step.module as MenuModuleId | null);
-      if (module) {
-        const href = tabHrefOf(module, target?.tab);
-        if (href && options?.replace) router.replace(href);
-        else if (href) router.push(href);
-      }
+      const href = module ? tabHrefOf(module, target?.tab) : null;
+      if (href && options?.replace) router.replace(href);
+      else if (href) router.push(href);
       const phone = window.matchMedia('(max-width: 767px)').matches;
       const open = phone && target?.phoneOpen ? target.phoneOpen : target?.open;
       if (open === 'profile') onProfile();
       else if (open && module) setPendingAdd({ module, add: open.add, variant: open.variant });
+      flashStop.current?.();
+      flashStop.current = null;
       if (!open || open === 'profile') {
-        flashTarget(
+        flashStop.current = flashTarget(
           phone && target?.phoneFlash ? target.phoneFlash : (target?.flash ?? 'main'),
           target?.press ? (el) => el.click() : undefined,
+          href,
         );
       }
     },

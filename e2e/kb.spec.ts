@@ -1,4 +1,4 @@
-import { expect, test, type APIRequestContext } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Route } from '@playwright/test';
 import { platformAdmin, uniqueInn } from './admin';
 import { newOrgOwner, uniqueLogin } from './helpers';
 
@@ -70,10 +70,33 @@ test.describe('Этап 2: База знаний — программа, уро�
     await page.goto('/app/kb/lessons');
     const step = page.locator('[data-kb-step="accs"]');
     await expect(step).toHaveAttribute('data-kb-state', 'open');
-    await step.getByRole('button', { name: 'Перейти' }).click();
-    await expect(page).toHaveURL(/\/app\/org\/main/);
+    // Счета приходят дольше 2,5 с, которые «Перейти» ждёт кнопку без оглядки на загрузку: пока блок
+    // показывает заглушку, кнопку ждут дальше и окно всё равно открывается (типовая ошибка № 81).
+    // Ответ держится не меньше 3,5 с и пока тест не увидел заглушку блока счетов.
+    let release = () => {};
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const accountsUrl = '**/api/org/accounts';
+    const slowAccounts = async (route: Route) => {
+      if (route.request().method() === 'GET') {
+        await Promise.all([held, new Promise<void>((resolve) => void setTimeout(resolve, 3_500))]);
+      }
+      await route.continue();
+    };
+    await page.route(accountsUrl, slowAccounts);
     const dialog = page.getByRole('dialog', { name: 'Счёт организации' });
-    await expect(dialog).toBeVisible();
+    try {
+      await step.getByRole('button', { name: 'Перейти' }).click();
+      await expect(page).toHaveURL(/\/app\/org\/main/);
+      await expect(
+        page.locator('main [data-org-loading="accounts"][aria-busy="true"]'),
+      ).toBeVisible({ timeout: 10_000 });
+      release();
+      // «Перейти» ждёт кнопку не дольше 10 с после нажатия — окну хватит 12 с.
+      await expect(dialog).toBeVisible({ timeout: 12_000 });
+    } finally {
+      release();
+      await page.unroute(accountsUrl, slowAccounts);
+    }
     // Несохранённые поля профиля после добавления счёта не сбрасываются (ТЗ, шаг «Реквизиты»).
     await dialog.getByRole('button', { name: 'Отмена' }).click();
     const address = page.locator('main').getByLabel('Адрес', { exact: true });

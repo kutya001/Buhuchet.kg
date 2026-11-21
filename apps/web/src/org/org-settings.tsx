@@ -216,6 +216,7 @@ function SettingsForm({
           <div className="grow" />
           <button
             type="button"
+            data-org-settings-save=""
             className={buttonClass('cta')}
             disabled={busy || changed}
             onClick={() => void save()}

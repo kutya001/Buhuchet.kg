@@ -17,6 +17,10 @@ describe('«Показать как»: элементы прототипа на 
     expect(productTarget('#tabs')).toBe('[data-tabrow]');
     expect(productTarget('#mbody .plate[data-plate="pend"]')).toBe('[data-plate="pend"]');
     expect(productTarget('#nothing-here')).toBeNull();
+    // «Моя организация» → «Настройки»: «Сохранить настройки» — кнопка без формы, «Хранилище файлов» —
+    // блок со своей меткой (показы `sh-settings`, `sh-storage`).
+    expect(productTarget('#st-save')).toBe('main [data-org-settings-save]');
+    expect(productTarget('#org-storage')).toBe('main [data-org-storage]');
     // «Сделать сейчас» в показах сдачи и подтверждения — главная кнопка карточки отчёта.
     expect(productTarget('#rc-main')).toContain('[data-report-button="submit"]');
     expect(productTarget('#rc-main')).toContain('[data-report-button="confirm"]');

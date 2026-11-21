@@ -89,7 +89,9 @@ export function KbLessonsTab() {
   }, [target]);
 
   if (query.isError) return <Note tone="bad">{t('kb.load_error')}</Note>;
-  if (!state) return null;
+  // Пока программа грузится — заглушка `aria-busy`, а не пустой экран: показ и «Обзор экрана» ждут
+  // её, а не собирают облачка по пустым «Урокам» (docs/typical-mistakes.md № 81).
+  if (!state) return <div className="min-h-[200px]" aria-busy="true" />;
   if (!state.lessons.length) {
     return (
       <EmptyState

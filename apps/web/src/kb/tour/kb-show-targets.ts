@@ -57,7 +57,10 @@ export const KB_SHOW_TARGETS: Readonly<Record<string, string>> = {
   '#pol-quiz': '[data-quiz-open]',
   '#mbody [data-feat-row]': 'main [data-feat-row]',
   '#pol-tconf': '[data-task-confirm]',
-  '#st-save': 'main form [type=submit]',
+  // «Сохранить настройки» — кнопка без формы (прототип `#st-save`), поэтому свой атрибут.
+  '#st-save': 'main [data-org-settings-save]',
+  // «Хранилище файлов» в «Настройках» (задача 2.29; прототип modules/org.js, `#org-storage`).
+  '#org-storage': 'main [data-org-storage]',
   // Справочники: «Справочники платформы» — плитки.
   '#mbody .gscroll || #mbody .gcards': 'main [data-dict-tile]',
   // Контрагенты: «сменить» ответственного и блок «Страница клиента» в карточке. Блок свёрнут (прототип
