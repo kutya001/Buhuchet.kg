@@ -19,6 +19,7 @@ import { storageRetryJob } from '../modules/files/storage-retry';
 import { syncServiceStatusesJob } from '../modules/contractors/job';
 import { cleanupVideoUploadsJob } from '../modules/kb/video-cleanup';
 import { duesRecalcJob } from '../modules/platform-dicts/admin-dues';
+import { dmCheckTemplatesJob } from '../modules/datamart/check-job';
 import { createDueReportsJob } from '../modules/reports/job';
 import { bellCleanupJob, bellDayJob } from '../modules/telegram/bell-day';
 import { contractorDebtJob } from '../modules/telegram/client/debt';
@@ -133,6 +134,8 @@ export const jobs: readonly Job[] = [
   duesRecalcJob,
   cleanupVideoUploadsJob,
   purgeLeadDocsJob,
+  // «Витрина: проверка шаблонов» после выпуска и ночью (общий план 20.11, этап 2, П4).
+  dmCheckTemplatesJob(),
 ];
 
 /** Ошибки доставки вебхуку — не чаще одного оповещения за столько часов. */

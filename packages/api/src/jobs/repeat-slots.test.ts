@@ -61,6 +61,8 @@ const QUIET = [
   'kb.cleanup-video-uploads',
   'leads.docs-purge',
   'telegram.register-webhook',
+  // Помечает сломанные шаблоны «Витрины данных»; администраторам — строка колокольчика при чтении.
+  'dm.check-templates',
 ] as const;
 
 const BASE = 'https://test.buhuchet.kg';
