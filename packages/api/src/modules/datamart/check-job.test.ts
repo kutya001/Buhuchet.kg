@@ -356,4 +356,31 @@ describe.skipIf(!databaseAvailable())('Витрина данных: провер
     // Своей организации нет, справочники платформы — как у любой организации.
     expect(seen.rows).toEqual([[0, own.rows[0]![1]]]);
   });
+
+  it('ошибка данных (класс 22) — не поломка только в пустом контексте: на демо-организации — «Сломан»', async () => {
+    // Без строк деление на count(*) падает только от пустоты: у организаций с данными шаблон работает.
+    await setQuery(
+      ids.org!,
+      'select null::uuid as cp_id, (1 / count(*))::text as name from contractors c',
+    );
+    clock.set('2026-11-24T22:05:00Z');
+    expect(await job.run(deps, clock.now())).toBe(2);
+    let c = await card(ids.org!);
+    expect(c.state).toBe('published');
+    expect(c.checkError).toBeNull();
+    // На демо-организации та же ошибка — поломка, как любая другая.
+    await f.t.admin.db
+      .update(organizations)
+      .set({ isDemo: true })
+      .where(eq(organizations.id, f.b.orgId));
+    await setQuery(
+      ids.org!,
+      'select null::uuid as cp_id, (1 / (count(*) * 0))::text as name from contractors c',
+    );
+    clock.set('2026-11-25T22:05:00Z');
+    expect(await job.run(deps, clock.now())).toBe(2);
+    c = await card(ids.org!);
+    expect(c.state).toBe('broken');
+    expect(c.checkError).toContain('22012');
+  });
 });

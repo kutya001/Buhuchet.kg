@@ -587,28 +587,25 @@ async function runCheck(
   if (r.audience === 'org') {
     org = await checkOrg(deps, adminId, r.orgId, tr);
     await guardCardRead(deps, c, false);
-    const orgId = org.id;
-    await withOrgContext(deps.db, { orgId, userId: adminId }, (tx) =>
-      writeHistory(tx, {
-        entity: 'organization',
-        entityId: orgId,
-        action: 'card_view',
-        reason: ((name) =>
-          name ? tr('dm.tpl.history_check', { name }) : tr('dm.tpl.history_check_new'))(
-          r.nameFor(orgId),
-        ),
-      }),
-    );
   }
   const q = { text: bound.text, params: bound.params, maxRows: DM_ROWS_MAX };
   let res: DmResult;
   try {
     const on = org;
-    res = await withDmPoolSlot(deps, tr, () =>
-      on
-        ? runDmOrg(deps.db, { orgId: on.id, userId: adminId }, q)
-        : runDmAdmin(deps.db, adminId, q),
-    );
+    // Запись в историю организации — когда место запуска уже взято: без запуска её нет.
+    res = await withDmPoolSlot(deps, tr, async () => {
+      if (!on) return runDmAdmin(deps.db, adminId, q);
+      const name = r.nameFor(on.id);
+      await withOrgContext(deps.db, { orgId: on.id, userId: adminId }, (tx) =>
+        writeHistory(tx, {
+          entity: 'organization',
+          entityId: on.id,
+          action: 'card_view',
+          reason: name ? tr('dm.tpl.history_check', { name }) : tr('dm.tpl.history_check_new'),
+        }),
+      );
+      return runDmOrg(deps.db, { orgId: on.id, userId: adminId }, q);
+    });
   } catch (err) {
     const pg = dmErrorOf(err);
     if (!pg) throw err;

@@ -336,7 +336,7 @@ describe.skipIf(!databaseAvailable())('Витрина данных: «Вывод
     ]);
   });
 
-  it('на весь сайт — не больше двух запусков одновременно: мест нет — 429 «Сейчас выполняется много запросов»', async () => {
+  it('на весь сайт — не больше двух запусков с экрана одновременно: мест нет — 429 «Сейчас выполняется много запросов»; внешний адрес по токену — мимо мест', async () => {
     const slots = [];
     for (let i = 0; i < DM_RUN_SLOTS; i += 1) {
       const slot = await takeRateLimit(f.t.app.db, DM_RUN_ALL_LIMIT, `slot:${i}`);
@@ -347,6 +347,43 @@ describe.skipIf(!databaseAvailable())('Витрина данных: «Вывод
     expect(busy).toMatchObject({ code: 'dm_busy_all', message: txt('err.dm_busy_all') });
     // Другая организация и Админка — тоже ждут: место одно на всех.
     expect((await fail(await adminRun('out-adm'), 429)).code).toBe('dm_busy_all');
+    // Внешний адрес по токену в эти места не входит: у него свой предел потока Т (п. Т-20).
+    const [token] = await f.t.admin.db
+      .insert(schema.dmTokens)
+      .values({
+        orgId: f.b.orgId,
+        templateId: tpl['out-cps']!,
+        name: 'Проверка мест',
+        tokenHash: 'a'.repeat(64),
+        prefix: 'bk_slot',
+        expiresAt: new Date(Date.now() + 86_400_000),
+        createdBy: f.b.ownerUserId,
+      })
+      .returning({ id: schema.dmTokens.id });
+    const api = await runDmTemplate(f.deps, {
+      template: {
+        id: tpl['out-cps']!,
+        code: 'out-cps',
+        name: 'x',
+        description: null,
+        audience: 'org',
+        module: 'cps',
+        needPermission: null,
+        state: 'published',
+        params: [],
+        columns: [{ code: 'n', name: 'n', type: 'text', total: false, contractor: false }],
+      },
+      query: "select 'да' as n",
+      input: {},
+      who: { kind: 'org', orgId: f.b.orgId, userId: f.b.ownerUserId },
+      ownContractorIds: null,
+      via: 'api',
+      tokenId: token!.id,
+      ip: null,
+      maxRows: 10,
+      today: '2026-11-21',
+    });
+    expect(api).toMatchObject({ ok: true, rows: [['да']] });
     await releaseRateLimit(f.t.app.db, DM_RUN_ALL_LIMIT, slots[0]!.subject, slots[0]!.ticket);
     expect((await ok(await run('owner-b', 'out-cps'), 200, DmRunResult)).rows).toEqual([
       ['Гамма', 125050],
