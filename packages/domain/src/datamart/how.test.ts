@@ -279,11 +279,28 @@ describe('dmExtHow', () => {
     );
   });
 
+  it('параметр с кодом не по правилу шаблона в адрес и в код не попадает', () => {
+    const x = how({
+      params: [
+        ...PARAMS,
+        {
+          code: 'a" & Shell("calc") & "',
+          name: 'Чужой',
+          type: 'text',
+          value: '1',
+        },
+      ],
+    });
+    expect(x).toEqual(how());
+    expect(JSON.stringify(x)).not.toContain('Shell');
+  });
+
   it('комментарий VBA не кончается переносом строки « _»', () => {
     const x = how({
-      words: { ...WORDS, token: 'Токен _\u00a0', fmtDate: 'ГГГГ-ММ-ДД _ ' },
+      words: { ...WORDS, token: 'Токен _\u00a0', fmtDate: 'ГГГГ-ММ-ДД _ ', parse: 'Разбор CSV _ ' },
     });
     expect(x.vba).toContain("    ' Токен\n    Const TOKEN");
+    expect(x.vba).toContain("    ' Разбор CSV\n    Dim ws As Worksheet");
     expect(x.vba).toContain(`p1 = "2026-11-01"   ' Срок с, date_from, ГГГГ-ММ-ДД\n`);
   });
 

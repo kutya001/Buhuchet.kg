@@ -1,5 +1,6 @@
 import type { IsoDate } from '../common/dates';
 import { monthOf } from '../common/months';
+import { DM_FIELD_RE } from './editor';
 import type { DmExtColumn } from './ext';
 
 /*
@@ -219,8 +220,12 @@ export function dmExtHow(o: {
   ) as unknown as DmHowWords;
   const token = o.token ?? w.placeholder;
   const bearer = `Bearer ${token}`;
+  // Код параметра стоит в коде программ как есть (часть адреса, имя переменной 1С): в код идёт только
+  // параметр с кодом по правилу шаблона — вторая проверка после формы шаблона.
+  const codeOk = new RegExp(DM_FIELD_RE);
   const ps = o.params.filter(
-    (p): p is DmHowParamIn & { value: string } => p.value !== null && p.value !== '',
+    (p): p is DmHowParamIn & { value: string } =>
+      p.value !== null && p.value !== '' && codeOk.test(p.code),
   );
   const pairs: DmHowPair[] = ps.map((p) => ({
     code: p.code,
