@@ -49,6 +49,7 @@ export function dmOwnScope(
 ): boolean {
   if (!module) return false;
   if (isScopeGroup(module)) return scopeOf(subject, module) === 'own';
+  // ОТКЛОНЕНИЕ: docs/deviations.md#О-95 — модуль без области со столбцом «Контрагент» — по «Контрагентам».
   return dmContractorColumn(columns) !== null && scopeOf(subject, 'cps') === 'own';
 }
 
