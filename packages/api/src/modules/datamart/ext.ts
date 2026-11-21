@@ -121,6 +121,7 @@ const ORG_AS_OWNER: AccessSubject = {
 };
 
 /** Строки журнала об отказах до запуска: у токена не больше 10 в минуту. */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Т-30
 const REFUSAL_LOG: RateLimit = {
   kind: 'dm_ext_log',
   max: DM_EXT_REFUSAL_LOGS_PER_MINUTE,
@@ -131,6 +132,7 @@ const QUEUE_STEP_MS = 200;
 const pause = (ms: number) => new Promise<void>((done) => setTimeout(done, ms));
 
 /** Занять запрос токена; запуски платформы или организации заняты — подождать до `DM_EXT_QUEUE_MS`. */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Т-30
 async function takeQueued(
   deps: ApiDeps,
   token: { tokenId: string; orgId: string | null },
@@ -199,6 +201,8 @@ export function extHandler(deps: ApiDeps): RouteHandler<typeof EXT_ROUTE, AppEnv
       tryMax: DM_EXT_TRY_PER_MINUTE,
       tryWindowSeconds: 60,
     });
+    // Известный токен сверх 60 обращений в минуту — «Слишком часто» без строки журнала.
+    // ОТКЛОНЕНИЕ: docs/deviations.md#Т-30
     if (target.outcome === 'ip_wait' || target.outcome === 'token_wait') {
       return rate(target.waitSeconds);
     }
