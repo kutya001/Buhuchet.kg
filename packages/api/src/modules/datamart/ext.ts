@@ -1,22 +1,17 @@
 import { createHash } from 'node:crypto';
 import { createRoute, z, type RouteHandler } from '@hono/zod-openapi';
 import {
-  dmErrorOf,
   dmExtTarget,
-  dmRequestLog,
+  dmOutputTemplate,
+  dmTemplateQuery,
   dmTokenFacts,
   DM_ROWS_MAX,
   orgMenuSettings,
-  queryTimedOut,
   releaseDmExt,
-  runDmAdmin,
-  runDmOrg,
   takeDmExt,
   withOrgContext,
   withUserContext,
-  type DmExtTarget,
-  type DmRequestLogEntry,
-  type DmResult,
+  type DmRequestEntry,
   type Tx,
 } from '@buhuchet/db';
 import {
@@ -30,7 +25,6 @@ import {
   DM_EXT_PER_MINUTE,
   DM_MODULES,
   DM_TOKEN_RE,
-  dmBind,
   dmExtColumns,
   dmExtCsv,
   dmExtPage,
@@ -41,10 +35,8 @@ import {
   dmTemplateSeen,
   dmTokenState,
   formatText,
-  isDmParamType,
   type AccessSubject,
   type DmModule,
-  type DmParamDef,
   type Feature,
 } from '@buhuchet/domain';
 import { ApiError, DmExtAnswer, DmExtCodeParam } from '@buhuchet/shared';
@@ -54,6 +46,7 @@ import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiError } from '../../errors';
 import { serverTexts } from '../l10n/texts';
+import { logDmRun, runDmTemplate, type DmRunWho } from './run';
 
 /*
  * Внешний адрес «Витрины данных» GET /api/ext/v1/<код шаблона> (доработки 20.11.2026: Витрина данных,
@@ -61,18 +54,19 @@ import { serverTexts } from '../l10n/texts';
  * Метод без входа (`PUBLIC_PATTERNS` в middleware/session.ts): cookie не читаются, кто просит — токен в
  * заголовке `Authorization: Bearer bk_…`. По порядку:
  *   1. токен в адресе не принимается (400), заголовок не похож на токен — «Токен не подходит» без базы;
- *   2. `app.dm_ext_target`: адрес, приславший 20 неизвестных токенов за 10 минут, ждёт (429); токен
- *      ищется по хешу; другой код шаблона — «Токен не подходит или истёк»;
+ *   2. `app.dm_ext_target` (0172): адрес, приславший 20 неизвестных токенов за 10 минут, ждёт (429);
+ *      токен ищется по хешу; другой код шаблона — «Токен не подходит или истёк»;
  *   3. состояние — тем же правилом `dmTokenState`, что вкладка «API Токены», по фактам в контексте
  *      токена (его организация, кто создал): отозван или истёк — 401; шаблон сломан — 503; остановлен
  *      (шаблон выключен, нет доступа, блокировка, подписка, «Внешний доступ по API», функция модуля
  *      выключена) — 403 «Доступ остановлен»;
  *   4. пределы токена `app.dm_ext_take`: один одновременно, 30 в минуту, 5 000 в сутки (429);
  *   5. параметры адреса — только свои коды шаблона, по типам (`dmBind`), лишние отбрасываются;
- *   6. запуск — исполнителем 0166 (`runDmOrg` от имени организации токена / `runDmAdmin`): только чтение,
- *      15 с, 50 000 строк; строки всей организации, как у владельца (область «Свои» — у сотрудника, у
- *      токена её нет: выпуск строже, docs/deviations.md п. Т-26);
- *   7. строка журнала (`app.dm_request_log`) — у каждого известного токена, с итогом и адресом.
+ *   6. запуск — общим путём «Вывода» `runDmTemplate` (этап 2, П4) от имени организации токена и его
+ *      создателя: только чтение, 15 с, 50 000 строк; строки всей организации, как у владельца (область
+ *      «Свои» — у сотрудника, у токена её нет: выпуск строже, docs/deviations.md п. Т-26);
+ *   7. строка журнала (`app.dm_request_log`) — у каждого известного токена, с итогом и адресом: исходы
+ *      запуска пишет `runDmTemplate`, отказы до него — этот метод (`logDmRun`).
  * Ответ — JSON прототипа (столбцы, строки, всего, следующая страница) или CSV.
  */
 
@@ -103,9 +97,8 @@ export const EXT_ROUTE = createRoute({
   },
 });
 
-type Outcome = DmRequestLogEntry['outcome'];
+type Outcome = DmRequestEntry['outcome'];
 type Tr = (key: string, params?: Record<string, string | number>) => string;
-type Known = Extract<DmExtTarget, { outcome: 'ok' }>;
 
 /** Организация смотрит «глазами владельца»: функции модулей, а не права сотрудника (у токена их нет). */
 const ORG_AS_OWNER: AccessSubject = {
@@ -124,22 +117,11 @@ function bearerOf(header: string | undefined): string | null {
   return m && DM_TOKEN_RE.test(m[1]!) ? m[1]! : null;
 }
 
-/** Параметры шаблона из базы (`[{ code, type, required, default }]`) — в вид `dmBind`. */
-function paramDefsOf(raw: unknown): DmParamDef[] {
-  if (!Array.isArray(raw)) return [];
-  return raw.flatMap((p: unknown) => {
-    if (typeof p !== 'object' || p === null) return [];
-    const { code, type, required, default: def } = p as Record<string, unknown>;
-    if (typeof code !== 'string' || typeof type !== 'string' || !isDmParamType(type)) return [];
-    return [{ k: code, type, req: required === true, def: typeof def === 'string' ? def : null }];
-  });
-}
-
 /** Контекст токена: его организация и кто создал; у токена Админки — администратор, создавший его. */
-function inToken<T>(deps: ApiDeps, k: Known, fn: (tx: Tx) => Promise<T>): Promise<T> {
-  return k.orgId
-    ? withOrgContext(deps.db, { orgId: k.orgId, userId: k.createdBy }, fn)
-    : withUserContext(deps.db, k.createdBy, fn);
+function inWho<T>(deps: ApiDeps, who: DmRunWho, fn: (tx: Tx) => Promise<T>): Promise<T> {
+  return who.kind === 'org'
+    ? withOrgContext(deps.db, { orgId: who.orgId, userId: who.userId }, fn)
+    : withUserContext(deps.db, who.adminId, fn);
 }
 
 function fail(
@@ -169,7 +151,6 @@ export function extHandler(deps: ApiDeps): RouteHandler<typeof EXT_ROUTE, AppEnv
     if (!token) return denied();
     const target = await dmExtTarget(deps.db, {
       tokenHash: createHash('sha256').update(token, 'utf8').digest('hex'),
-      code,
       ip: clientIpSubject(c, deps, 'dm_ext'),
       badMax: DM_EXT_BAD_MAX,
       badWindowSeconds: DM_EXT_BAD_WINDOW_SECONDS,
@@ -180,36 +161,43 @@ export function extHandler(deps: ApiDeps): RouteHandler<typeof EXT_ROUTE, AppEnv
     const now = deps.clock.now();
     const today = bishkekDate(now);
     const ip = clientIpText(c);
-    const defs = paramDefsOf(target.template?.params);
-    const shown: Record<string, string | null> = {};
-    const log = (outcome: Outcome, extra: Partial<DmRequestLogEntry> = {}) =>
-      inToken(deps, target, (tx) =>
-        dmRequestLog(tx, {
-          via: 'api',
-          templateId: target.templateId,
-          tokenId: target.tokenId,
-          params: shown,
-          rows: null,
-          ms: null,
-          outcome,
-          error: null,
-          ip,
-          ...extra,
-        }),
-      );
+    const who: DmRunWho = target.orgId
+      ? { kind: 'org', orgId: target.orgId, userId: target.createdBy }
+      : { kind: 'admin', adminId: target.createdBy };
+    let given: Record<string, string> = {};
+    const log = (outcome: Outcome, error: string) =>
+      logDmRun(deps, who, {
+        via: 'api',
+        templateId: target.templateId,
+        tokenId: target.tokenId,
+        params: given,
+        rows: null,
+        ms: null,
+        outcome,
+        error,
+        ip,
+      });
 
-    // Состояние — по часам базы и тем же фактам, что у вкладки «API Токены».
-    const seen = await inToken(deps, target, async (tx) => {
+    // Токен другого шаблона — тот же ответ, что неизвестный (адрес шаблона не подтверждается).
+    if (target.templateCode !== code) {
+      await log('denied', tr('err.dm_ext_token'));
+      return denied();
+    }
+    // Состояние — по часам базы и тем же фактам, что у вкладки «API Токены»; шаблон и его текст — в
+    // контексте токена (доступ организации к шаблону проверяет база).
+    const seen = await inWho(deps, who, async (tx) => {
       const facts = await dmTokenFacts(tx, { since: now, today, id: target.tokenId });
       const fact = facts.items[0];
       if (!fact) return null;
       const features = fact.orgId ? (await orgMenuSettings(tx, fact.orgId)).features : null;
-      return { now: facts.now, fact, features };
+      const template = await dmOutputTemplate(tx, code, fact.orgId ? 'org' : 'admin');
+      const query = template ? await dmTemplateQuery(tx, template.id) : null;
+      return { now: facts.now, fact, features, template, query };
     });
     // Токен Админки, чей создатель больше не администратор платформы: фактов в его контексте нет.
     const stopped = tr('err.dm_ext_stopped');
     if (!seen) return fail(c, 403, 'dm_ext_stopped', stopped);
-    const { fact } = seen;
+    const { fact, template } = seen;
     const st = dmTokenState(
       {
         expiresAt: fact.expiresAt,
@@ -224,32 +212,36 @@ export function extHandler(deps: ApiDeps): RouteHandler<typeof EXT_ROUTE, AppEnv
       },
       seen.now,
     );
-    const tpl = target.template;
-    if (st.state === 'revoked' || st.state === 'expired' || !tpl) {
-      await log('denied', { error: tr('err.dm_ext_token') });
+    if (st.state === 'revoked' || st.state === 'expired') {
+      await log('denied', tr('err.dm_ext_token'));
       return denied();
     }
     const broken = tr('err.dm_ext_broken');
-    if (st.stop === 'tpl_broken' || !tpl.query) {
-      await log('broken', { error: broken });
+    if (st.stop === 'tpl_broken') {
+      await log('broken', broken);
       return fail(c, 503, 'dm_ext_broken', broken);
     }
     const offByFeature =
       fact.orgId !== null &&
-      !dmTemplateSeen(
-        {
-          audience: 'org',
-          state: fact.templateState,
-          module: isModule(target.module) ? target.module : null,
-          needPermission: target.needPermission,
-          columns: tpl.columns,
-        },
-        ORG_AS_OWNER,
-        (seen.features ?? {}) as Partial<Record<Feature, boolean>>,
-      );
-    if (st.state === 'stopped' || offByFeature) {
-      await log('closed', { error: stopped });
+      (!template ||
+        !dmTemplateSeen(
+          {
+            audience: 'org',
+            state: fact.templateState,
+            module: isModule(template.module) ? template.module : null,
+            needPermission: template.needPermission,
+            columns: template.columns,
+          },
+          ORG_AS_OWNER,
+          (seen.features ?? {}) as Partial<Record<Feature, boolean>>,
+        ));
+    if (st.state === 'stopped' || offByFeature || !template) {
+      await log('closed', stopped);
       return fail(c, 403, 'dm_ext_stopped', stopped);
+    }
+    if (!seen.query) {
+      await log('broken', broken);
+      return fail(c, 503, 'dm_ext_broken', broken);
     }
 
     const slot = await takeDmExt(deps.db, target.tokenId, {
@@ -258,59 +250,56 @@ export function extHandler(deps: ApiDeps): RouteHandler<typeof EXT_ROUTE, AppEnv
       leaseSeconds: DM_EXT_LEASE_SECONDS,
     });
     if (!slot.ok) {
-      await log('rate', { error: tr('err.dm_ext_rate', { n: slot.waitSeconds }) });
+      await log('rate', tr('err.dm_ext_rate', { n: slot.waitSeconds }));
       return rate(slot.waitSeconds);
     }
     try {
       const req = dmExtRequest(
         entries,
-        defs.map((d) => d.k),
+        template.params.map((p) => p.code),
       );
-      const badParam = async (param: string) => {
-        const message = tr('err.dm_ext_param', { param });
-        await log('bad_param', { error: message });
-        return fail(c, 400, 'dm_ext_param', message);
-      };
-      if (!req.ok) return await badParam(req.param);
-      for (const d of defs) {
-        const v = Object.hasOwn(req.input, d.k) ? req.input[d.k]! : dmParamDefault(d.def, today);
-        shown[d.k] = v === '' ? null : v;
+      const badParam = (param: string) =>
+        fail(c, 400, 'dm_ext_param', tr('err.dm_ext_param', { param }));
+      if (!req.ok) {
+        await log('bad_param', tr('err.dm_ext_param', { param: req.param }));
+        return badParam(req.param);
       }
-      const bound = dmBind(tpl.query, defs, req.input, today);
-      if (!bound.ok) {
-        if (bound.error === 'param') return await badParam(bound.param);
-        await log('broken', { error: broken });
+      given = req.input;
+      const out = await runDmTemplate(deps, {
+        template,
+        query: seen.query,
+        input: req.input,
+        who,
+        ownContractorIds: null,
+        via: 'api',
+        tokenId: target.tokenId,
+        ip,
+        maxRows: DM_ROWS_MAX,
+        today,
+      });
+      if (!out.ok) {
+        if (out.outcome === 'bad_param') return badParam(out.param);
+        if (out.outcome === 'timeout') {
+          return fail(c, 504, 'dm_ext_timeout', tr('err.dm_ext_timeout'));
+        }
+        deps.logger.warn(
+          { requestId: c.get('requestId'), template: code, db: out.adminDetail },
+          'Витрина: шаблон не выполнился по токену',
+        );
         return fail(c, 503, 'dm_ext_broken', broken);
       }
-      let result: DmResult;
-      try {
-        const q = { text: bound.text, params: bound.params, maxRows: DM_ROWS_MAX };
-        result = target.orgId
-          ? await runDmOrg(deps.db, { orgId: target.orgId, userId: target.createdBy }, q)
-          : await runDmAdmin(deps.db, target.createdBy, q);
-      } catch (err) {
-        if (queryTimedOut(err)) {
-          const message = tr('err.dm_ext_timeout');
-          await log('timeout', { error: message });
-          return fail(c, 504, 'dm_ext_timeout', message);
-        }
-        if (dmErrorOf(err)) {
-          deps.logger.warn(
-            { requestId: c.get('requestId'), template: target.templateCode, db: dmErrorOf(err) },
-            'Витрина: шаблон не выполнился по токену',
-          );
-          await log('broken', { error: broken });
-          return fail(c, 503, 'dm_ext_broken', broken);
-        }
-        await log('error');
-        throw err;
+      // Значения параметров для ссылки на следующую страницу: из адреса или по умолчанию на сегодня.
+      const shown: Record<string, string | null> = {};
+      for (const p of template.params) {
+        shown[p.code] = Object.hasOwn(req.input, p.code)
+          ? req.input[p.code]!
+          : dmParamDefault(p.default, today);
       }
-      await log('ok', { rows: result.rows.length, ms: result.ms });
       return answer(c, deps, {
         code,
         req,
-        cols: dmExtColumns(tpl.columns),
-        result,
+        cols: dmExtColumns(out.columns),
+        result: { columns: out.columns.map((col) => col.code), rows: out.rows, more: out.more },
         shown,
       });
     } finally {
@@ -327,7 +316,7 @@ function answer(
     code: string;
     req: Extract<ReturnType<typeof dmExtRequest>, { ok: true }>;
     cols: ReturnType<typeof dmExtColumns>;
-    result: DmResult;
+    result: { columns: string[]; rows: unknown[][]; more: boolean };
     shown: Record<string, string | null>;
   },
 ) {
@@ -337,7 +326,7 @@ function answer(
   let next: string | null = null;
   if (page.hasNext) {
     const url = new URL(`${DM_EXT_PATH}${o.code}`, deps.config.APP_BASE_URL);
-    for (const [k, v] of Object.entries(o.shown)) if (v !== null) url.searchParams.set(k, v);
+    for (const [k, v] of Object.entries(o.shown)) if (v) url.searchParams.set(k, v);
     if (o.req.format === 'csv') url.searchParams.set('format', 'csv');
     if (o.req.limit !== DM_EXT_PAGE) url.searchParams.set('limit', String(o.req.limit));
     url.searchParams.set('page', String(o.req.page + 1));

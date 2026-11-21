@@ -347,7 +347,8 @@ describe.skipIf(!databaseAvailable())('Витрина данных: внешни
     } finally {
       await db.update(dmTemplateSql).set({ query: 'SELECT 1 AS n' }).where(q);
     }
-    expect((await logOf(a.item.id)).map((r) => r.outcome)).toEqual(['broken', 'broken']);
+    // Сломан по отметке — отказ до запуска; не выполнился — исход запуска «Ошибка» (общий путь «Вывода»).
+    expect((await logOf(a.item.id)).map((r) => r.outcome)).toEqual(['broken', 'error']);
   });
 
   it('токен Админки: шаблон «Для администратора» по всем организациям; шаблон организаций им не открыть', async () => {
