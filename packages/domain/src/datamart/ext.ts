@@ -207,7 +207,10 @@ export function dmExtUrl(
     .filter((x): x is readonly [string, string] => !!x[1])
     .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
     .join('&');
-  return `${base.replace(/\/+$/, '')}${DM_EXT_PATH}${code}${qs ? `?${qs}` : ''}`;
+  // Косые в конце — без регулярного выражения: `/\/+$/` на длинной строке из косых работает за квадрат.
+  let end = base.length;
+  while (end > 0 && base[end - 1] === '/') end--;
+  return `${base.slice(0, end)}${DM_EXT_PATH}${code}${qs ? `?${qs}` : ''}`;
 }
 
 /** Значение-образец ячейки по виду столбца (строка 0 или 1 примера ответа). */

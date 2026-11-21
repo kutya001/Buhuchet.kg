@@ -203,6 +203,10 @@ describe('dmExtUrl', () => {
     expect(dmExtUrl('https://buhuchet.kg', 'cps', [], '2026-11-21')).toBe(
       'https://buhuchet.kg/api/ext/v1/cps',
     );
+    expect(dmExtUrl('https://buhuchet.kg///', 'cps', [], '2026-11-21')).toBe(
+      'https://buhuchet.kg/api/ext/v1/cps',
+    );
+    expect(dmExtUrl('/'.repeat(50_000), 'cps', [], '2026-11-21')).toBe('/api/ext/v1/cps');
   });
 
   it('значение по умолчанию с особыми знаками — в кодировке адреса', () => {

@@ -97,8 +97,10 @@ describe('dmTemplateTokenable', () => {
   });
 
   it('модуль без области и невидимый шаблон', () => {
+    // «Сотрудники» без «Контрагента» видны только при «Все» в группе «Контрагенты» (п. О-95).
     const staff = tpl({ module: 'staff', columns: [] });
-    expect(dmTemplateTokenable(staff, subject(['staffView']), ALL_ON)).toBe(true);
+    expect(dmTemplateTokenable(staff, subject(['staffView']), ALL_ON)).toBe(false);
+    expect(dmTemplateTokenable(staff, subject(['staffView'], { cps: 'all' }), ALL_ON)).toBe(true);
     // «Сотрудники» со столбцом «Контрагент» (готовый «Задачи»): «Вывод» отбирает «Свои» по группе
     // «Контрагенты» (`dmOwnScope`, этап 2, П4) — токен только при «Все» там.
     const tasks = tpl({ module: 'staff', columns: [{ code: 'contractor_id', type: 'cp' }] });
