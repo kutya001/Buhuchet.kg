@@ -1,5 +1,5 @@
 import { createFakeTelegram, fixedClock } from '@buhuchet/adapters';
-import { dmCheckMark, schema, withUserContext } from '@buhuchet/db';
+import { dmCheckMark, runDmOrg, schema, withOrgContext, withUserContext } from '@buhuchet/db';
 import { databaseAvailable } from '@buhuchet/db/testing';
 import { UI_TEXTS } from '@buhuchet/domain';
 import { BellPage, DmAdminTemplateCard } from '@buhuchet/shared';
@@ -15,7 +15,7 @@ import {
   signIn,
   TEST_PASSWORD,
 } from '../../testing';
-import { dmCheckNightSince, dmCheckTemplatesJob } from './check-job';
+import { DM_NO_DATA_ORG, dmCheckNightSince, dmCheckTemplatesJob } from './check-job';
 
 /*
  * «Витрина: проверка шаблонов» (доработки 20.11.2026: Витрина данных, блок 8, пункт 7; общий план 20.11,
@@ -196,6 +196,47 @@ describe.skipIf(!databaseAvailable())('Витрина данных: провер
     }
   });
 
+  it('пропал столбец шаблона или в тексте запрещённое слово — тоже «Сломан»; исправили — «Опубликован»', async () => {
+    // Каждый «выпуск» — ещё одна применённая миграция (число миграций растёт): шаблоны проверяются снова
+    // в ту же ночь. Предыдущий тест проверял при числе на одну больше — поэтому начинаем с двух.
+    const hashes: string[] = [];
+    const release = async (n: number) => {
+      for (let i = 0; i < n; i += 1) {
+        const hash = `test-release-${hashes.length}`;
+        hashes.push(hash);
+        await f.t.admin.db.execute(
+          sql`insert into drizzle.__drizzle_migrations (hash, created_at) values (${hash}, 0)`,
+        );
+      }
+      clock.advance(60_000);
+      expect(await job.run(deps, clock.now())).toBe(2);
+    };
+    try {
+      // Запрос больше не отдаёт опубликованный столбец «name».
+      await setQuery(ids.org!, 'select c.id as cp_id from contractors c');
+      await release(2);
+      let c = await card(ids.org!);
+      expect(c.state).toBe('broken');
+      expect(c.checkError).toBe(txt('err.dm_check_removed').replace('{column}', 'name'));
+
+      await setQuery(ids.org!, 'select c.id as cp_id, c.name, pg_sleep(0) as z from contractors c');
+      await release(1);
+      c = await card(ids.org!);
+      expect(c.state).toBe('broken');
+      expect(c.checkError).toBe(txt('err.dm_sql_forbidden').replace('{word}', 'pg_sleep'));
+
+      await setQuery(ids.org!, 'select c.id as cp_id, c.name from contractors c');
+      await release(1);
+      expect(await card(ids.org!)).toMatchObject({ state: 'published', checkError: null });
+    } finally {
+      for (const hash of hashes) {
+        await f.t.admin.db.execute(
+          sql`delete from drizzle.__drizzle_migrations where hash = ${hash}`,
+        );
+      }
+    }
+  });
+
   it('шаблон Админки не выполнился — «Сломан»; отключённый не проверяется', async () => {
     await setQuery(ids.adm!, 'select 1 / 0 as n');
     clock.set('2026-11-21T22:05:00Z');
@@ -215,7 +256,7 @@ describe.skipIf(!databaseAvailable())('Витрина данных: провер
     expect((await stateOf(ids.org!)).state).toBe('off');
   });
 
-  it('итог по устаревшей версии не пишется; функции проверки — только задаче, не вошедшему', async () => {
+  it('итог по устаревшей версии не пишется; функции проверки — только задаче: не вошедшему и не организации', async () => {
     const t = await stateOf(ids.adm!);
     expect(
       await dmCheckMark(f.t.app.db, {
@@ -245,9 +286,42 @@ describe.skipIf(!databaseAvailable())('Витрина данных: провер
         ),
       ),
     ).rejects.toThrow();
+    for (const q of [
+      sql`select app.dm_check_due(now(), 10)`,
+      sql`select app.dm_check_mark(${ids.adm!}::uuid, ${t.version}, true, null, null, 0, now())`,
+    ]) {
+      await expect(
+        withOrgContext(f.t.app.db, { orgId: f.a.orgId, userId: null }, (tx) => tx.execute(q)),
+      ).rejects.toThrow();
+    }
+    expect((await stateOf(ids.adm!)).state).toBe('broken');
   });
 
-  it('без демо-организации шаблоны организаций не проверяются', async () => {
+  it('строку истории платформы без автора («Система») или от чужого имени пишет только функция задачи: роль приложения — нет', async () => {
+    const [adminUser] = await f.t.admin.db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.login, 'platform-admin'));
+    const [other] = await f.t.admin.db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.login, 'owner-a'));
+    const insert = (actor: string | null) =>
+      sql`insert into platform_audit_log (entity, entity_id, action, changes, actor_user_id)
+        values ('dm_template', ${ids.adm!}, 'dm_state', '[]'::jsonb, ${actor}::uuid)`;
+    for (const actor of [null, other!.id]) {
+      // Администратор платформы — ни без автора, ни от чужого имени.
+      await expect(
+        withUserContext(f.t.app.db, adminUser!.id, (tx) => tx.execute(insert(actor))),
+      ).rejects.toThrow();
+      // Без вошедшего (задача, внешний вызов) — тоже.
+      await expect(f.t.app.db.execute(insert(actor))).rejects.toThrow();
+    }
+    // От своего имени администратор пишет, как и прежде.
+    await withUserContext(f.t.app.db, adminUser!.id, (tx) => tx.execute(insert(adminUser!.id)));
+  });
+
+  it('без демо-организации (рабочий сайт) шаблон организаций проверяется в пустом контексте: строк организаций не видно, поломка ловится', async () => {
     await f.t.admin.db
       .update(organizations)
       .set({ isDemo: false })
@@ -258,8 +332,28 @@ describe.skipIf(!databaseAvailable())('Витрина данных: провер
       version: (await card(ids.org!)).version,
     });
     expect(on.status, await on.clone().text()).toBe(200);
+    await setQuery(ids.org!, 'select c.id as cp_id, c.nope as name from contractors c');
     clock.set('2026-11-23T22:05:00Z');
-    // Только шаблон Админки.
-    expect(await job.run(deps, clock.now())).toBe(1);
+    // Оба шаблона: организаций — в пустом контексте, Админки — от администратора.
+    expect(await job.run(deps, clock.now())).toBe(2);
+    const c = await card(ids.org!);
+    expect(c.state).toBe('broken');
+    expect(c.checkError).toContain('nope');
+    const [row] = await f.t.admin.db
+      .select()
+      .from(dmTemplateSql)
+      .where(eq(dmTemplateSql.templateId, ids.org!));
+    expect(row!.checkedOrgId).toBeNull();
+    // Пустой контекст не видит ни одной строки организаций — данные настоящих организаций не читаются.
+    const count = {
+      text: 'select (select count(*) from organizations)::int as orgs, (select count(*) from ownership_forms)::int as forms',
+      params: [],
+      maxRows: 1,
+    };
+    const own = await runDmOrg(f.t.app.db, { orgId: f.a.orgId }, count);
+    expect(own.rows[0]![0]).toBe(1);
+    const seen = await runDmOrg(f.t.app.db, { orgId: DM_NO_DATA_ORG }, count);
+    // Своей организации нет, справочники платформы — как у любой организации.
+    expect(seen.rows).toEqual([[0, own.rows[0]![1]]]);
   });
 });

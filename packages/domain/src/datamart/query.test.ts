@@ -63,6 +63,21 @@ describe('dmParseSql: параметры :имя становятся $n с пр
     });
   });
 
+  it('непарные скобки вне строк и комментариев — отказ: часть запроса не уйдёт из-под отбора «Свои»', () => {
+    const escape =
+      'SELECT c.id AS cp_id FROM contractors c) a UNION ALL SELECT * FROM (SELECT c.id FROM contractors c';
+    expect(dmParseSql(escape, defs)).toEqual({ problem: 'parens' });
+    expect(dmParseSql('SELECT (1', defs)).toEqual({ problem: 'parens' });
+    expect(dmParseSql('SELECT (1));', defs)).toEqual({ problem: 'parens' });
+    // В строках, именах, комментариях и строках $…$ скобки не считаются.
+    expect(
+      dmParseSql(`SELECT ')' AS a, "(" AS b, $t$)$t$ AS c -- )\n, count(*) /* ( */ FROM x;`, defs),
+    ).toEqual({
+      text: `SELECT ')' AS a, "(" AS b, $t$)$t$ AS c -- )\n, count(*) /* ( */ FROM x`,
+      names: [],
+    });
+  });
+
   it('знак $ внутри имени и одиночный $ — не строка и не параметр', () => {
     expect(dmParseSql('SELECT a$b, 1 $ 2', defs)).toEqual({ text: 'SELECT a$b, 1 $ 2', names: [] });
   });

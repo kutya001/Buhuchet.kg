@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { schema } from '@buhuchet/db';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
 import { UI_TEXTS } from '@buhuchet/domain';
@@ -114,12 +115,19 @@ describe.skipIf(!databaseAvailable())('Витрина данных: шаблон
     await f?.t.drop();
   });
 
-  it('только администратору платформы: сотруднику — 403, без входа — 401', async () => {
+  it('только администратору платформы: сотруднику — 403, без входа — 401 (все методы)', async () => {
+    const id = randomUUID();
     for (const [method, path, body] of [
       ['GET', '', undefined],
+      ['GET', '/values?col=state', undefined],
+      ['GET', '/export', undefined],
       ['GET', '/form', undefined],
       ['POST', '/check', { audience: 'org', query: 'select 1 as n' }],
       ['POST', '', form('x-forbidden')],
+      ['GET', `/${id}`, undefined],
+      ['PUT', `/${id}`, { ...form('x-forbidden'), version: 1 }],
+      ['POST', `/${id}/copy`, {}],
+      ['POST', `/${id}/state`, { to: 'off', reason: 'Проверка', version: 1 }],
     ] as const) {
       const url = `/api/admin/dm/templates${path}`;
       expect((await call('owner-a', method, url, body)).status).toBe(403);
@@ -163,7 +171,51 @@ describe.skipIf(!databaseAvailable())('Витрина данных: шаблон
       .select()
       .from(auditLog)
       .where(and(eq(auditLog.orgId, f.a.orgId), eq(auditLog.action, 'card_view')));
-    expect(views.map((v) => v.reason)).toContain(txt('dm.tpl.history_check').replace('{name}', ''));
+    // Новый шаблон — запись без названия (п. О-96).
+    expect(views.map((v) => v.reason)).toContain(txt('dm.tpl.history_check_new'));
+  });
+
+  it('«Проверить»: в истории организации — название только шаблона «Для организаций», доступного ей', async () => {
+    const saved = async (code: string, over: Record<string, unknown>) =>
+      (await ok(await create(code, over), 201, DmAdminTemplateCard)).id;
+    const forAll = await saved('hist-all', {});
+    const forB = await saved('hist-b', { access: 'selected', orgIds: [f.b.orgId] });
+    const forAdmin = await saved('hist-adm', {
+      audience: 'admin',
+      module: null,
+      query: 'select 1 as n',
+      params: [],
+      columns: [{ code: 'n', name: 'n', type: 'num', total: false }],
+    });
+    const reasons = async () =>
+      (
+        await f.t.admin.db
+          .select({ reason: auditLog.reason })
+          .from(auditLog)
+          .where(and(eq(auditLog.orgId, f.a.orgId), eq(auditLog.action, 'card_view')))
+          .orderBy(auditLog.id)
+      ).map((r) => r.reason);
+    const before = (await reasons()).length;
+    for (const templateId of [forAll, forB, forAdmin]) {
+      const res = await ok(
+        await admin('POST', '/check', {
+          templateId,
+          audience: 'org',
+          query: CP_QUERY,
+          params: [],
+          columns: [],
+          checkOrgId: f.a.orgId,
+        }),
+        200,
+        DmTemplateCheckResult,
+      );
+      expect(res.ok).toBe(true);
+    }
+    expect((await reasons()).slice(before)).toEqual([
+      txt('dm.tpl.history_check').replace('{name}', 'Шаблон hist-all'),
+      txt('dm.tpl.history_check_new'),
+      txt('dm.tpl.history_check_new'),
+    ]);
   });
 
   it('«Проверить»: по умолчанию — демо-организация; ошибка — текстом базы; столбцы без имени и лишние слова — отказ', async () => {
@@ -442,7 +494,7 @@ describe.skipIf(!databaseAvailable())('Витрина данных: шаблон
     expect(b.items.map((t) => t.code)).not.toContain('cps-sel-a');
   });
 
-  it('список: по названию, «Токенов» — действующих, «Организаций пользуется» — токены и запросы за 30 дней; значения и Excel', async () => {
+  it('список: по названию, «Токенов» — действующих, «Организаций пользуется» — токены и запросы по токенам за 30 дней; значения и Excel', async () => {
     const t0 = await ok(
       await create('cps-list', { publish: true, name: 'Аааа список' }),
       201,
@@ -454,11 +506,33 @@ describe.skipIf(!databaseAvailable())('Витрина данных: шаблон
       term: 30,
     });
     expect(tok.status, await tok.clone().text()).toBe(201);
+    // «Показать» с экрана не считается (прототип `dmUse`: токены и их журнал), запрос по токену — да;
+    // «за 30 дней» — по часам приложения: запрос 31 день назад не считается.
+    const now = f.deps.clock.now().getTime();
+    await f.t.admin.db.insert(dmRequests).values([
+      {
+        orgId: f.b.orgId,
+        templateId: t0.id,
+        via: 'screen',
+        outcome: 'ok',
+        at: new Date(now - 60_000),
+      },
+      {
+        orgId: f.b.orgId,
+        templateId: t0.id,
+        via: 'api',
+        outcome: 'ok',
+        at: new Date(now - 31 * 86_400_000),
+      },
+    ]);
+    const screenOnly = await ok(await admin('GET', `/${t0.id}`), 200, DmAdminTemplateCard);
+    expect(screenOnly).toMatchObject({ toks: 1, tokOrgs: 1, orgs: 1 });
     await f.t.admin.db.insert(dmRequests).values({
       orgId: f.b.orgId,
       templateId: t0.id,
-      via: 'screen',
+      via: 'api',
       outcome: 'ok',
+      at: new Date(now - 29 * 86_400_000),
     });
     const page = await ok(await admin('GET', '?size=100'), 200, DmAdminTemplateList);
     expect(page.items[0]!.name).toBe('Аааа список');

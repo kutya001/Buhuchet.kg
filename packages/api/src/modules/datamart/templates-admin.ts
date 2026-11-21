@@ -88,7 +88,7 @@ import { requirePlatformAdmin } from '../../middleware/access';
 import { guardCardRead } from '../admin/card-guard';
 import { serverTexts } from '../l10n/texts';
 import { withRunSlot } from './output';
-import { DM_ROWS_MAX } from './run';
+import { DM_ROWS_MAX, dmSqlProblemText, withDmPoolSlot } from './run';
 
 /*
  * Админка → «Витрина данных» → «Шаблоны» (доработки 20.11.2026: Витрина данных, блок 2, пункты 2–7;
@@ -310,12 +310,12 @@ interface Usage {
   orgs: number | null;
 }
 
+/** Внутри транзакции — только `tx`: момент «сейчас» приходит значением, не `deps` (п. О-46). */
 async function usageOf(
   tx: Tx,
-  deps: ApiDeps,
+  now: Date,
   templates: readonly DmAdminTemplate[],
 ): Promise<Map<string, Usage>> {
-  const now = deps.clock.now();
   const since = new Date(now.getTime() - 30 * DAY_MS);
   const today: IsoDate = bishkekDate(now);
   const [{ now: dbNow, items }, requests] = await Promise.all([
@@ -390,9 +390,9 @@ function listRowOf(t: DmAdminTemplate, u: Usage, tr: Tr): DmTemplateListRow {
   };
 }
 
-async function listRows(tx: Tx, deps: ApiDeps, tr: Tr) {
+async function listRows(tx: Tx, now: Date, tr: Tr) {
   const all = await dmAdminTemplates(tx);
-  const usage = await usageOf(tx, deps, all);
+  const usage = await usageOf(tx, now, all);
   return all.map((t) => {
     const u = usage.get(t.id) ?? NO_USAGE;
     return { t, row: rowOf(t, u), list: listRowOf(t, u, tr) };
@@ -441,10 +441,10 @@ async function historyOf(tx: Tx, id: string, tr: Tr) {
     .reverse();
 }
 
-async function cardOf(tx: Tx, deps: ApiDeps, id: string, tr: Tr) {
+async function cardOf(tx: Tx, now: Date, id: string, tr: Tr) {
   const t = await dmAdminTemplate(tx, id);
   if (!t) throw new RecordNotFoundError('dm_template', id);
-  const [usage, history] = await Promise.all([usageOf(tx, deps, [t]), historyOf(tx, id, tr)]);
+  const [usage, history] = await Promise.all([usageOf(tx, now, [t]), historyOf(tx, id, tr)]);
   const u = usage.get(t.id) ?? NO_USAGE;
   return DmAdminTemplateCard.parse({
     id: t.id,
@@ -479,10 +479,7 @@ async function cardOf(tx: Tx, deps: ApiDeps, id: string, tr: Tr) {
 // ───── «Проверить» ─────
 
 /** Текст отказа по тексту запроса (прототип `dmSqlErr`). */
-const sqlMessage = (tr: Tr, p: DmQueryProblem) =>
-  p.code === 'forbidden'
-    ? tr('err.dm_sql_forbidden', { word: p.word })
-    : tr(`err.dm_sql_${p.code}`);
+const sqlMessage = (tr: Tr, p: DmQueryProblem) => dmSqlProblemText(tr, p);
 
 interface CheckRequest {
   audience: 'org' | 'admin';
@@ -492,9 +489,27 @@ interface CheckRequest {
   /** Столбцы опубликованного шаблона: ни один не должен пропасть. */
   published: readonly DmEditorColumn[] | null;
   orgId: string | null;
-  /** Название шаблона для записи в историю организации. */
-  name: string;
+  /**
+   * Название шаблона для записи в историю организации: только шаблона «Для организаций», доступного
+   * ей; иначе (новый, шаблон Админки, «Выбранные» без неё) — запись без названия.
+   */
+  nameFor: (orgId: string) => string | null;
 }
+
+/** Название шаблона в истории организации — только если шаблон для неё. */
+const nameForOrg =
+  (
+    t: {
+      audience: 'org' | 'admin';
+      access: 'all' | 'selected';
+      orgIds: readonly string[];
+      name: string;
+    } | null,
+  ) =>
+  (orgId: string): string | null =>
+    t && t.audience === 'org' && t.name && (t.access === 'all' || t.orgIds.includes(orgId))
+      ? t.name
+      : null;
 
 type CheckOutcome =
   | {
@@ -562,7 +577,7 @@ async function runCheck(
   if (!bound.ok) {
     const message =
       bound.error === 'sql'
-        ? tr('err.dm_check_failed', { error: bound.problem })
+        ? tr('err.dm_check_failed', { error: dmSqlProblemText(tr, bound) })
         : tr('err.dm_bad_param', {
             param: params.find((p) => p.code === bound.param)?.name ?? bound.param,
           });
@@ -578,16 +593,22 @@ async function runCheck(
         entity: 'organization',
         entityId: orgId,
         action: 'card_view',
-        reason: tr('dm.tpl.history_check', { name: r.name }),
+        reason: ((name) =>
+          name ? tr('dm.tpl.history_check', { name }) : tr('dm.tpl.history_check_new'))(
+          r.nameFor(orgId),
+        ),
       }),
     );
   }
   const q = { text: bound.text, params: bound.params, maxRows: DM_ROWS_MAX };
   let res: DmResult;
   try {
-    res = org
-      ? await runDmOrg(deps.db, { orgId: org.id, userId: adminId }, q)
-      : await runDmAdmin(deps.db, adminId, q);
+    const on = org;
+    res = await withDmPoolSlot(deps, tr, () =>
+      on
+        ? runDmOrg(deps.db, { orgId: on.id, userId: adminId }, q)
+        : runDmAdmin(deps.db, adminId, q),
+    );
   } catch (err) {
     const pg = dmErrorOf(err);
     if (!pg) throw err;
@@ -728,7 +749,7 @@ export function templateAdminHandlers(deps: ApiDeps) {
     const query = listQueryOf(c.req.valid('query'));
     const tr = await texts();
     const { page, rows } = await withUserContext(deps.db, admin(c), async (tx) => {
-      const rows = await listRows(tx, deps, tr);
+      const rows = await listRows(tx, deps.clock.now(), tr);
       return {
         rows,
         page: await listDmTemplatesPage(
@@ -758,7 +779,7 @@ export function templateAdminHandlers(deps: ApiDeps) {
     const res = await withUserContext(deps.db, admin(c), async (tx) =>
       listDmTemplateValues(
         tx,
-        (await listRows(tx, deps, tr)).map((r) => r.list),
+        (await listRows(tx, deps.clock.now(), tr)).map((r) => r.list),
         col,
         q,
       ),
@@ -780,7 +801,7 @@ export function templateAdminHandlers(deps: ApiDeps) {
         async (tx) =>
           exportDmTemplates(
             tx,
-            (await listRows(tx, deps, tr)).map((r) => r.list),
+            (await listRows(tx, deps.clock.now(), tr)).map((r) => r.list),
             query,
             keys,
           ),
@@ -831,7 +852,8 @@ export function templateAdminHandlers(deps: ApiDeps) {
           columns: input.columns,
           published,
           orgId: input.checkOrgId,
-          name: tpl?.name ?? '',
+          // Вид окна и сохранённого шаблона приходят порознь: название — только если оба «Для организаций».
+          nameFor: nameForOrg(input.audience === 'org' ? tpl : null),
         },
         tr,
       );
@@ -873,7 +895,7 @@ export function templateAdminHandlers(deps: ApiDeps) {
         published:
           before && dmTemplatePublished(before.state) ? editorColumns(before.columns) : null,
         orgId: checkOrgId,
-        name: v.name,
+        nameFor: nameForOrg(v),
       },
       tr,
     );
@@ -941,7 +963,7 @@ export function templateAdminHandlers(deps: ApiDeps) {
             action: 'create',
             changes: [{ field: 'state', to: state }],
           });
-          return { id: newId, card: await cardOf(tx, deps, newId, tr) };
+          return { id: newId, card: await cardOf(tx, deps.clock.now(), newId, tr) };
         }
         const cur = await dmAdminTemplate(tx, id, { lock: true });
         if (!cur) throw new RecordNotFoundError('dm_template', id);
@@ -965,7 +987,7 @@ export function templateAdminHandlers(deps: ApiDeps) {
             changes: [{ field: 'state', from: cur.state, to: state }],
           });
         }
-        return { id, card: await cardOf(tx, deps, id, tr) };
+        return { id, card: await cardOf(tx, deps.clock.now(), id, tr) };
       });
     } catch (err) {
       if (uniqueViolation(err) === 'dm_templates_code_unique') {
@@ -989,7 +1011,10 @@ export function templateAdminHandlers(deps: ApiDeps) {
   const card: RouteHandler<Routes['card'], AppEnv> = async (c) => {
     const { id } = c.req.valid('param');
     const tr = await texts();
-    return c.json(await withUserContext(deps.db, admin(c), (tx) => cardOf(tx, deps, id, tr)), 200);
+    return c.json(
+      await withUserContext(deps.db, admin(c), (tx) => cardOf(tx, deps.clock.now(), id, tr)),
+      200,
+    );
   };
 
   const copy: RouteHandler<Routes['copy'], AppEnv> = async (c) => {
@@ -1029,7 +1054,7 @@ export function templateAdminHandlers(deps: ApiDeps) {
           { field: 'state', to: 'draft' },
         ],
       });
-      return cardOf(tx, deps, newId, tr);
+      return cardOf(tx, deps.clock.now(), newId, tr);
     });
     return c.json(res, 201);
   };
@@ -1052,7 +1077,7 @@ export function templateAdminHandlers(deps: ApiDeps) {
         changes: [{ field: 'state', from: cur.state, to: input.to }],
         reason: input.reason,
       });
-      return cardOf(tx, deps, id, tr);
+      return cardOf(tx, deps.clock.now(), id, tr);
     });
     return c.json(res, 200);
   };

@@ -40,6 +40,7 @@ export type DmQueryProblem =
   | { code: 'not_select' }
   | { code: 'two_statements' }
   | { code: 'unclosed' }
+  | { code: 'parens' }
   | { code: 'positional' }
   | { code: 'too_many_params' }
   | { code: 'forbidden'; word: string };
