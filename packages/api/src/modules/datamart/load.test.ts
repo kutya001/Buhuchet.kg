@@ -224,8 +224,9 @@ describe.skipIf(!databaseAvailable())('Витрина данных: нагруз
         call('owner-b', 'GET', '/api/dm/output'),
       ]);
       expect(usual.map((r) => r.status)).toEqual(usual.map(() => 200));
+      // Тяжёлые ещё идут — по `finished`, а не по часам: между пределом времени и завершением обещания
+      // есть короткое окно, где часы уже «прошли», а запуск ещё не закончен.
       expect(finished).toEqual([]);
-      expect(Date.now() - started).toBeLessThan(HEAVY_MS);
 
       // Предел времени обрывает все три; места свободны — «Показать» снова отвечает.
       expect(await Promise.all([mine, byToken, second])).toEqual([

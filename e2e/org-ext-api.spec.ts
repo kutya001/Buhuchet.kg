@@ -244,15 +244,20 @@ test.describe('Витрина данных: «Внешний доступ по A
       await adminPage.goto(`/app/dm/tok?tok=${item.id}`);
       const adminCard = adminPage.getByRole('dialog', { name: tokenName });
       await expect(adminCard.locator('[data-dm-card]')).toBeVisible();
-      await adminCard.locator('[data-dm-card-revoke]').click();
+      // Окно Админки — того же проекта: на телефоне окно токена и подтверждение въезжают шторкой (№ 34).
+      const revoke = adminCard.locator('[data-dm-card-revoke]');
+      await stillElement(revoke);
+      await revoke.click();
       const confirm = adminPage.getByRole('dialog', { name: tx['dm.tok.revoke.title']! });
       await expect(confirm).toContainText(tokenName);
+      const confirmOk = confirm.getByRole('button', { name: tx['dm.tok.revoke.ok']! });
+      await stillElement(confirmOk);
       const revoked = adminPage.waitForResponse(
         (r) =>
           new URL(r.url()).pathname === `/api/admin/dm/tokens/${item.id}/revoke` &&
           r.request().method() === 'POST',
       );
-      await confirm.getByRole('button', { name: tx['dm.tok.revoke.ok']! }).click();
+      await confirmOk.click();
       expect((await revoked).status()).toBe(200);
       await adminPage.close();
 

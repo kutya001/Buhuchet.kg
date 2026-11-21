@@ -37,6 +37,12 @@ function textPattern(text: string, values: Record<string, string>): RegExp {
 }
 
 /**
+ * Сколько ждать итога «Показать»: при занятых местах запуска сайта (п. О-96, `dm_busy_all`) экран
+ * переспрашивает раз в 2 с до 10 раз (`apps/web/src/dm/out-data.ts`) — дольше 5 с ожидания по умолчанию.
+ */
+const SHOW_WAIT = 25_000;
+
+/**
  * Нажать кнопку окна шаблона, которая запускает запрос (`POST path`), и дождаться ответа не 429.
  * Запусков шаблонов с экрана на весь сайт одновременно — два (п. О-96), а сквозные тесты идут
  * параллельно: соседний тест «Витрины» может в этот момент занять оба места — тогда 429 `dm_busy_all`
@@ -170,8 +176,10 @@ test.describe('Витрина данных: «Шаблоны» и «Вывод»
     await tpl.selectOption(code);
     await page.locator('[data-dm-out-show]').click();
     const result = page.locator('[data-dm-out-result]');
+    // «Показать» при занятых местах сайта переспрашивает сама — раз в 2 с до 10 раз (`out-data.ts`).
     await expect(result.locator('[data-dm-out-meta]')).toContainText(
       textPattern(texts['dm.out.meta']!, { n: '1' }),
+      { timeout: SHOW_WAIT },
     );
     await expect(result.locator('tbody td[data-dx="0"]')).toHaveText(['7']);
   });
@@ -197,7 +205,7 @@ test.describe('Витрина данных: «Шаблоны» и «Вывод»
     await page.locator('[data-dm-out-tpl]').selectOption('orgs');
     await page.locator('[data-dm-out-show]').click();
     const result = page.locator('[data-dm-out-result]');
-    await expect(result.locator('[data-dm-out-meta]')).toBeVisible();
+    await expect(result.locator('[data-dm-out-meta]')).toBeVisible({ timeout: SHOW_WAIT });
     await search(page, isMobile, word);
     const orgCells = result.locator('tbody td[data-dx="0"]');
     await expect(orgCells).toHaveText(names);
