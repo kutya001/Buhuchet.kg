@@ -1,6 +1,7 @@
 import {
   DM_CODE_RE,
   DM_MODULES,
+  DM_PARAM_TYPES,
   DM_TOKEN_NAME_MAX,
   DM_TOKEN_STATES,
   DM_TOKEN_STOPS,
@@ -109,10 +110,31 @@ export const DmTokenRequestRow = z.object({
 export const DmExtColumn = z.object({ key: z.string(), title: z.string(), type: z.string() });
 
 /**
- * «Как подключить» (этап 2, П12; прототип `dmHow`): адрес с параметрами по умолчанию на сегодня и
- * столбцы ответа. Примеры запроса, ответа и скрипт с токеном собирает экран (`dmExtHow` домена).
+ * Параметр шаблона в «Как подключить» (прототип v160 `dmHow`: таблица «Параметр / Значение / Что это»,
+ * отдельные строки в коде программ).
  */
-export const DmTokenHow = z.object({ url: z.string(), columns: z.array(DmExtColumn) });
+export const DmHowParam = z.object({
+  /** Код в адресе `?month=`. */
+  code: z.string(),
+  name: z.string(),
+  type: z.enum(DM_PARAM_TYPES),
+  required: z.boolean(),
+  /** Значение по умолчанию на сегодня по Бишкеку (прототип `dmDef`); пусто — нет. */
+  value: z.string().nullable(),
+});
+export type DmHowParam = z.infer<typeof DmHowParam>;
+
+/**
+ * «Как подключить» (этап 2, П12; прототип v160 `dmHow`): адрес с параметрами по умолчанию на сегодня,
+ * он же без параметров (`base`), параметры шаблона по отдельности и столбцы ответа. Ссылку CSV, код
+ * для программ и пример ответа с токеном собирает экран (`dmExtHow` домена).
+ */
+export const DmTokenHow = z.object({
+  url: z.string(),
+  base: z.string(),
+  params: z.array(DmHowParam),
+  columns: z.array(DmExtColumn),
+});
 export type DmTokenHow = z.infer<typeof DmTokenHow>;
 
 /** Окно токена (прототип `dmTokDlg`): строки сведений, журнал запросов (последние 50) и действия. */
