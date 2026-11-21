@@ -269,6 +269,10 @@ export const DATAMART_TEXTS = {
   'dm.how.copy_code': { ru: 'Скопировать код', section: S },
   'dm.how.copied': { ru: 'Скопировано', section: S },
   'dm.how.code_copied': { ru: 'Код скопирован', section: S },
+  'dm.how.token_plain': {
+    ru: 'Токен хранится в файле открытым текстом: его видит каждый, у кого есть файл',
+    section: S,
+  },
   'dm.how.parts': {
     ru: 'В «Части URL-адреса» вставьте по одной строке, для каждой следующей — «Добавить часть»:',
     section: S,
@@ -400,6 +404,11 @@ export const DATAMART_TEXTS = {
   },
   'dm.how.code.query': { ru: '3. Запрос — менять не нужно', section: S },
   'dm.how.code.load': { ru: '3. Загрузка — менять не нужно', section: S },
+  'dm.how.code.parse': {
+    ru: '4. Разбор CSV по кавычкам, по одной ячейке; текст, похожий на формулу, — с апострофом',
+    section: S,
+  },
+  'dm.how.code.guard': { ru: 'текст, похожий на формулу, — с апострофом', section: S },
   'dm.how.code.error': { ru: 'Ошибка', section: S },
   'dm.how.code.data_1c': {
     ru: 'Данные.columns — столбцы, Данные.rows — строки, Данные.next — адрес следующей страницы (Неопределено, если её нет)',
