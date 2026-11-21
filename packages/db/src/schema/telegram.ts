@@ -380,6 +380,28 @@ export const orgTelegramNotices = pgTable(
 ).enableRLS();
 
 /**
+ * Какой порог памяти организации уже сообщён владельцам (доработки 20.11.2026, блок 2, пункт 5; поток Т,
+ * этап 1, П13; задача «Подписки: память и чеки на проверке»): 0 — ниже 80 %, 80 — сообщено «80 %»,
+ * 100 — сообщено «память заполнена». Каждое сообщение приходит один раз, пока занятое снова не опустится
+ * ниже порога: спустилось — порог запоминается ниже, следующий подъём сообщается снова. Нет строки — 0.
+ * Пишет задача в контексте своей организации.
+ */
+export const orgMemoryNotices = pgTable(
+  'org_memory_notices',
+  {
+    orgId: uuid('org_id')
+      .primaryKey()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    level: smallint('level').notNull().default(0),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check('org_memory_notices_level_check', sql`${t.level} in (0, 80, 100)`),
+    orgIsolation('org_memory_notices_isolation', t.orgId),
+  ],
+).enableRLS();
+
+/**
  * Общий рабочий чат фирмы (поток Т, задача Т8; docs/decisions.md п. Т-8; прототип v105
  * modules/tg-group.js): у организации — одна группа Telegram, куда бот пишет сводку дня. Номер группы
  * у Telegram отрицательный и один на всю платформу: группа не бывает общим чатом двух организаций.

@@ -12,6 +12,7 @@ import { lt } from 'drizzle-orm';
 import type { Job } from '../deps';
 import { purgeLeadDocsJob } from '../modules/admin/lead-purge';
 import { cleanupPendingFiles } from '../modules/files/cleanup';
+import { eraseDeletedFilesJob } from '../modules/files/erase-deleted';
 import { purgeSentFilesJob } from '../modules/files/sent-purge';
 import { storageRetryJob } from '../modules/files/storage-retry';
 import { syncServiceStatusesJob } from '../modules/contractors/job';
@@ -25,6 +26,7 @@ import { contractorPayJob } from '../modules/telegram/client/pay';
 import { botMenuCommands } from '../modules/telegram/command-view';
 import { telegramSendJob } from '../modules/telegram/outbox';
 import { telegramRemindersJob } from '../modules/telegram/reminders';
+import { storageReconcileJob, subsMemoryChecksJob, subsRemindersJob } from './subscriptions';
 import { alertTexts, sendPlatformAlert } from './alerts';
 import { watchLoginLocksJob } from './login-locks';
 
@@ -124,6 +126,7 @@ export const jobs: readonly Job[] = [
   cleanupPendingFilesJob,
   purgeSentFilesJob,
   storageRetryJob,
+  eraseDeletedFilesJob,
   duesRecalcJob,
   cleanupVideoUploadsJob,
   purgeLeadDocsJob,
@@ -189,7 +192,15 @@ export function telegramWebhookJob(webhook: { url: string; secretToken: string }
 export function jobsFor(
   config: Pick<AppConfig, 'APP_BASE_URL' | 'TELEGRAM_BOT_TOKEN' | 'TELEGRAM_WEBHOOK_SECRET'>,
 ): readonly Job[] {
-  const all = [...jobs, telegramRemindersJob(config.APP_BASE_URL), telegramSendJob()];
+  const all = [
+    ...jobs,
+    telegramRemindersJob(config.APP_BASE_URL),
+    telegramSendJob(),
+    // Подписки, память и сверка хранилища (пакет 20.11.2026, поток Т, этап 1, П13): ссылка «Открыть».
+    subsRemindersJob(config.APP_BASE_URL),
+    subsMemoryChecksJob(config.APP_BASE_URL),
+    storageReconcileJob(config.APP_BASE_URL),
+  ];
   if (
     !config.TELEGRAM_BOT_TOKEN ||
     !config.TELEGRAM_WEBHOOK_SECRET ||

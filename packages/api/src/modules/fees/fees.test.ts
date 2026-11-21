@@ -18,7 +18,13 @@ import {
 } from '@buhuchet/shared';
 import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../testing';
+import {
+  apiRequest,
+  createStaffFixture,
+  signIn,
+  TEST_PASSWORD,
+  withRoleScopes,
+} from '../../testing';
 
 type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
 
@@ -407,9 +413,13 @@ describe.skipIf(!databaseAvailable())('Плата за обслуживание 
     expect(form.contractor.oneSum).toBe(true);
   });
 
-  it('файлы оплаты: загружает тот, кто принимает оплату; бухгалтер их не видит', async () => {
+  it('файлы оплаты: загружает тот, кто принимает оплату; бухгалтер их не видит; в «Файловом менеджере» — с источником «Оплата за обслуживание» тому, кто видит плату', async () => {
     const [p] = await f.t.admin.db
-      .select({ id: schema.feePayments.id })
+      .select({
+        id: schema.feePayments.id,
+        amount: schema.feePayments.amount,
+        paidOn: schema.feePayments.paidOn,
+      })
       .from(schema.feePayments)
       .where(eq(schema.feePayments.contractorId, cpPay));
     const source = { kind: 'fee_payment', id: p!.id };
@@ -429,6 +439,41 @@ describe.skipIf(!databaseAvailable())('Плата за обслуживание 
     expect([403, 404]).toContain(
       (await call('GET', `/api/files?kind=fee_payment&id=${p!.id}`, acc)).status,
     );
+
+    // «Файловый менеджер» (доработки 20.11.2026, пакет 2, блок 5, пункт 1; п. К-25): файл виден с
+    // источником тому, кто видит плату; бухгалтеру без права на плату и при выключенной функции — нет.
+    const inManager = async (cookie: string) =>
+      FileManagerList.parse(
+        await (
+          await expectStatus(await call('GET', '/api/files/manager?size=all', cookie), 200)
+        ).json(),
+      )
+        .items.filter((r) => r.id === ticket.id)
+        .map((r) => [r.kind, r.source.replace(/\u00a0/g, ' ')]);
+    const whole = String(Number(p!.amount) / 100).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    const [y, m, d] = p!.paidOn.split('-');
+    const fileRow = ['fee_payment', `Оплата за обслуживание ${whole} сом от ${d}.${m}.${y}`];
+    expect(Number(p!.amount) % 100).toBe(0);
+    expect(await inManager(owner)).toEqual([fileRow]);
+    expect(await inManager(chief)).toEqual([fileRow]);
+    expect(await inManager(acc)).toEqual([]);
+    await features({ ...ALL_ON, fee: false });
+    try {
+      expect(await inManager(owner)).toEqual([]);
+    } finally {
+      await features(ALL_ON);
+    }
+    // Область «Свои» группы «Контрагенты» у главного бухгалтера: файл оплаты чужого контрагента не виден,
+    // хотя «Файловый менеджер» у него — «Все».
+    await withRoleScopes(
+      f.t.admin.db,
+      employee('chief-a'),
+      { cps: 'own', files: 'all' },
+      async () => {
+        expect(await inManager(chief)).toEqual([]);
+      },
+    );
+    expect(await inManager(chief)).toEqual([fileRow]);
   });
 
   it('поступление с частью за обслуживание: без права на плату — только часть на налоги, поступления только за обслуживание не видно (п. В-19)', async () => {

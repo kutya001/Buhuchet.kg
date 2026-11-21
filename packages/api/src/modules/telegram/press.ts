@@ -37,6 +37,7 @@ import {
   type Translate,
 } from '@buhuchet/domain';
 import type { ApiDeps } from '../../deps';
+import { closedBotText, orgClosedNow } from '../../subscription-access';
 import { serverTexts } from '../l10n/texts';
 import { BOT_ACTIONS } from './actions';
 import { botText, sendBotMessage } from './bot';
@@ -306,6 +307,11 @@ export async function handleBotPress(deps: ApiDeps, press: BotPress): Promise<vo
   }
   const denied = botTargetRefusal(target, action);
   if (denied) return refuse(denied);
+  // Доступ организации закрыт по подписке (доработки 20.11.2026, блок 4, пункт 4): кнопки старых
+  // сообщений ничего не делают; «Это не я» — защита учётной записи, работает и тогда.
+  if (!action.security && target.orgId && (await orgClosedNow(deps, target.orgId))) {
+    return answer(await closedBotText(deps), true);
+  }
   // Действие, меняющее данные, — не чаще предела с одного чата (docs/decisions.md п. Т-1): человек столько
   // не нажимает, а поток нажатий не должен держать транзакции и блокировки записей.
   if (action.change || action.limited) {

@@ -12,7 +12,9 @@ import {
   ContractorImportCheck,
   ContractorImportResult,
   ContractorImportTemplate,
+  NoSeatsDetails,
   type ContractorImportRow,
+  type ContractorSeats,
 } from '@buhuchet/shared';
 import {
   buttonClass,
@@ -21,11 +23,12 @@ import {
   inputClass,
   MONO_CLASS,
   Modal,
+  Note,
   Pill,
   TOUCH_AREA,
   useToast,
 } from '@buhuchet/ui';
-import { queryOptions, useQueryClient } from '@tanstack/react-query';
+import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query';
 import { memo, useCallback, useId, useState, type ReactNode } from 'react';
 import { ApiFailure, api, apiFailure, callApi } from '../api-client';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
@@ -33,6 +36,7 @@ import { useErrorText, useT } from '../l10n/provider';
 import { exportFailureText, saveFile } from '../lists/export';
 import { useShell } from '../shell/context';
 import { useContractorsRefresh } from './contractor-data';
+import { SeatGrowButton, seatsQuery, useSeatGuard } from './seat-dialog';
 
 /*
  * Загрузка контрагентов вставкой из Excel (задача 2.16; ТЗ «Загрузка текущих контрагентов при переходе на
@@ -79,6 +83,16 @@ export function useContractorImport(): { open: () => void; dialog: ReactNode } {
   return { open, dialog };
 }
 
+const FREE_MARK = '\uE000';
+const NEW_MARK = '\uE001';
+
+/** Текст словаря с числами жирным (прототип `<b>` в `#im-seat`): метки в тексте заменяются числами. */
+function boldNumbers(text: string, values: Readonly<Record<string, string>>): ReactNode[] {
+  return text
+    .split(/([\uE000\uE001])/)
+    .map((part, i) => (part in values ? <b key={i}>{values[part]}</b> : part));
+}
+
 /** Ячейка строки с новым значением; недостающие слева досоздаются пустыми. */
 function withCell(cells: readonly string[], index: number, value: string): string[] {
   const next = [...cells];
@@ -101,12 +115,19 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
   const [table, setTable] = useState<ImportTable | null>(null);
   const [busy, setBusy] = useState(false);
   const [template, setTemplate] = useState<DialogSlot<ContractorImportTemplate> | null>(null);
+  // Места в пакете (доработки 20.11.2026, блок 3, пункт 1; прототип v152 `#im-seat`): строка видна, как
+  // только показана таблица («новых: 0» до проверки), числа — из последней проверки или загрузки, а до
+  // них — из «Мест в пакете».
+  const [seats, setSeats] = useState<ContractorSeats | null>(null);
+  const seatsNow = useQuery({ ...seatsQuery, enabled: !!table && !seats });
+  const seat = useSeatGuard();
 
   // Готово к загрузке — только когда проверены все строки (прототип: `rows.every(r => r.errs)`).
-  const ready =
-    table && table.rows.every((r) => r.check)
-      ? table.rows.filter((r) => !r.check!.errors.length).length
-      : 0;
+  const checked = !!table && table.rows.every((r) => r.check);
+  const ready = checked ? table.rows.filter((r) => !r.check!.errors.length).length : 0;
+  const seatsShown = seats ?? seatsNow.data ?? null;
+  const free = table ? seatsShown?.seats?.free : undefined;
+  const seatOver = free !== undefined && ready > free;
 
   const parse = () => {
     const parsed = parseImportText(text);
@@ -161,6 +182,7 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
       return;
     }
     const data = ContractorImportCheck.parse(res.data);
+    setSeats(data.seats);
     setTable((tb) =>
       tb === sent
         ? { ...tb, rows: tb.rows.map((r, i) => ({ cells: r.cells, check: data.rows[i] ?? null })) }
@@ -169,16 +191,23 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
   };
 
   const create = async () => {
-    if (!table || busy || !ready) return;
+    if (!table || busy || !ready || seatOver) return;
     const sent = table;
     setBusy(true);
     const res = await callApi(() => api.api.contractors.import.$post({ json: request(sent) }));
     setBusy(false);
     if (!res.ok) {
+      // Мест не хватило, пока окно было открыто: окно «В пакете нет свободных мест» и свежая строка мест.
+      if (seat.fromError(res.error)) {
+        const d = NoSeatsDetails.parse(res.error.details);
+        setSeats({ seats: { used: d.used, limit: d.limit, free: d.free }, owner: d.owner });
+        return;
+      }
       toast(errorText(res.error), { bad: true });
       return;
     }
     const data = ContractorImportResult.parse(res.data);
+    setSeats(data.seats);
     if (data.created) refresh();
     // Созданные строки уходят из таблицы, строки с ошибками остаются со своими ошибками.
     const left = sent.rows
@@ -304,7 +333,7 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
           <button
             type="button"
             className={buttonClass('cta')}
-            disabled={busy || !ready}
+            disabled={busy || !ready || seatOver}
             onClick={() => void create()}
             data-cp-import-ok=""
           >
@@ -378,7 +407,31 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
           </div>
         </fieldset>
         <div className="text-[12px] leading-[1.4] text-muted">{t('cp.import.table_hint')}</div>
+        {free !== undefined ? (
+          <div data-cp-import-seat={seatOver ? 'over' : 'ok'}>
+            <Note tone={seatOver ? 'bad' : 'info'} center>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="min-w-0 flex-1">
+                  {boldNumbers(t('cp.seat.import', { free: FREE_MARK, n: NEW_MARK }), {
+                    [FREE_MARK]: formatCount(free),
+                    [NEW_MARK]: formatCount(ready),
+                  })}
+                  {seatOver
+                    ? ` ${t(seatsShown?.owner ? 'cp.seat.import_over_owner' : 'cp.seat.import_over')}`
+                    : null}
+                </span>
+                {seatOver && seatsShown?.owner ? (
+                  <SeatGrowButton
+                    className={`${buttonClass('default', 'sm')} ${TOUCH_AREA}`}
+                    onGrow={() => void seat.grow()}
+                  />
+                ) : null}
+              </div>
+            </Note>
+          </div>
+        ) : null}
       </div>
+      {seat.node}
     </Modal>
   );
 }

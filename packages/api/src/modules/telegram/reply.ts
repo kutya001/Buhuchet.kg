@@ -19,6 +19,7 @@ import {
   fileContentType,
   fileUploadProblem,
   hasPermission,
+  memoryFullParams,
   pressBotButton,
   RecordChangedError,
   RecordNotFoundError,
@@ -27,6 +28,12 @@ import {
 } from '@buhuchet/domain';
 import { FILE_NOTE_MAX } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
+import {
+  closedBotText,
+  memoryFullOf,
+  orgClosedNow,
+  subscriptionToday,
+} from '../../subscription-access';
 import { FILES_SECTION, UPLOAD_RATE_LIMIT } from '../files/files';
 import { botText, sendBotMessage, sendNow } from './bot';
 import { queueTelegramEvents } from './events';
@@ -155,6 +162,11 @@ export async function handleBotReply(deps: ApiDeps, msg: BotIncoming): Promise<b
     await sayKey(denied);
     return true;
   }
+  // Доступ организации закрыт по подписке (доработки 20.11.2026, блок 4, пункт 4): ответ не принят.
+  if (target.orgId && (await orgClosedNow(deps, target.orgId))) {
+    await say(await closedBotText(deps));
+    return true;
+  }
   // Бот ждал другое: объясняет и ждёт дальше (прототип: `again`).
   if (ask.kind === 'file' && !msg.file) {
     await sayKey('tgAskNeedFile');
@@ -196,6 +208,16 @@ export async function handleBotReply(deps: ApiDeps, msg: BotIncoming): Promise<b
         await sayKey('tgActNoRight');
         return true;
       }
+    }
+    // Память организации заполнена (доработки 20.11.2026, блок 2, пункт 5) — тоже до скачивания:
+    // файл не качается и в хранилище не кладётся. В транзакции записи проверка повторяется.
+    const full = await botUserContext(deps, target, (tx) =>
+      memoryFullOf(tx, subscriptionToday(deps)),
+    );
+    if (full) {
+      const gb = memoryFullParams(full);
+      await sayKey('tgActMemFull', { занято: gb.used, лимит: gb.limit });
+      return true;
     }
     const uploads = await takeRateLimit(deps.db, UPLOAD_RATE_LIMIT, target.userId);
     if (!uploads.ok) {

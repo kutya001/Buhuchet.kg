@@ -57,3 +57,10 @@ export const SUBSCRIPTION_LAUNCH_REASON =
 /** Байт в мегабайте памяти: как размер файла на экране (`fileSizeParts`); 1 ГБ = 1 000 МБ (блок 2, пункт 2). */
 export const SUBSCRIPTION_MB_BYTES = 1024 * 1024;
 export const SUBSCRIPTION_GB_MB = 1000;
+
+/**
+ * Подписка при создании организации (блок 4, пункт 5; блок 6, пункт 4; прототип subNewOrgSave):
+ * причина записи — с бесплатным периодом и без него.
+ */
+export const SUBSCRIPTION_NEW_ORG_FREE_REASON = 'Бесплатный период при создании организации';
+export const SUBSCRIPTION_NEW_ORG_REASON = 'Подписка при создании организации';

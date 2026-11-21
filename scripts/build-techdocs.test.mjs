@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { buildTechDocs, sourceVersion } from './build-techdocs.mjs';
+import { buildTechDocs, sourceVersion, withProductSections } from './build-techdocs.mjs';
 
 // Данные «Технической документации» собираются по исходникам этого репозитория скриптом прототипа
 // (spec/prototype/db/api_snapshot.py). Тест сверяет, что сборка даёт то, что читает сайт: описание API
@@ -50,6 +50,11 @@ test('сборка: снимок API по исходникам продукта,
       if (m.acc === 'perm') assert.ok(m.perm.length > 0, `метод с правом без прав: ${m.id}`);
     }
 
+    // Раздел модуля, которого ещё нет в скрипте прототипа, берёт название продукта.
+    const tokens = api.methods.find((m) => m.id === 'GET /admin/dm/tokens');
+    assert.ok(tokens, 'в снимке нет GET /admin/dm/tokens');
+    assert.equal(api.sections[tokens.sec], 'Витрина данных');
+
     const schema = JSON.parse(readFileSync(path.join(dir, 'schema.json'), 'utf8'));
     assert.ok(schema.tables.length > 50);
     assert.ok(schema.tables.some((t) => t.name === 'users' && t.ru));
@@ -63,6 +68,14 @@ test('сборка: снимок API по исходникам продукта,
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('названия разделов продукта только дополняют скрипт прототипа', () => {
+  const api = { meta: {}, sections: { admin: 'Админка', datamart: 'Из прототипа' } };
+  const out = withProductSections(api);
+  assert.equal(out.sections.datamart, 'Из прототипа');
+  assert.equal(out.sections.admin, 'Админка');
+  assert.equal(withProductSections({ sections: {} }).sections.datamart, 'Витрина данных');
 });
 
 test('версия: коммит и дата из git, без git — из переменной сборки и сегодня', () => {

@@ -64,16 +64,19 @@ import {
   APP_PATH,
   canEnter,
   isModuleId,
+  lockedMe,
   MODULES,
   moduleHref,
   parseAppPath,
   phoneModules,
   roleEditorOf,
   shellAccess,
+  subLock,
   tabHref,
   visibleTabs,
   type ShellAccess,
 } from './modules';
+import { MemFullHost, SubClosedScreen, SubRenewBar } from './sub-lock';
 import { menuDot, useTabCounts, withTabCounts } from './tab-counts';
 import { UiProviders } from './ui-providers';
 
@@ -310,7 +313,7 @@ function ShellPage({
       .then(async (res) => {
         if (res.status === 401 || res.status === 403) return 'out';
         if (res.status !== 200) return null;
-        const fresh = MeResponse.parse(await res.json());
+        const fresh = lockedMe(MeResponse.parse(await res.json()));
         return canEnter(fresh) ? fresh : 'out';
       })
       .then((fresh) => {
@@ -331,16 +334,19 @@ function ShellPage({
   }, [pathname, moduleId, router]);
 
   const access = useMemo(() => shellAccess(me), [me]);
-  const counts = useTabCounts(me.modules);
+  // Доступ закрыт по подписке у сотрудника (не владельца): вместо модулей — «Доступ закрыт».
+  const staffLock = subLock(me) === 'staff';
+  const menu = useMemo(() => (staffLock ? [] : me.modules), [staffLock, me.modules]);
+  const counts = useTabCounts(menu);
   // «Начните с Базы знаний»: точка у модуля, пока уровень 0 % (прототип kbDot).
   const kbProgress = useQuery(kbStateQuery).data?.progress;
   const kbStart = !!kbProgress && kbProgress.total > 0 && kbProgress.pct === 0;
   // Непрочитанные новости: у модуля — серая точка (новости не требуют действия, прототип v138), красный
   // счётчик — только у вкладки «Новости» (прототип kbTabs).
-  const newsUnread = useQuery({ ...newsUnreadQuery, enabled: me.modules.includes('kb') }).data ?? 0;
+  const newsUnread = useQuery({ ...newsUnreadQuery, enabled: menu.includes('kb') }).data ?? 0;
   const modules = useMemo(
     () =>
-      me.modules.map((id) => {
+      menu.map((id) => {
         const m = withTabCounts(shellModule(id, access, t), counts[id]);
         if (id !== 'kb') return m;
         if (newsUnread) {
@@ -358,12 +364,12 @@ function ShellPage({
         }
         return kbStart ? { ...m, count: { value: '', dot: true, title: t('kb.dot') } } : m;
       }),
-    [me.modules, access, t, counts, kbStart, newsUnread],
+    [menu, access, t, counts, kbStart, newsUnread],
   );
   const current = modules.find((m) => m.id === moduleId) ?? null;
   const currentTab = current?.tabs.find((tab) => tab.id === tabId) ?? null;
   const phone = useMemo(() => {
-    const split = phoneModules(me.modules, access.admin);
+    const split = phoneModules(menu, access.admin);
     const pick = (id: MenuModuleId, title: string): PhoneModule => {
       const m = modules.find((x) => x.id === id)!;
       return { id, title, icon: m.icon, href: m.href, count: m.count };
@@ -378,7 +384,7 @@ function ShellPage({
         return id === 'files' ? { ...m, count: undefined } : m;
       }),
     };
-  }, [me.modules, access.admin, modules, t]);
+  }, [menu, access.admin, modules, t]);
 
   const [navHidden, setNavHidden] = useState(initialNavHidden);
   const [wide, setWide] = useState(initialWide);
@@ -542,7 +548,7 @@ function ShellPage({
   // Приветствие и опросник: после входа — вместо «Что нового», если нужно (задача 2.33).
   const welcome = useWelcomeRuntime({
     access,
-    modules: me.modules,
+    modules: menu,
     homeHref: moduleHref('home', access),
     lessonsHref: tabHref('kb', 'lessons'),
   });
@@ -797,7 +803,10 @@ function ShellPage({
               Link={NextLink}
             />
           )}
-          {current ? (
+          <SubRenewBar access={access} />
+          {staffLock ? (
+            <SubClosedScreen />
+          ) : current ? (
             <TabPager
               tabs={current.tabs.map((tab) => tab.id)}
               activeTab={tabId}
@@ -821,6 +830,7 @@ function ShellPage({
         {welcome.overlays}
         {video.overlays}
         {me.organization ? <ContractorCardHost /> : null}
+        {me.organization ? <MemFullHost access={access} /> : null}
         {me.organization ? <ProjectCardHost /> : null}
         {/* «?» без статьи о модуле — описание модуля (прототип kb.js kbHelp). */}
         <Modal

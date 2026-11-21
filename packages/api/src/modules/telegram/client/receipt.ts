@@ -57,8 +57,10 @@ import {
 } from '@buhuchet/domain';
 import { z } from '@hono/zod-openapi';
 import type { ApiDeps } from '../../../deps';
+import { orgAccessClosed, orgClosedNow } from '../../contractor-page/org-closed';
 import { addSentFiles, SentFilesRefused } from '../../files/sent-add';
 import { serverTexts } from '../../l10n/texts';
+import { memoryFullOf, subscriptionToday } from '../../../subscription-access';
 import { botSendOptions } from '../outbox';
 import type { BotPress } from '../press';
 import type { BotIncoming } from '../reply';
@@ -265,6 +267,20 @@ export async function receiptCancel(
   return { reply: await botTemplateText(tx, 'tgActCancelled'), after, send: null };
 }
 
+/** Доступ организации закрыт по подписке: файл не принимается (доработки 20.11.2026, блок 4, пункт 4). */
+// ОТКЛОНЕНИЕ: docs/deviations.md#К-24
+async function sayOrgClosed(deps: ApiDeps, chatId: number): Promise<void> {
+  await sayTo(deps, chatId, (await serverTexts(deps))('cppage.tg.org_closed'));
+}
+
+/** Доступ организации закрылся, пока файл из чата скачивался: транзакция записи откатывается. */
+class OrgClosedOnSend extends Error {
+  constructor() {
+    super('org_closed');
+    this.name = 'OrgClosedOnSend';
+  }
+}
+
 /** Отправить текст клиенту; ошибка Telegram не роняет разбор. */
 async function sayTo(deps: ApiDeps, chatId: number, text: string): Promise<void> {
   try {
@@ -299,6 +315,8 @@ function refusalOf(r: SentFileRefusal, receipt: boolean): Refusal & { close: boo
   switch (r.code) {
     case 'sent_off':
       return { key: 'tgCpFileOff', close: true };
+    case 'sent_mem_full':
+      return { key: 'tgCpFileMem', close: true };
     case 'sent_day_left':
     case 'sent_day_limit':
       return { key: 'tgCpFileLimit', values: { лимит: SENT_FILES_PER_DAY }, close: true };
@@ -329,7 +347,7 @@ async function sendClientFile(
     comment: string | null;
     receipt: boolean;
   },
-): Promise<{ ids: string[] } | (Refusal & { close: boolean })> {
+): Promise<{ ids: string[] } | (Refusal & { close: boolean }) | 'closed'> {
   const loaded = await deps.telegram!.loadFile(o.file.fileId, FILE_MAX_BYTES);
   if (!loaded.ok) {
     if (loaded.reason === 'too_large') return refusalOf({ code: 'sent_too_large' }, o.receipt);
@@ -349,9 +367,15 @@ async function sendClientFile(
       tgChatId: o.chatId,
       comment: o.comment,
       receipt: o.receipt,
+      // Доступ организации могли закрыть, пока файл скачивался: проверка — и в транзакциях записи; ответ —
+      // как при закрытом доступе до скачивания, просьба «Пришлите чек» остаётся (п. К-24).
+      guard: async (tx) => {
+        if (await orgAccessClosed(tx, bishkekDate(deps.clock.now()))) throw new OrgClosedOnSend();
+      },
       files: [{ name: o.name, bytes: loaded.body }],
     });
   } catch (err) {
+    if (err instanceof OrgClosedOnSend) return 'closed';
     if (err instanceof SentFilesRefused) return refusalOf(err.refusal, o.receipt);
     deps.logger.error({ err }, 'Telegram: файл контрагента не принят');
     deps.errors?.capture(err);
@@ -422,6 +446,10 @@ async function receiptReply(
     await say({ key: 'tgCpNotLinked' });
     return true;
   }
+  if (await orgClosedNow(deps, ask.orgId)) {
+    await sayOrgClosed(deps, msg.chatId);
+    return true;
+  }
   // Бот ждал файл (прототип: `again`): объясняет и ждёт дальше.
   if (!msg.file) {
     await say({ key: 'tgAskNeedFile' });
@@ -481,6 +509,10 @@ async function receiptReply(
     const arg = parseCpReceiptArg(current.message.ask?.arg ?? null);
     if (!arg?.paidId) return { key: 'tgActStale', close: false };
     if (!(await clientFilesOn(tx, ask.contractorId))) return refusalOf({ code: 'sent_off' }, true);
+    // Память организации заполнена — файл у Telegram не скачивается (общая сборка этапа 1, П2).
+    if (await memoryFullOf(tx, subscriptionToday(deps))) {
+      return refusalOf({ code: 'sent_mem_full' }, true);
+    }
     if ((await sentFilesLastDay(tx, ask.contractorId)) >= SENT_FILES_PER_DAY) {
       return refusalOf({ code: 'sent_day_limit' }, true);
     }
@@ -511,6 +543,10 @@ async function receiptReply(
     comment: caption ? `${note}. ${caption}` : note,
     receipt: true,
   });
+  if (sent === 'closed') {
+    await sayOrgClosed(deps, msg.chatId);
+    return true;
+  }
   if ('key' in sent) {
     if (sent.close) await closeAsk();
     await say(sent);
@@ -597,14 +633,20 @@ async function freeFile(deps: ApiDeps, msg: BotIncoming, today: IsoDate): Promis
     return true;
   }
   const active: ActiveLink[] = [];
+  // Контрагенты организаций с закрытым доступом в «От какой компании?» не попадают (п. К-24); о закрытом
+  // доступе бот говорит только действующему подключению — бывшему клиенту, как прежде, «не подключён».
+  let closed = 0;
   for (const link of chats) {
-    const on = await withOrgContext(deps.db, { orgId: link.orgId, userId: null }, (tx) =>
-      activeLink(tx, link),
-    );
-    if (on) active.push({ ...link, sender: on.name });
+    const on = await withOrgContext(deps.db, { orgId: link.orgId, userId: null }, async (tx) => {
+      const found = await activeLink(tx, link);
+      return found && (await orgAccessClosed(tx, today)) ? ('closed' as const) : found;
+    });
+    if (on === 'closed') closed += 1;
+    else if (on) active.push({ ...link, sender: on.name });
   }
   if (!active.length) {
-    await say({ key: 'tgCpNotLinked' });
+    if (closed) await sayOrgClosed(deps, msg.chatId);
+    else await say({ key: 'tgCpNotLinked' });
     return true;
   }
   if (active.length > 1) {
@@ -613,7 +655,8 @@ async function freeFile(deps: ApiDeps, msg: BotIncoming, today: IsoDate): Promis
   }
   const link = active[0]!;
   const out = await toContractor(deps, link, msg.chatId, file, name, msg.caption);
-  await say('key' in out ? out : { key: 'tgCpFileOk' });
+  if (out === 'closed') await sayOrgClosed(deps, msg.chatId);
+  else await say('key' in out ? out : { key: 'tgCpFileOk' });
   return true;
 }
 
@@ -627,13 +670,16 @@ async function toContractor(
   file: NonNullable<BotIncoming['file']>,
   name: string,
   caption: string | null,
-): Promise<{ ids: string[] } | Refusal> {
+): Promise<{ ids: string[] } | Refusal | 'closed'> {
   const pre = await withOrgContext(
     deps.db,
     { orgId: link.orgId, userId: null },
     async (tx): Promise<Refusal | null> => {
       if (!(await clientFilesOn(tx, link.contractorId)))
         return refusalOf({ code: 'sent_off' }, false);
+      if (await memoryFullOf(tx, subscriptionToday(deps))) {
+        return refusalOf({ code: 'sent_mem_full' }, false);
+      }
       if ((await sentFilesLastDay(tx, link.contractorId)) >= SENT_FILES_PER_DAY) {
         return refusalOf({ code: 'sent_day_limit' }, false);
       }
@@ -772,7 +818,11 @@ async function fileToChosen(
   refuse: (r: Refusal) => Promise<void>,
 ): Promise<void> {
   const chats = await contractorTelegramChats(deps.db, press.chatId);
-  type Found = { link: ActiveLink; file: z.infer<typeof PendingFile>['fileTo'] } | Refusal | null;
+  type Found =
+    | { link: ActiveLink; file: z.infer<typeof PendingFile>['fileTo'] }
+    | Refusal
+    | 'org_closed'
+    | null;
   let found: Found = null;
   for (const orgId of new Set(chats.map((c) => c.orgId))) {
     found = await withOrgContext(deps.db, { orgId, userId: null }, async (tx): Promise<Found> => {
@@ -788,8 +838,10 @@ async function fileToChosen(
         ? await activeLink(tx, { linkId: row.linkId, contractorId: row.contractorId })
         : null;
       if (!chat || !on) return { key: 'tgCpNotLinked' };
+      if (await orgAccessClosed(tx, today)) return 'org_closed';
       if (!(await clientFilesOn(tx, row.contractorId)))
         return refusalOf({ code: 'sent_off' }, false);
+      if (await memoryFullOf(tx, today)) return refusalOf({ code: 'sent_mem_full' }, false);
       if ((await sentFilesLastDay(tx, row.contractorId)) >= SENT_FILES_PER_DAY) {
         return refusalOf({ code: 'sent_day_limit' }, false);
       }
@@ -799,6 +851,10 @@ async function fileToChosen(
   }
   if (!found) {
     await refuse({ key: 'tgActStale' });
+    return;
+  }
+  if (found === 'org_closed') {
+    await answer((await serverTexts(deps))('cppage.tg.org_closed'));
     return;
   }
   if ('key' in found) {
@@ -816,6 +872,11 @@ async function fileToChosen(
     file.name,
     file.caption,
   );
+  if (out === 'closed') {
+    // Вопрос остаётся: после оплаты выбрать можно снова.
+    await sayOrgClosed(deps, press.chatId);
+    return;
+  }
   if ('key' in out) {
     // Файл не принят — вопрос остаётся: выбрать можно снова (этого или другого контрагента).
     await sayTo(deps, press.chatId, await botTemplateText(deps.db, out.key, out.values));

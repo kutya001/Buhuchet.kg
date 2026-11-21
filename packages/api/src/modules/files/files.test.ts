@@ -15,6 +15,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../app';
 import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../testing';
 import { cleanupPendingFiles } from './cleanup';
+import { eraseDeletedFiles } from './erase-deleted';
 import { FILE_SOURCES, type FileSource } from './sources';
 
 const { auditLog, files, rateLimits } = schema;
@@ -385,6 +386,27 @@ describe.skipIf(!databaseAvailable())('Файлы записей: API', () => {
       expect(res.status).toBe(200);
       expect(await res.json()).toEqual({ id: item.id });
       expect((await list(acc)).items.some((i) => i.id === item.id)).toBe(false);
+      // «Ждут удаления» (доработки 20.11.2026, пакет 2, блок 5, пункт 3): файл сутки лежит в
+      // хранилище — его можно вернуть, — потом его стирает задача «Файлы: стирание удалённых».
+      expect(await storage.exists(key)).toBe(true);
+      const trash = await f.t.admin.db
+        .select()
+        .from(schema.fileTrash)
+        .where(eq(schema.fileTrash.fileId, item.id));
+      expect(trash).toHaveLength(1);
+      expect(trash[0]).toMatchObject({ why: 'del', storageKey: key, name: 'черновик.txt' });
+      const hours = (trash[0]!.eraseAt.getTime() - trash[0]!.deletedAt.getTime()) / 3600000;
+      expect(hours).toBeCloseTo(24, 5);
+      expect(await eraseDeletedFiles(f.deps)).toBe(0);
+      expect(await storage.exists(key)).toBe(true);
+      await f.t.admin.db
+        .update(schema.fileTrash)
+        .set({
+          deletedAt: sql`now() - interval '25 hours'`,
+          eraseAt: sql`now() - interval '1 hour'`,
+        })
+        .where(eq(schema.fileTrash.id, trash[0]!.id));
+      expect(await eraseDeletedFiles(f.deps)).toBe(1);
       expect(await storage.exists(key)).toBe(false);
       expect((await history(item.id)).map((h) => [h.entity, h.action, h.changes])).toEqual([
         ['file', 'file_attach', [{ field: 'file', to: 'черновик.txt' }]],
@@ -856,7 +878,13 @@ describe.skipIf(!databaseAvailable())('Файлы записей: API', () => {
         createdBy: f.people['acc-a']!.userId,
       });
       expect(row!.replacedAt).not.toBeNull();
-      expect(await storage.exists(oldKey)).toBe(false);
+      // Прежняя версия сутки ждёт стирания (вернуть её нельзя) — ключ живого файла не трогается.
+      expect(await storage.exists(oldKey)).toBe(true);
+      const [old] = await f.t.admin.db
+        .select()
+        .from(schema.fileTrash)
+        .where(eq(schema.fileTrash.storageKey, oldKey));
+      expect(old).toMatchObject({ why: 'rep', fileId: null, name: 'скан.pdf', sizeBytes: 5 });
       expect(await storage.exists(row!.storageKey)).toBe(true);
       // Строка загрузки-замены стёрта: её ключ перешёл к файлу.
       expect(await f.t.admin.db.select().from(files).where(eq(files.id, uploadId))).toEqual([]);

@@ -83,6 +83,11 @@ export interface Storage {
     key: string,
     options: { expiresInSeconds: number; contentType: VideoContentType },
   ): Promise<string>;
+  /**
+   * Страница списка объектов под приставкой (сверка хранилища с базой, задача
+   * `files.storage-reconcile`): до 1 000 ключей по порядку, `next` — с чего продолжить; конец — null.
+   */
+  list(prefix: string, after?: string | null): Promise<StorageListPage>;
   /** Проверка доступности корзины (страница «здоровья»). */
   ping(): Promise<void>;
   /** Создать корзину, если её нет (локально и в CI). */
@@ -90,6 +95,21 @@ export interface Storage {
 }
 
 /** Уложенная часть многочастной загрузки. */
+/** Объект хранилища в списке: ключ, размер и когда положен. */
+export interface StorageObject {
+  key: string;
+  size: number;
+  modifiedAt: Date;
+}
+
+export interface StorageListPage {
+  items: StorageObject[];
+  next: string | null;
+}
+
+/** Ключей на странице списка — как у S3 (ListObjectsV2). */
+export const STORAGE_LIST_PAGE = 1000;
+
 export interface StoragePart {
   partNumber: number;
   etag: string;
@@ -431,6 +451,24 @@ export function createS3Storage(config: StorageConfig): Storage {
       });
       return getSignedUrl(signer, command, { expiresIn: expiresInSeconds });
     },
+    async list(prefix, after) {
+      const out = await client.send(
+        new ListObjectsV2Command({
+          Bucket,
+          Prefix: prefix,
+          MaxKeys: STORAGE_LIST_PAGE,
+          ...(after ? { ContinuationToken: after } : {}),
+        }),
+      );
+      return {
+        items: (out.Contents ?? []).flatMap((o) =>
+          o.Key
+            ? [{ key: o.Key, size: o.Size ?? 0, modifiedAt: o.LastModified ?? new Date(0) }]
+            : [],
+        ),
+        next: out.IsTruncated && out.NextContinuationToken ? out.NextContinuationToken : null,
+      };
+    },
     async ping() {
       await client.send(new HeadBucketCommand({ Bucket }));
     },
@@ -465,6 +503,8 @@ export interface MemoryStorage extends Storage {
   readonly multiparts: ReadonlyMap<string, { key: string; parts: Map<number, Uint8Array> }>;
   /** Браузер положил часть по подписанной ссылке (в тестах). */
   putPart(uploadId: string, partNumber: number, body: Uint8Array): void;
+  /** Когда объект «положен» — для сверки хранилища в тестах (по умолчанию — момент `put`). */
+  setModified(key: string, at: Date): void;
 }
 
 /** Хранилище в памяти для тестов других пакетов. */
@@ -474,6 +514,7 @@ export function createMemoryStorage(): MemoryStorage {
     string,
     { key: string; contentType: string; parts: Map<number, Uint8Array> }
   >();
+  const modified = new Map<string, Date>();
   const encoder = new TextEncoder();
   let uploads = 0;
   const etag = (n: number, body: Uint8Array) => `"${n}-${body.length}"`;
@@ -485,14 +526,19 @@ export function createMemoryStorage(): MemoryStorage {
       if (!upload) throw new Error(`Нет загрузки ${uploadId}`);
       upload.parts.set(partNumber, body);
     },
+    setModified(key, at) {
+      modified.set(key, at);
+    },
     async put(key, body, { contentType }) {
       files.set(key, { body: typeof body === 'string' ? encoder.encode(body) : body, contentType });
+      modified.set(key, new Date());
     },
     async get(key) {
       return files.get(key)?.body ?? null;
     },
     async delete(key) {
       files.delete(key);
+      modified.delete(key);
     },
     async exists(key) {
       return files.has(key);
@@ -501,7 +547,22 @@ export function createMemoryStorage(): MemoryStorage {
       const file = files.get(fromKey);
       if (!file) return false;
       files.set(toKey, { body: file.body.slice(), contentType: file.contentType });
+      modified.set(toKey, new Date());
       return true;
+    },
+    async list(prefix, after) {
+      const keys = [...files.keys()]
+        .filter((k) => k.startsWith(prefix) && (!after || k > after))
+        .sort();
+      const page = keys.slice(0, STORAGE_LIST_PAGE);
+      return {
+        items: page.map((key) => ({
+          key,
+          size: files.get(key)!.body.length,
+          modifiedAt: modified.get(key) ?? new Date(0),
+        })),
+        next: keys.length > STORAGE_LIST_PAGE ? page[page.length - 1]! : null,
+      };
     },
     async signedDownloadUrl(key, { expiresInSeconds, fileName, inline }) {
       checkExpiry(expiresInSeconds);
@@ -570,6 +631,7 @@ export function createMemoryStorage(): MemoryStorage {
         at += b.length;
       }
       files.set(key, { body: out, contentType: upload.contentType });
+      modified.set(key, new Date());
       multiparts.delete(uploadId);
     },
     async abortMultipart(_key, uploadId) {

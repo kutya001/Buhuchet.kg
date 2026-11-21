@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { createRoute, type RouteHandler } from '@hono/zod-openapi';
 import {
-  contractorPageState,
   insertPendingSentFiles,
   isStorageRetryKey,
   keptSentFiles,
@@ -37,8 +36,10 @@ import {
 } from '@buhuchet/shared';
 import type { Context } from 'hono';
 import type { ApiDeps } from '../../deps';
+import { subscriptionToday } from '../../subscription-access';
 import type { AppEnv } from '../../env';
 import { apiFail } from '../../errors';
+import { pageAccess } from '../contractor-page/org-closed';
 import { clientIpHash, pageTokenHash } from '../contractor-page/public';
 import { bellContractor } from '../telegram/bell';
 import { error } from './files';
@@ -92,6 +93,7 @@ export const REFUSAL_STATUS: Record<SentFileRefusal['code'], 400 | 409 | 429> = 
   sent_reason_empty: 400,
   sent_reason_long: 400,
   sent_decided: 409,
+  sent_mem_full: 409,
 };
 
 /** Открытая страница этого браузера: организация и контрагент; иначе — «Страница недоступна». */
@@ -100,7 +102,8 @@ export async function openPage(deps: ApiDeps, c: Context<AppEnv>, slug: string, 
   if (!isPageAddress(slug, inn)) return unavailable();
   const grantHash = pageTokenHash(c, deps);
   if (!grantHash) return unavailable();
-  const state = await contractorPageState(deps.db, slug, inn, grantHash);
+  // Доступ организации закрыт по подписке — тоже «Страница недоступна» (п. К-24).
+  const state = await pageAccess(deps, slug, inn, grantHash);
   if (state.state !== 'open') return unavailable();
   return { orgId: state.orgId, contractorId: state.contractorId, grantHash };
 }
@@ -128,7 +131,11 @@ export const pageSentStartRoute = createRoute({
       description: 'Страница недоступна или не открыта в этом браузере (нет кода)',
       content: error,
     },
-    409: { description: 'Контрагенту сейчас нельзя отправлять файлы', content: error },
+    409: {
+      description:
+        'Контрагенту сейчас нельзя отправлять файлы или память организации заполнена (`sent_mem_full`)',
+      content: error,
+    },
     429: { description: 'Больше 20 файлов в сутки или слишком много отправок', content: error },
   },
 });
@@ -155,6 +162,7 @@ export function pageSentStartHandler(
       apiFail(429, 'file_upload_limit', FILE_MESSAGES.file_upload_limit);
     }
     const comment = sentFileNote(body.comment ?? '') || null;
+    const today = subscriptionToday(deps);
     const rows = files.map((f) => {
       const id = randomUUID();
       return {
@@ -170,7 +178,7 @@ export function pageSentStartHandler(
     });
     try {
       await withOrgContext(deps.db, { orgId: page.orgId, userId: null }, async (tx) => {
-        await sentLimitCheck(tx, page.contractorId, files);
+        await sentLimitCheck(tx, page.contractorId, files, today);
         await insertPendingSentFiles(tx, rows);
       });
     } catch (err) {

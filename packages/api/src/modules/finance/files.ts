@@ -1,6 +1,7 @@
 import {
   oneOffServiceFileSource,
   operationFileSource,
+  operationFilesPart,
   operationMonthClosed,
   serviceFilesPart,
 } from '@buhuchet/db';
@@ -17,9 +18,12 @@ import { canKeepServices, serviceReadScope, servicesVisible } from './services';
  * окно операции: «Учёт денег» или «Просматривать финансовые операции», контрагент в области группы
  * «Финансовые операции», «Учёт оплаты налогов» включён. Прикреплять и удалять — когда «Изменить» у
  * операции открыт (прототип: `filesBox(…, !v.del && !eL)`): не удалена, контрагент не в архиве, месяц не
- * закрыт, есть право этого вида операции. История — у операции. В «Файловом менеджере» их нет — как в
- * прототипе (allFiles: только поступления и оплаты налогов).
+ * закрыт, есть право этого вида операции. История — у операции. В «Файловом менеджере» и во вкладке
+ * «Файлы» карточки — с источником «Финансовая операция» тому же, кто видит окно операции (доработки
+ * 20.11.2026, пакет 2, блок 5, пункт 1; в прототипе их там нет — allFiles: только поступления и оплаты
+ * налогов); отменённой операции файлов в списке нет, как у поступлений.
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#К-25
 export const operationFiles: FileListSource = {
   async resolve(tx, subject, id) {
     if (id === null || (!hasPermission(subject, 'money') && !hasPermission(subject, 'finView')))
@@ -50,7 +54,10 @@ export const operationFiles: FileListSource = {
       history: () => ({ entity: 'money_operation', entityId: id, contractorId: contractor.id }),
     };
   },
-  list: () => null,
+  list: ({ subject, features, t }) =>
+    features.taxpay && (hasPermission(subject, 'money') || hasPermission(subject, 'finView'))
+      ? operationFilesPart(finScopeOf(subject), t)
+      : null,
 };
 
 /**

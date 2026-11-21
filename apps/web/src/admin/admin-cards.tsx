@@ -9,6 +9,7 @@ import { AccountCard } from './account-card';
 import { useLeadActions } from './lead-actions';
 import { useOrgActions } from './org-actions';
 import { OrgCard } from './org-card';
+import type { OrgCardTab } from './org-card-model';
 
 /**
  * Карточки Админки — пользователя и организации — и их действия (прототип v83,
@@ -22,7 +23,8 @@ export function useAdminCards(): {
   accountActions: (u: AdminUser) => ActionEntry[];
   orgActions: (o: AdminOrganization) => ActionEntry[];
   openAccount: (id: string, initial?: AdminUser | null) => void;
-  openOrg: (id: string, initial?: AdminOrganization | null) => void;
+  /** `tab` — вкладка, на которой открыть (Админка → «Файлы»: «Файлы» организации). */
+  openOrg: (id: string, initial?: AdminOrganization | null, tab?: OrgCardTab) => void;
   cards: ReactNode;
 } {
   const [account, setAccount] = useState<DialogSlot<{
@@ -32,13 +34,15 @@ export function useAdminCards(): {
   const [org, setOrg] = useState<DialogSlot<{
     id: string;
     initial: AdminOrganization | null;
+    tab?: OrgCardTab;
   }> | null>(null);
   const openAccount = useCallback(
     (id: string, initial: AdminUser | null = null) => setAccount(openSlot({ id, initial })),
     [],
   );
   const openOrg = useCallback(
-    (id: string, initial: AdminOrganization | null = null) => setOrg(openSlot({ id, initial })),
+    (id: string, initial: AdminOrganization | null = null, tab?: OrgCardTab) =>
+      setOrg(openSlot({ id, initial, ...(tab ? { tab } : {}) })),
     [],
   );
   const accounts = useAccountActions({ open: (u) => openAccount(u.id, u) });
@@ -52,6 +56,7 @@ export function useAdminCards(): {
           key={`org-card-${org.n}`}
           id={org.data.id}
           initial={org.data.initial}
+          {...(org.data.tab ? { tab: org.data.tab } : {})}
           open={org.open}
           onClose={() => setOrg(closeSlot)}
           actions={orgs.cardActions}
@@ -74,7 +79,7 @@ export function useAdminCards(): {
           open={account.open}
           onClose={() => setAccount(closeSlot)}
           actions={accounts.cardActions}
-          onOrg={openOrg}
+          onOrg={(orgId) => openOrg(orgId)}
         />
       ) : null}
       {accounts.dialogs}

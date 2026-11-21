@@ -23,9 +23,12 @@ export type CountKey =
   | 'kpi.missing.count'
   | 'files.count'
   | 'files.sent.count'
+  | 'afiles.count'
   | 'accounts.count'
   | 'orgs.count'
   | 'orgs.card.repm.count'
+  | 'subs.count'
+  | 'subs.kinds.count'
   | 'leads.count'
   | 'locale.count'
   | 'dicts.count'
@@ -53,7 +56,8 @@ export type CountKey =
   | 'tdocs.count'
   | 'runs.jobs.count'
   | 'runs.count'
-  | 'tgadm.count';
+  | 'tgadm.count'
+  | 'dm.tok.count';
 
 /** Тексты списка из словаря; число записей — в форме для числа (1 сотрудник, 2 сотрудника, 5 сотрудников). */
 export function gridLabels(t: Translate, count: CountKey): GridLabels {

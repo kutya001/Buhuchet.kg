@@ -34,6 +34,7 @@ import {
   telegramUpdate,
   TEST_ORIGIN,
   TEST_PASSWORD,
+  TEST_SUBSCRIPTION,
 } from '../../testing';
 import { retryStorageDeletes } from '../files/storage-retry';
 
@@ -1019,6 +1020,114 @@ describe.skipIf(!databaseAvailable())(
         expect((await failure(res)).code).toBe('page_unavailable');
       }
       expect(sentTo(CLIENT_1)).toHaveLength(1);
+    });
+
+    it('доступ организации закрыт по подписке (доработки 20.11.2026, блок 4, пункт 4; прототип v152): после кода — «Страница временно недоступна» без данных, без кода — ввод кода; «Забыли код?» отвечает как без Telegram; методы страницы — «Страница недоступна»; после оплаты страница снова открыта', async () => {
+      const subscription = (paidUntil: string) =>
+        f.t.admin.db
+          .insert(schema.orgSubscriptions)
+          .values({ orgId: f.a.orgId, planId: 'm1', seats: 1000, paidUntil })
+          .onConflictDoUpdate({ target: schema.orgSubscriptions.orgId, set: { paidUntil } });
+      const g = await grant(owner, cpA, INN_A, 'org-a');
+      const read = async (cookie?: string) =>
+        f.app.request(`/api/page/org-a/${INN_A}`, { headers: cookie ? { cookie } : {} });
+      // Файл раздела «Файлы» страницы: до закрытия открывается, после — «Страница недоступна».
+      const fileId = randomUUID();
+      await f.t.admin.db.insert(schema.files).values({
+        id: fileId,
+        orgId: f.a.orgId,
+        sourceKind: 'manual',
+        sourceId: null,
+        contractorId: cpA,
+        name: 'Договор.pdf',
+        contentType: 'application/pdf',
+        sizeBytes: 2048,
+        storageKey: `org/${f.a.orgId}/files/${fileId}`,
+        createdBy: f.people['acc-a']!.userId,
+        state: 'ready',
+      });
+      const pageFile = () =>
+        f.app.request(`/api/page/org-a/${INN_A}/files/${fileId}`, {
+          headers: { cookie: g.cookie },
+        });
+      try {
+        await subscription('2026-12-31');
+        expect((await publicPage('org-a', INN_A, g.cookie)).contractor.name).toBe(CP_A);
+        expect((await pageFile()).status).toBe(302);
+        // Ссылка «Подключить Telegram», полученная до закрытия.
+        const link = await pagePost(`/api/page/org-a/${INN_A}/telegram`, g.cookie);
+        expect(link.status, await link.clone().text()).toBe(200);
+        const token = new URL(PublicPageTelegramLink.parse(await link.json()).url).searchParams.get(
+          'start',
+        )!;
+        // «Оплачено до» прошло (сегодня 18.10.2026).
+        await subscription('2026-10-17');
+        // «Старт» по ней — «Доступ организации закрыт», запроса сотрудникам нет, ссылка не потрачена.
+        const NEWCHAT = 9377;
+        expect((await sendToBot(f.app, telegramUpdate(`/start ${token}`, NEWCHAT))).status).toBe(
+          200,
+        );
+        expect(sentTo(NEWCHAT).map((m) => m.text)).toEqual([UI_TEXTS['cppage.tg.org_closed'].ru]);
+        const asked = () =>
+          f.t.admin.db
+            .select({ id: schema.contractorTelegramLinks.id })
+            .from(schema.contractorTelegramLinks)
+            .where(eq(schema.contractorTelegramLinks.chatId, NEWCHAT));
+        expect(await asked()).toEqual([]);
+        const closed = await read(g.cookie);
+        const raw = await closed.text();
+        expect(PublicPage.parse(JSON.parse(raw))).toEqual({ state: 'org_closed' });
+        expect(raw).not.toContain('Ала-Тоо');
+        expect(raw).not.toContain('Организация А');
+        // Без запомненного кода — обычный ввод кода: по ссылке не видно, что подписка не оплачена.
+        expect(PublicPage.parse(await (await read()).json()).state).toBe('code');
+        // Код в Telegram не уходит, ответ — как без Telegram.
+        tg.sent.length = 0;
+        expect(await forgotOutcome('org-a', INN_A)).toEqual({
+          outcome: 'none',
+          limit: PAGE_CODE_TG_MAX,
+        });
+        expect(sentTo(CLIENT_1)).toEqual([]);
+        // Остальные методы страницы с запомненным кодом — «Страница недоступна».
+        const refused = [
+          await pagePost(`/api/page/org-a/${INN_A}/telegram`, g.cookie),
+          await pagePost(`/api/page/org-a/${INN_A}/tour`, g.cookie, { full: true, step: 1, of: 1 }),
+          await paidStart(g.cookie, { purpose: 'fee', month: null, amount: 100_000 }),
+          await pagePost(`/api/page/org-a/${INN_A}/sent`, g.cookie, {
+            files: [{ name: 'Акт.pdf', size: PDF.length }],
+          }),
+          await pageFile(),
+        ];
+        for (const res of refused) {
+          expect(res.status, await res.clone().text()).toBe(404);
+          expect((await failure(res)).code).toBe('page_unavailable');
+        }
+        // Открытие закрытой страницы в историю контрагента не пишется.
+        const opened = (await history(cpA, 'page_open')).length;
+        await read(g.cookie);
+        expect(await history(cpA, 'page_open')).toHaveLength(opened);
+        // «Нет подписки» закрывает страницу так же (общая сборка этапа 1, п. О-89).
+        await f.t.admin.db
+          .delete(schema.orgSubscriptions)
+          .where(eq(schema.orgSubscriptions.orgId, f.a.orgId));
+        expect(PublicPage.parse(await (await read(g.cookie)).json())).toEqual({
+          state: 'org_closed',
+        });
+        // Оплатили — страница снова открыта тем же браузером, ссылка работает.
+        await subscription('2026-12-31');
+        expect((await publicPage('org-a', INN_A, g.cookie)).contractor.name).toBe(CP_A);
+        await sendToBot(f.app, telegramUpdate(`/start ${token}`, NEWCHAT));
+        expect(sentTo(NEWCHAT).at(-1)!.text).toBe(tpl('tgCpAsk', { контрагент: CP_A }));
+        expect(await asked()).toHaveLength(1);
+        await f.t.admin.db
+          .delete(schema.contractorTelegramLinks)
+          .where(eq(schema.contractorTelegramLinks.chatId, NEWCHAT));
+      } finally {
+        await f.t.admin.db.delete(schema.files).where(eq(schema.files.id, fileId));
+        // Подписка тестовой организации — как была, и после падения между удалением и оплатой:
+        // «Нет подписки» тоже закрывает доступ (п. О-89).
+        await subscription(TEST_SUBSCRIPTION.paidUntil);
+      }
     });
 
     it('команда «Код от страницы»: по сообщению на каждую страницу чата — каждая в своей организации; чужой чат — «спросите у бухгалтера»; повтор доставки не отвечает', async () => {

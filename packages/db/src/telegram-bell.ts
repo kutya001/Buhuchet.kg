@@ -91,6 +91,11 @@ export interface BellSight {
   /** Карточка сотрудника — право «Просматривать сотрудников». */
   staff: boolean;
   /**
+   * Владелец организации: строки «Подписка» (напоминания об оплате, итог проверки чека, память) — только
+   * владельцам, как экран «Подписка» (доработки 20.11.2026; прототип `subTellOwners`).
+   */
+  owner: boolean;
+  /**
    * Модули вошедшего для новостей (доработки 16.11.2026, блок 4, пункт 3; `newsModulesOf` домена):
    * новость с модулями видна, если есть хотя бы один; null — администратор платформы, видны все.
    */
@@ -132,6 +137,9 @@ function seen(s: BellSight): SQL {
         where ${contractors.id}::text = b.target_id and ${s.files ?? sql`true`})
       when 'cp_fee' then ${s.cpFee}::boolean
       when 'employee' then ${s.staff}::boolean
+      when 'sub' then ${s.owner}::boolean
+      when 'sub_check' then app.is_platform_admin()
+      when 'storage_check' then app.is_platform_admin()
       else true end`;
 }
 

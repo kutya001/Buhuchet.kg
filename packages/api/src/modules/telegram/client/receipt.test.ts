@@ -9,6 +9,7 @@ import {
   CP_TG_RECEIPT_ACTION,
   fillTemplate,
   TELEGRAM_TEMPLATE_DEFAULTS,
+  UI_TEXTS,
 } from '@buhuchet/domain';
 import {
   ContractorPage,
@@ -18,7 +19,7 @@ import {
   SentFileList,
   SentFileListPage,
 } from '@buhuchet/shared';
-import { asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   apiRequest,
@@ -30,6 +31,7 @@ import {
   telegramUpdate,
   TEST_ORIGIN,
   TEST_PASSWORD,
+  TEST_SUBSCRIPTION,
 } from '../../../testing';
 import { addSentFiles } from '../../files/sent-add';
 
@@ -536,6 +538,74 @@ describe.skipIf(!databaseAvailable())(
       expect(await sentFiles(cpA)).toEqual([]);
     });
 
+    it('память организации заполнена: файл клиента не принимается и не скачивается — «Сейчас файл отправить нельзя» (доработки 20.11, блок 2, пункт 5)', async () => {
+      // Предел — 0 МБ: занято (0) не меньше предела.
+      const memory = (baseMb: number, seatMb: number) =>
+        f.t.admin.db.update(schema.subscriptionSettings).set({ baseMb, seatMb });
+      await memory(0, 0);
+      // Проверка памяти — до скачивания: Telegram файл не отдаёт (общая сборка этапа 1).
+      const load = tg.loadFile.bind(tg);
+      let loads = 0;
+      tg.loadFile = async (fileId, maxBytes) => {
+        loads += 1;
+        return load(fileId, maxBytes);
+      };
+      try {
+        await sendFile(CLIENT_2, { name: 'Акт.pdf' });
+        expect(lastText(CLIENT_2)).toBe(text('tgCpFileMem'));
+        expect(lastText(CLIENT_2)).toBe(
+          'Сейчас файл отправить нельзя. Сообщите вашему бухгалтеру.',
+        );
+      } finally {
+        tg.loadFile = load;
+        await memory(2000, 200);
+      }
+      expect(loads).toBe(0);
+      expect(await sentFiles(cpA)).toEqual([]);
+    });
+
+    it('память организации заполнена: чек ответом на «Прислать чек» и файл после «От какой компании?» тоже не скачиваются', async () => {
+      const memory = (baseMb: number, seatMb: number) =>
+        f.t.admin.db.update(schema.subscriptionSettings).set({ baseMb, seatMb });
+      await f.t.admin.db.delete(schema.contractorTelegramMessages);
+      await feeMessage();
+      await press(receiptData, CLIENT_2, lastMessageId(CLIENT_2));
+      const askId = lastMessageId(CLIENT_2);
+      // Вопрос «От какой компании?» задаётся до скачивания — память проверяется при выборе.
+      await sendFile(CLIENT_1, { name: 'Справка.pdf' });
+      const whichId = lastMessageId(CLIENT_1);
+      const [row] = await f.t.admin.db
+        .select({ id: schema.contractorTelegramMessages.id })
+        .from(schema.contractorTelegramMessages)
+        .where(
+          and(
+            eq(schema.contractorTelegramMessages.chatId, CLIENT_1),
+            eq(schema.contractorTelegramMessages.contractorId, cpA),
+            eq(schema.contractorTelegramMessages.kind, 'file'),
+          ),
+        );
+      await memory(0, 0);
+      const load = tg.loadFile.bind(tg);
+      let loads = 0;
+      tg.loadFile = async (fileId, maxBytes) => {
+        loads += 1;
+        return load(fileId, maxBytes);
+      };
+      try {
+        await sendFile(CLIENT_2, { replyTo: askId });
+        expect(lastText(CLIENT_2)).toBe(text('tgCpFileMem'));
+        expect(
+          await press(botPressData(CP_TG_FILE_TO_ACTION, row!.id), CLIENT_1, whichId),
+        ).toMatchObject({ text: text('tgCpFileMem'), alert: true });
+      } finally {
+        tg.loadFile = load;
+        await memory(2000, 200);
+      }
+      expect(loads).toBe(0);
+      expect(await sentFiles(cpA)).toEqual([]);
+      expect(await claims(cpA)).toEqual([]);
+    });
+
     it('файл без просьбы от клиента одного контрагента: в «Отправленные файлы» с подписью; тип, размер и 20 в сутки вместе со страницей', async () => {
       await sendFile(CLIENT_2, { name: 'setup.exe', body: EXE });
       expect(lastText(CLIENT_2)).toBe(text('tgCpFileNo', { мб: 20 }));
@@ -811,6 +881,93 @@ describe.skipIf(!databaseAvailable())(
       expect(limited).toMatchObject({ alert: true });
       expect(limited!.text).toContain('несколько раз за час');
       expect(tg.sent.length).toBe(count);
+    });
+
+    it('доступ организации закрыт по подписке (доработки 20.11.2026, блок 4, пункт 4): файл и чек клиента не принимаются — «Доступ организации закрыт»; контрагентов закрытой фирмы нет в «От какой компании?»; закрылся во время скачивания — файл не записан, просьба ждёт; после оплаты просьба «Пришлите чек» снова принимает чек', async () => {
+      const subscription = (paidUntil: string) =>
+        f.t.admin.db
+          .insert(schema.orgSubscriptions)
+          .values({ orgId: f.a.orgId, planId: 'm1', seats: 1000, paidUntil })
+          .onConflictDoUpdate({ target: schema.orgSubscriptions.orgId, set: { paidUntil } });
+      const closedText = UI_TEXTS['cppage.tg.org_closed'].ru;
+      try {
+        // До закрытия: просьба «Пришлите чек» и вопрос «От какой компании?» уже в чатах.
+        await feeMessage();
+        await press(receiptData, CLIENT_2, lastMessageId(CLIENT_2));
+        const askId = lastMessageId(CLIENT_2);
+        await sendFile(CLIENT_1, { name: 'Акт.pdf' });
+        expect(lastText(CLIENT_1)).toBe(text('tgCpFileWhich'));
+        const whichId = lastMessageId(CLIENT_1);
+        const rows = await f.t.admin.db
+          .select({
+            id: schema.contractorTelegramMessages.id,
+            contractorId: schema.contractorTelegramMessages.contractorId,
+          })
+          .from(schema.contractorTelegramMessages)
+          .where(
+            sql`${schema.contractorTelegramMessages.chatId} = ${CLIENT_1} and ${schema.contractorTelegramMessages.kind} = 'file'`,
+          );
+        const choose = (cp: string) =>
+          botPressData(CP_TG_FILE_TO_ACTION, rows.find((r) => r.contractorId === cp)!.id);
+
+        // «Оплачено до» прошло (сегодня 18.10.2026): доступ организации А закрыт.
+        await subscription('2026-10-17');
+        // Чек ответом на просьбу — не принят.
+        await sendFile(CLIENT_2, { name: 'Чек.pdf', replyTo: askId });
+        expect(lastText(CLIENT_2)).toBe(closedText);
+        // Второй файл, пока просьба открыта, — тоже не принят.
+        await sendFile(CLIENT_2, { name: 'Скан.pdf' });
+        expect(lastText(CLIENT_2)).toBe(closedText);
+        // Выбор в вопросе, заданном до закрытия, — «Доступ организации закрыт», файл никуда не ушёл.
+        expect(await press(choose(cpA), CLIENT_1, whichId)).toMatchObject({
+          text: closedText,
+          alert: true,
+        });
+        expect(await sentFiles(cpA)).toEqual([]);
+        expect(await claims(cpA)).toEqual([]);
+        // Чат двух фирм: у открытой фирмы Б одно подключение — файл уходит ей без вопроса.
+        await sendFile(CLIENT_1, { name: 'Справка.pdf' });
+        expect(lastText(CLIENT_1)).toBe(text('tgCpFileOk'));
+        expect((await sentFiles(cpB)).map((x) => x.name)).toEqual(['Справка.pdf']);
+        expect(await sentFiles(cpA)).toEqual([]);
+        expect(await sentFiles(cpA2)).toEqual([]);
+
+        // Оплатили, но доступ закрылся, пока файл скачивался: файл не записан, ответ — «Доступ организации
+        // закрыт», просьба «Пришлите чек» не закрывается.
+        await subscription('2026-12-31');
+        const load = tg.loadFile.bind(tg);
+        tg.loadFile = async (fileId, maxBytes) => {
+          await subscription('2026-10-17');
+          return load(fileId, maxBytes);
+        };
+        try {
+          await sendFile(CLIENT_2, { name: 'Скан.pdf' });
+        } finally {
+          tg.loadFile = load;
+        }
+        expect(lastText(CLIENT_2)).toBe(closedText);
+        expect(await sentFiles(cpA)).toEqual([]);
+        expect(await claims(cpA)).toEqual([]);
+
+        // Оплатили — просьба «Пришлите чек» ждала: файл становится чеком.
+        await subscription('2026-12-31');
+        await sendFile(CLIENT_2, { name: 'Скан.pdf' });
+        expect(lastText(CLIENT_2)).toBe(text('tgCpReceiptOk'));
+        expect((await sentFiles(cpA)).map((x) => x.name)).toEqual(['Скан.pdf']);
+        expect(await claims(cpA)).toHaveLength(1);
+
+        // Просьба закрыта: файл из чата одной фирмы — без просьбы, и тоже «Доступ организации закрыт».
+        await subscription('2026-10-17');
+        await sendFile(CLIENT_2, { name: 'Ещё скан.pdf' });
+        expect(lastText(CLIENT_2)).toBe(closedText);
+        expect((await sentFiles(cpA)).map((x) => x.name)).toEqual(['Скан.pdf']);
+      } finally {
+        // Подписка тестовой организации — как была: «Нет подписки» тоже закрывает доступ (п. О-89).
+        await f.t.admin.db
+          .update(schema.orgSubscriptions)
+          .set({ paidUntil: TEST_SUBSCRIPTION.paidUntil })
+          .where(eq(schema.orgSubscriptions.orgId, f.a.orgId));
+      }
     });
 
     it('файлов из одного чата — не больше 30 в час; после 20 за сутки — «лимит», после 30 — «слишком много»', async () => {

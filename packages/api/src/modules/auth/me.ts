@@ -3,6 +3,7 @@ import {
   currentOrganization,
   loadEmployeeAccess,
   orgMenuSettings,
+  orgUsage,
   phoneCodes,
   telegramChat,
   telegramPlainText,
@@ -24,6 +25,7 @@ import {
 import { ApiError, MeResponse } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
+import { subscriptionToday } from '../../subscription-access';
 
 interface MeUser {
   userId: string;
@@ -45,6 +47,7 @@ function meBody(
     payFirst: boolean;
   } | null,
   phone: string | null = null,
+  subscription: MeResponse['subscription'] = null,
 ): MeResponse {
   const features = settings?.features ?? null;
   return {
@@ -79,11 +82,19 @@ function meBody(
     features: features ?? {},
     reportConfirm: settings?.reportConfirm ?? false,
     payFirst: settings?.payFirst ?? false,
+    // Доступ закрыт по подписке: так входит только владелец, и ему — только «Моя организация» с
+    // «Подпиской» (доработки 20.11.2026, блок 4, пункты 4–5; прототип subLockMods).
     modules: user.isPlatformAdmin
       ? [...ADMIN_MENU_MODULES]
-      : access && features
-        ? menuModules(access.subject, features)
-        : [],
+      : access && subscription?.closed
+        ? ['org']
+        : access && features
+          ? menuModules(access.subject, features)
+          : [],
+    // Статус и срок подписки — только владельцу: подписку видит и оплачивает он (блок 5, пункт 1);
+    // остальным — лишь «доступ закрыт» (`subClosed`).
+    subscription: access?.subject.isOwner ? subscription : null,
+    subClosed: subscription?.closed ?? false,
   };
 }
 
@@ -104,7 +115,8 @@ export async function loadMe(
   const previous = telegram ? null : await telegramPreviousChat(deps.db, user.userId);
   if (!user.orgId) return meBody(user, null, null, telegram, previous, null);
   const orgId = user.orgId;
-  const { access, organization, settings, phone } = await withOrgContext(
+  const today = subscriptionToday(deps);
+  const { access, organization, settings, phone, usage } = await withOrgContext(
     deps.db,
     { orgId, userId: user.userId },
     async (tx) => {
@@ -116,10 +128,17 @@ export async function loadMe(
         settings: await orgMenuSettings(tx, orgId),
         // Телефон в «Мой профиль» — по маске страны из справочника «Коды телефонов».
         phone: access?.phone ? formatPhone(access.phone, await phoneCodes(tx)) : null,
+        // Подписка: полоса «Продлите подписку» и «Доступ закрыт» (блок 4); память не считается.
+        usage: await orgUsage(tx, today, { bytes: false }),
       };
     },
   );
-  return meBody(user, access, organization, telegram, previous, settings, phone);
+  const subscription = usage && {
+    status: usage.status,
+    paidUntil: usage.paidUntil,
+    closed: usage.closed,
+  };
+  return meBody(user, access, organization, telegram, previous, settings, phone, subscription);
 }
 
 export const meRoute = createRoute({
@@ -134,7 +153,8 @@ export const meRoute = createRoute({
     },
     401: { description: 'Нет входа', content: { 'application/json': { schema: ApiError } } },
     403: {
-      description: 'Учётная запись или организация заблокирована',
+      description:
+        'Учётная запись или организация заблокирована, или доступ организации закрыт по подписке (`sub_closed`: сеанс сотрудника закрыт)',
       content: { 'application/json': { schema: ApiError } },
     },
   },

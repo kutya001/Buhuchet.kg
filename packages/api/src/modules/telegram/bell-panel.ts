@@ -31,6 +31,7 @@ import { asSessionUser } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
 import { reportScopeOf } from '../reports/common';
 import { cpScopeOf, taskAccessOf } from '../tasks/common';
+import { bellSyncPlatform, subNoticeContext } from './subs';
 
 /*
  * Панель колокольчика — чтение (доработки 16.11.2026, блок 3; поток Т; экран — поток И): строки
@@ -67,6 +68,7 @@ async function sightOf(c: Context<AppEnv>, tx: Tx): Promise<BellSight> {
       files: undefined,
       cpFee: false,
       staff: false,
+      owner: false,
       // Режим Админка: администратору платформы видны новости всех модулей.
       news: c.get('session')?.isPlatformAdmin ? null : [],
     };
@@ -85,16 +87,39 @@ async function sightOf(c: Context<AppEnv>, tx: Tx): Promise<BellSight> {
     files: contractorScope(scopeOf(s, 'files') === 'own' ? s.employeeId : null),
     cpFee: features.fee && hasPermission(s, 'fee'),
     staff: hasPermission(s, 'staffView'),
+    owner: s.isOwner,
     // Модули новостей — как у ленты «Новостей» (доработки 16.11.2026, блок 4, пункт 3).
     news: newsModulesOf(s, features),
   };
 }
 
-/** Новости вошедшего и — администратору платформы — новые заявки: до чтения строк. */
-async function syncReadTime(deps: ApiDeps, c: Context<AppEnv>, tx: Tx, lead: string, s: BellSight) {
+/**
+ * Тексты строк, которые кладёт чтение: заявка и — администратору платформы — чеки подписок и сверка
+ * хранилища (`bellSyncPlatform`). До транзакции.
+ */
+async function readTimeTexts(deps: ApiDeps, c: Context<AppEnv>) {
+  const t = await serverTexts(deps);
+  const platform = c.get('session')?.isPlatformAdmin
+    ? await subNoticeContext(deps, deps.config.APP_BASE_URL)
+    : null;
+  return { lead: t('bell.line.lead'), platform };
+}
+
+/** Новости вошедшего и — администратору платформы — новые заявки, чеки и сверка: до чтения строк. */
+async function syncReadTime(
+  deps: ApiDeps,
+  c: Context<AppEnv>,
+  tx: Tx,
+  texts: Awaited<ReturnType<typeof readTimeTexts>>,
+  s: BellSight,
+) {
   const now = deps.clock.now();
   await bellSyncNews(tx, now, s.news);
-  if (c.get('session')?.isPlatformAdmin) await bellSyncLeads(tx, lead, now);
+  const session = c.get('session');
+  if (session?.isPlatformAdmin) {
+    await bellSyncLeads(tx, texts.lead, now);
+    if (texts.platform) await bellSyncPlatform(tx, texts.platform, session.userId);
+  }
 }
 
 export const bellPageRoute = createRoute({
@@ -118,10 +143,10 @@ export const bellPageRoute = createRoute({
 export function bellPageHandler(deps: ApiDeps): RouteHandler<typeof bellPageRoute, AppEnv> {
   return async (c) => {
     const q = c.req.valid('query');
-    const t = await serverTexts(deps);
+    const texts = await readTimeTexts(deps, c);
     const page = await asSessionUser(deps, c.get('session')!, async (tx) => {
       const s = await sightOf(c, tx);
-      await syncReadTime(deps, c, tx, t('bell.line.lead'), s);
+      await syncReadTime(deps, c, tx, texts, s);
       return bellPage(tx, s, { tab: q.tab, before: q.before ?? null });
     });
     return c.json(
@@ -163,10 +188,10 @@ export const bellCountRoute = createRoute({
 
 export function bellCountHandler(deps: ApiDeps): RouteHandler<typeof bellCountRoute, AppEnv> {
   return async (c) => {
-    const t = await serverTexts(deps);
+    const texts = await readTimeTexts(deps, c);
     const counts = await asSessionUser(deps, c.get('session')!, async (tx) => {
       const s = await sightOf(c, tx);
-      await syncReadTime(deps, c, tx, t('bell.line.lead'), s);
+      await syncReadTime(deps, c, tx, texts, s);
       return bellUnseenCounts(tx, s);
     });
     return c.json(counts, 200);

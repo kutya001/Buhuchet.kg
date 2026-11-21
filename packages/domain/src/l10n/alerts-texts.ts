@@ -46,6 +46,10 @@ export const ALERTS_TEXTS = {
     ru: '⚠️ Хранилище: больше суток не удаётся удалить файлы с публичных загрузок (заявки с лендинга, файлы от контрагентов) — задача повторяет каждый час. Таких файлов: {n}.\nПроверьте доступ к хранилищу S3 и журнал сайта.',
     section: S,
   },
+  'alert.file_trash_erase': {
+    ru: '⚠️ Хранилище: больше суток не удаётся стереть удалённые файлы — задача «Файлы: стирание удалённых» повторяет каждый час. Таких файлов: {n}.\nПроверьте доступ к хранилищу S3; список — Админка → «Файлы» → «Проверка хранилища».',
+    section: S,
+  },
   'alert.job.system_cleanup_scheduler_runs': { ru: 'Очистка журналов', section: S },
   'alert.job.auth_cleanup_login_attempts': { ru: 'Очистка счёта неверных паролей', section: S },
   'alert.job.auth_watch_login_locks': { ru: 'Слежение за блокировками входа', section: S },
@@ -80,6 +84,11 @@ export const ALERTS_TEXTS = {
     ru: 'Удаление непринятых файлов от контрагентов через 30 дней',
     section: S,
   },
+  'alert.job.files_erase_deleted': { ru: 'Файлы: стирание удалённых', section: S },
+  // Сверка хранилища и подписки (доработки 20.11.2026, поток Т, этап 1, П13; прототип schedJobs).
+  'alert.job.files_storage_reconcile': { ru: 'Файлы: сверка хранилища', section: S },
+  'alert.job.subs_reminders': { ru: 'Подписки: напоминания об оплате', section: S },
+  'alert.job.subs_memory_checks': { ru: 'Подписки: память и чеки на проверке', section: S },
   'alert.job.kb_cleanup_video_uploads': {
     ru: 'Очистка брошенных загрузок видео',
     section: S,

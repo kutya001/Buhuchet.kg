@@ -773,6 +773,30 @@ export const CONTRACTORS_TEXTS = {
     ru: 'Контрагент в архиве — сначала верните его из архива',
     section: E,
   },
+  // Места в пакете (доработки 20.11.2026, блок 3, пункт 1; прототип v152 seatMsg, seatDlg)
+  'err.no_seats': {
+    ru: 'В пакете нет свободных мест: занято {used} из {limit}. Расширьте пакет или переведите контрагента в архив',
+    section: E,
+  },
+  'cp.seat.title': { ru: 'В пакете нет свободных мест', section: S },
+  'cp.seat.ask_owner': {
+    ru: 'Обратитесь к владельцу организации: пакет расширяет он.',
+    section: S,
+  },
+  'cp.seat.grow': { ru: 'Расширить пакет', section: S },
+  'cp.seat.ok': { ru: 'Понятно', section: S },
+  'cp.seat.import': {
+    ru: 'Свободных мест в пакете: {free}, новых контрагентов в файле: {n}.',
+    section: S,
+  },
+  'cp.seat.import_over_owner': {
+    ru: 'Загрузить можно, когда мест хватит на всех: расширьте пакет или переведите контрагентов в архив.',
+    section: S,
+  },
+  'cp.seat.import_over': {
+    ru: 'Загрузить можно, когда мест хватит на всех: обратитесь к владельцу организации.',
+    section: S,
+  },
   'err.transfer_same': { ru: 'Выберите другого сотрудника', section: E },
   'err.employee_not_found': { ru: 'Сотрудник не найден', section: E },
   'err.socfund_reason_required': { ru: 'Укажите, почему тариф выбран вручную', section: E },

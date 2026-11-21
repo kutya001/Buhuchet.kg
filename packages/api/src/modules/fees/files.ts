@@ -1,4 +1,4 @@
-import { feePaymentFileSource } from '@buhuchet/db';
+import { feePaymentFileSource, feePaymentFilesPart } from '@buhuchet/db';
 import { canSeeContractor, hasPermission } from '@buhuchet/domain';
 import type { FileListSource } from '../files/sources';
 import { scopeSqlOf } from '../contractors/common';
@@ -8,10 +8,12 @@ import { scopeSqlOf } from '../contractors/common';
  * квитанция): видны при включённой «Плате за обслуживание» с правом «Видеть плату за обслуживание» по
  * контрагентам области группы «Контрагенты» (ТЗ «Файловый менеджер»: файлы по плате — только с этим
  * правом); прикреплять и удалять — с правом «Менять журнал тарифов», пока контрагент не в архиве.
- * История — у оплаты. В «Файловом менеджере» и во вкладке «Файлы» их нет — как в прототипе (allFiles
- * без FEEPAYS): они открываются из оплаты.
+ * История — у оплаты. В «Файловом менеджере» и во вкладке «Файлы» карточки — с источником «Оплата за
+ * обслуживание» тому же, кто видит плату (доработки 20.11.2026, пакет 2, блок 5, пункт 1; в прототипе их
+ * там нет — allFiles без FEEPAYS).
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#В-18
+// ОТКЛОНЕНИЕ: docs/deviations.md#К-25
 export const feePaymentFiles: FileListSource = {
   async resolve(tx, subject, id) {
     if (id === null || !hasPermission(subject, 'fee')) return null;
@@ -27,5 +29,8 @@ export const feePaymentFiles: FileListSource = {
       history: () => ({ entity: 'fee_payment', entityId: id, contractorId: contractor.id }),
     };
   },
-  list: () => null,
+  list: ({ subject, features, t }) =>
+    features.fee && hasPermission(subject, 'fee')
+      ? feePaymentFilesPart(scopeSqlOf(subject), t)
+      : null,
 };

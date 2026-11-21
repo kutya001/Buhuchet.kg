@@ -87,6 +87,7 @@ const ALL: BellSight = {
   files: undefined,
   cpFee: true,
   staff: true,
+  owner: true,
   news: null,
 };
 
@@ -511,6 +512,43 @@ describe.skipIf(!databaseAvailable())('Колокольчик: строки, п�
         .delete(platformLeads)
         .where(sql`${platformLeads.id} in ${own.map((x) => x.id)}`);
     }
+  });
+
+  it('подписка: строку «sub» видит только владелец по правам сейчас; «sub_check» и «storage_check» — только администратор платформы', async () => {
+    await clear();
+    const sub = row(acc.userId, {
+      kind: 'other',
+      event: 'sub',
+      targetKind: 'sub',
+      targetId: a.orgId,
+      contractorId: null,
+      text: 'Подписка истекает',
+      eventKey: `sub_remind:${randomUUID()}`,
+    });
+    const check = row(acc.userId, {
+      kind: 'other',
+      event: 'sub_check',
+      targetKind: 'sub_check',
+      targetId: a.orgId,
+      contractorId: null,
+      text: 'Новый чек',
+      eventKey: `sub_check:${randomUUID()}`,
+    });
+    const store = row(acc.userId, {
+      kind: 'other',
+      event: 'storage_check',
+      targetKind: 'storage_check',
+      targetId: randomUUID(),
+      contractorId: null,
+      text: 'Сверка хранилища',
+      eventKey: `storage_check:${randomUUID()}`,
+    });
+    expect(await inA(null, (tx) => insertBellRows(tx, [sub, check, store], NOW))).toBe(3);
+    // Владелец (owner) видит строку о подписке; его понизили — строка пропадает, вернули — снова видна.
+    expect(await keys(acc.userId, ALL)).toEqual([sub.eventKey]);
+    expect(await keys(acc.userId, { ...ALL, owner: false })).toEqual([]);
+    const counts = await inA(acc.userId, (tx) => bellUnseenCounts(tx, { ...ALL, owner: false }));
+    expect(counts.unseen).toBe(0);
   });
 
   it('новости и заявки старше срока хранения не кладутся: убранная уборкой строка не возвращается', async () => {

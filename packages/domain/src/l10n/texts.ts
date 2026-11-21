@@ -15,12 +15,14 @@ import { CONTRACTOR_SERVICE_TEXTS } from './contractor-service-texts';
 import { CONTRACTOR_PAGE_TEXTS } from './contractor-page-texts';
 import { CONTRACTOR_PAGE_HELP_TEXTS } from './contractor-page-help-texts';
 import { CONTRACTORS_TEXTS } from './contractors-texts';
+import { DATAMART_TEXTS } from './datamart-texts';
 import { DICTS_TEXTS } from './dicts-texts';
 import { FEE_TEXTS } from './fees-texts';
 import { FINANCE_TEXTS } from './finance-texts';
 import { FILES_TEXTS } from './files-texts';
 import { GRID_TEXTS } from './grid-texts';
 import { HOME_TEXTS } from './home-texts';
+import { ADMIN_FILES_TEXTS } from './admin-files-texts';
 import { KB_ADMIN_TEXTS } from './kb-admin-texts';
 import { KB_TEXTS } from './kb-texts';
 import { KB_VIDEO_TEXTS } from './kb-video-texts';
@@ -31,6 +33,7 @@ import { MONEY_TEXTS, TAX_MONEY_TEXTS } from './money-texts';
 import { NEWS_TEXTS } from './news-texts';
 import { ONBOARDING_TEXTS } from './onboarding-texts';
 import { ORG_TEXTS } from './org-texts';
+import { SUBSCRIPTION_TEXTS } from './subscription-texts';
 import { PLATFORM_DICTS_TEXTS } from './platform-dicts-texts';
 import { PROJECTS_TEXTS } from './projects-texts';
 import { REPORT_MONTHS_TEXTS } from './report-months-texts';
@@ -39,6 +42,7 @@ import { SHELL_TEXTS } from './shell-texts';
 import { STAFF_BONUS_TEXTS } from './staff-bonus-texts';
 import { STAFF_TEXTS } from './staff-texts';
 import { STATUS_TEXTS } from './status-texts';
+import { SUBSCRIPTIONS_TEXTS } from './subscriptions-texts';
 import { TASKS_TEXTS } from './tasks-texts';
 import { TELEGRAM_TEXTS } from './telegram-texts';
 import { BELL_TEXTS } from './bell-texts';
@@ -112,6 +116,8 @@ export const UI_TEXTS = {
   ...STAFF_TEXTS,
   ...STATUS_TEXTS,
   ...ORG_TEXTS,
+  ...SUBSCRIPTION_TEXTS,
+  ...SUBSCRIPTIONS_TEXTS,
   ...ONBOARDING_TEXTS,
   ...HOME_TEXTS,
   ...CONTRACTORS_TEXTS,
@@ -130,6 +136,7 @@ export const UI_TEXTS = {
   ...ADMIN_TECHDOCS_TEXTS,
   ...ADMIN_L10N_TEXTS,
   ...ADMIN_TEXTS,
+  ...ADMIN_FILES_TEXTS,
   ...LEADS_TEXTS,
   ...DICTS_TEXTS,
   ...MONEY_TEXTS,
@@ -140,6 +147,7 @@ export const UI_TEXTS = {
   ...PROJECTS_TEXTS,
   ...KPI_TEXTS,
   ...FILES_TEXTS,
+  ...DATAMART_TEXTS,
   ...KB_TEXTS,
   ...KB_VIDEO_TEXTS,
   ...NEWS_TEXTS,

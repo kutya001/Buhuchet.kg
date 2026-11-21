@@ -542,7 +542,11 @@ function linkedSourcesText(parts: FileListParts, t: ListTexts): SQL {
         ]
       : [],
   );
-  const fee = sql`when 'fee_payment' then (select replace(${dictLiteral(t('files.link.nm.fee_payment'))}::text, '{date}', to_char(${feePayments.paidOn}, 'DD.MM.YYYY')) from ${feePayments} where ${feePayments.id} = ${files.sourceId} and ${feePayments.deletedAt} is null)`;
+  // Вид «Оплата за обслуживание» есть в частях (сотрудник видит плату, доработки 20.11.2026, пакет 2,
+  // блок 5, пункт 1) — подпись и видимость из части; нет — файл с такой ссылкой и так скрыт.
+  const fee = parts.fee_payment
+    ? sql``
+    : sql`when 'fee_payment' then (select replace(${dictLiteral(t('files.link.nm.fee_payment'))}::text, '{date}', to_char(${feePayments.paidOn}, 'DD.MM.YYYY')) from ${feePayments} where ${feePayments.id} = ${files.sourceId} and ${feePayments.deletedAt} is null)`;
   return sql`(select string_agg(lt.label, ' · ' order by lt.created_at, lt.label) from (select ${fileLinks.sourceKind} as kind, ${fileLinks.sourceId} as source_id, ${fileLinks.createdAt} as created_at from ${fileLinks} where ${fileLinks.fileId} = ${files.id}) lk cross join lateral (select lk.source_id) as "files"(source_id) cross join lateral (select lk.created_at, (case lk.kind ${sql.join(cases, sql` `)} ${fee} end) as label) lt where lt.label is not null)`;
 }
 

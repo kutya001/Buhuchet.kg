@@ -87,6 +87,7 @@ import {
 } from '@buhuchet/domain';
 import { z } from '@hono/zod-openapi';
 import type { ApiDeps, Job, JobContext } from '../../../deps';
+import { orgAccessClosed, orgClosedNow } from '../../contractor-page/org-closed';
 import { serverTexts } from '../../l10n/texts';
 import { monthPayRows } from '../../reports/month-pay-rows';
 import { bellContractor } from '../bell';
@@ -499,6 +500,13 @@ export async function clientPress(deps: ApiDeps, press: BotPress): Promise<boole
     await refuse('tgCpNotLinked');
     return true;
   }
+  // Доступ организации закрыт по подписке: кнопки старых сообщений отвечают «Доступ организации
+  // закрыт» и ничего не делают (доработки 20.11.2026, блок 4, пункт 4; п. К-24) — только своему
+  // подключению: бывшему клиенту — как прежде «не подключён».
+  if (await orgClosedNow(deps, target.orgId)) {
+    await answer((await serverTexts(deps))('cppage.tg.org_closed'), true);
+    return true;
+  }
   // Каждое «Показать реквизиты» присылает новые сообщения: не больше стольких в час с подключения.
   if (action === CP_TG_REQ_ACTION) {
     const limit = await takeRateLimit(deps.db, CP_TG_REQ_RATE_LIMIT, target.linkId);
@@ -820,6 +828,11 @@ export async function clientQuestion(deps: ApiDeps, raw: unknown): Promise<boole
     await send(await templateText(deps.db, 'tgCpNotLinked'));
     return true;
   }
+  // Доступ организации закрыт по подписке: вопрос сотрудникам не уходит (п. К-24).
+  if (await orgClosedNow(deps, target.orgId)) {
+    await send((await serverTexts(deps))('cppage.tg.org_closed'));
+    return true;
+  }
   const limit = await takeRateLimit(deps.db, CP_TG_ASK_RATE_LIMIT, target.linkId);
   if (!limit.ok) {
     await send((await serverTexts(deps))('cppage.tg.ask_limit'));
@@ -968,6 +981,9 @@ async function prepareAutoPay(
   // прошлого дня).
   const today = cpNoticeDay(settings.payAt, slot);
   if (!today) return null;
+  // Доступ организации закрыт по подписке: клиентам бот сам не пишет, пропущенное после оплаты задним
+  // числом не уходит (доработки 20.11.2026, блок 4, пункт 4; п. К-24).
+  if (await orgAccessClosed(tx, today)) return null;
   const out: AutoPayPlan = { batches: [], staff: [] };
   const { features } = await orgMenuSettings(tx, orgId);
   const taxpay = features.taxpay;

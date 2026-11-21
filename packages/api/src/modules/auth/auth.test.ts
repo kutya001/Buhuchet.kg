@@ -598,7 +598,19 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
       scopes: {},
       reportConfirm: false,
       // Меню Админки — все её модули по порядку (прототип core/registry.js, ADM).
-      modules: ['accounts', 'orgs', 'pdicts', 'l10n', 'kb', 'kbadm', 'tdocs', 'runs', 'tg'],
+      modules: [
+        'accounts',
+        'orgs',
+        'afiles',
+        'dm',
+        'pdicts',
+        'l10n',
+        'kb',
+        'kbadm',
+        'tdocs',
+        'runs',
+        'tg',
+      ],
     });
     const cookie = cookieOf(res);
     expect((await get(app, '/api/auth/me', cookie)).status).toBe(200);

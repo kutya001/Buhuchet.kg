@@ -222,7 +222,9 @@ export function FilesManager({ upload }: { upload: { start: () => void; dialog: 
   /**
    * «Перейти к источнику» (прототип `f.open`): карточка отчёта или задачи, окно значения показателя,
    * у файла контрагента (из свидетельства и выписки) — вкладка «Файлы» его карточки, у файла разовой
-   * услуги и её оплаты — карточка услуги (прототип `serviceCard`), у файла проекта — карточка проекта.
+   * услуги и её оплаты — карточка услуги (прототип `serviceCard`), у файла проекта — карточка проекта,
+   * у файла оплаты за обслуживание и финансовой операции — окно оплаты и окно операции (доработки
+   * 20.11.2026, пакет 2, блок 5, пункт 1).
    */
   const sourceOf = (file: FileManagerRow): (() => void) | null => {
     // Файл контрагента (из документов и принятый от него, блок 2) — вкладка «Файлы» его карточки.
@@ -257,6 +259,10 @@ export function FilesManager({ upload }: { upload: { start: () => void; dialog: 
     if (file.kind === 'one_off_service' && file.sourceRef) {
       const id = file.sourceRef;
       return () => setService(openSlot(id));
+    }
+    if ((file.kind === 'fee_payment' || file.kind === 'money_operation') && file.sourceId) {
+      const link = { kind: file.kind, id: file.sourceId };
+      return () => links.open(link);
     }
     return null;
   };

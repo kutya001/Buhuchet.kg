@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { ownerPassword, platformAdmin, search, uniqueInn } from './admin';
+import { E2E_SUBSCRIPTION, ownerPassword, platformAdmin, search, uniqueInn } from './admin';
 import { cardTab, signIn, uniqueLogin } from './helpers';
 
 // «ИНН и форма» организации (доработки 14.11.2026, блок 1, пункт 4; прототип v114 ldInnFormDlg):
@@ -36,6 +36,7 @@ test.describe('Доработки 14.11.2026, блок 1: «ИНН и форма
         ownerFullName: 'Иннова Сквозная',
         ownerLogin: owner,
         temporaryPassword: temporary,
+        subscription: E2E_SUBSCRIPTION,
       },
     });
     expect(created.status(), await created.text()).toBe(201);

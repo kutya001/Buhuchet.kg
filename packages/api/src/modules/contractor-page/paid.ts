@@ -206,7 +206,11 @@ export const pagePaidStartRoute = createRoute({
       description: 'Страница недоступна, не открыта в этом браузере или «Как оплатить» не показан',
       content: error,
     },
-    409: { description: 'Контрагенту сейчас нельзя отправлять файлы', content: error },
+    409: {
+      description:
+        'Контрагенту сейчас нельзя отправлять файлы или память организации заполнена (`sent_mem_full`)',
+      content: error,
+    },
     429: { description: 'Больше 20 файлов в сутки или слишком много отправок', content: error },
   },
 });
@@ -249,7 +253,7 @@ export function pagePaidStartHandler(
       await withOrgContext(deps.db, { orgId: page.orgId, userId: null }, async (tx) => {
         const ctx = await paidContext(tx, { ...page, today, t });
         checkPaid(ctx, { ...body, file });
-        await sentLimitCheck(tx, page.contractorId, [file]);
+        await sentLimitCheck(tx, page.contractorId, [file], today);
         await insertPendingSentFiles(tx, [row]);
       });
     } catch (err) {
@@ -550,6 +554,9 @@ export function pageForgotHandler(deps: ApiDeps): RouteHandler<typeof pageForgot
     if (!target) return unavailable();
     const r = await sendPageCode(deps, { ...target, via: 'page' });
     if (r.outcome === 'unavailable') return unavailable();
-    return c.json({ outcome: r.outcome, limit: PAGE_CODE_TG_MAX }, 200);
+    // Доступ организации закрыт по подписке: ответ тот же, что без Telegram, — по ответу не видно, что
+    // подписка фирмы не оплачена (прототип v152 `pubForgot`, п. К-24).
+    const outcome = r.outcome === 'org_closed' ? 'none' : r.outcome;
+    return c.json({ outcome, limit: PAGE_CODE_TG_MAX }, 200);
   };
 }

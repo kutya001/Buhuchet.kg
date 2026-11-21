@@ -6,10 +6,12 @@ import { ContractorsList } from '../contractors/contractors-list';
 import { L10nList } from '../admin/l10n-list';
 import { LeadsList } from '../admin/leads-list';
 import { OrgsActivity } from '../admin/orgs-activity';
+import { OrgsSubsTab } from '../admin/subs-tab';
 import { OrgsList } from '../admin/orgs-list';
 import { TechDocsScreen } from '../admin/techdocs-screen';
 import { PlatformDicts } from '../dicts/platform-tab';
 import { ReportTypesList } from '../dicts/report-types-list';
+import { DmScreen } from '../dm/dm-screen';
 import { FilesScreen } from '../files/files-manager';
 import { StaffBonusTab } from '../finance/staff-bonuses';
 import { FinanceScreen } from '../finance/finance-screen';
@@ -34,6 +36,7 @@ import { KbNewsTab } from '../news/news-tab';
 import { OrgMain } from '../org/org-main';
 import { OrgPolicyTab } from '../org/org-policy';
 import { OrgSettingsTab } from '../org/org-settings';
+import { OrgSubTab } from '../org/sub-screen';
 import { PlatformDictsAdmin } from '../platform-dicts/pdicts-screen';
 import { ProjectsList, type ProjectTab } from '../projects/projects-list';
 import { ReportCalendarTab } from '../reports/report-calendar';
@@ -46,6 +49,7 @@ import { ModuleStub } from '../shell/module-stub';
 import { StaffList } from '../staff/staff-list';
 import { TasksList, type TaskTab } from '../tasks/tasks-list';
 import { RunsScreen } from '../runs/runs-screen';
+import { AdminFilesScreen } from '../afiles/afiles-screen';
 import { TgAdmScreen } from '../tgadm/tgadm-screen';
 
 /**
@@ -89,6 +93,7 @@ export function ModuleScreen({
     const tab = tabId ?? 'main';
     if (tab === 'policy') return <OrgPolicyTab />;
     if (tab === 'settings') return <OrgSettingsTab />;
+    if (tab === 'sub') return <OrgSubTab />;
     return <OrgMain />;
   }
   if (moduleId === 'reports') {
@@ -140,8 +145,12 @@ export function ModuleScreen({
   if (moduleId === 'accounts') return <AccountsList />;
   if (moduleId === 'orgs') {
     if (tabId === 'act') return <OrgsActivity />;
+    if (tabId === 'subs') return <OrgsSubsTab />;
     return tabId === 'leads' ? <LeadsList /> : <OrgsList />;
   }
+  if (moduleId === 'afiles') return <AdminFilesScreen tab={tabId ?? 'store'} />;
+  // Админка → «Витрина данных»: на этапе 1 — только «API Токены» (поток Т, П14).
+  if (moduleId === 'dm') return <DmScreen tab={tabId ?? 'tok'} admin />;
   if (moduleId === 'pdicts') return <PlatformDictsAdmin tabId={tabId ?? 'types'} />;
   if (moduleId === 'l10n') return <L10nList />;
   if (moduleId === 'tdocs') return <TechDocsScreen tab={tabId ?? 'db'} />;
@@ -198,6 +207,7 @@ const SCREENS_WITH_PLATES: ReadonlySet<string> = new Set<string>([
   'orgs/',
   'orgs/list',
   'orgs/act',
+  'orgs/subs',
   'l10n/',
   'runs/',
   'runs/jobs',

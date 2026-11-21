@@ -31,13 +31,16 @@ type MoneyWindow = { fee: boolean; id: string };
  * есть «Карточка услуги» и «Карточка проекта»). Общее для «Файлового менеджера» (меню «Перейти к
  * источнику: …», «Источник» окна файла) и вкладки «Файлы» контрагента; `dialogs` — в разметку экрана.
  */
-export function useFileLinkOpen(): { open: (link: FileLinkInfo) => void; dialogs: ReactNode } {
+export function useFileLinkOpen(): {
+  open: (link: Pick<FileLinkInfo, 'kind' | 'id'>) => void;
+  dialogs: ReactNode;
+} {
   const reports = useReportActions();
   const [money, setMoney] = useState<DialogSlot<MoneyWindow> | null>(null);
   const [service, setService] = useState<DialogSlot<ServiceAction> | null>(null);
   const [payment, setPayment] = useState<DialogSlot<ProjectPaymentAction> | null>(null);
 
-  const open = (link: FileLinkInfo) => {
+  const open = (link: Pick<FileLinkInfo, 'kind' | 'id'>) => {
     switch (link.kind) {
       case 'report':
         return reports.openCard({ id: link.id });

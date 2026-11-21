@@ -7,6 +7,7 @@ import {
   logContractorTelegramPay,
 } from '@buhuchet/db';
 import {
+  bishkekDate,
   CP_TG_ANSWER_ACTION,
   CP_TG_NO_ACTION,
   CP_TG_OK_ACTION,
@@ -21,6 +22,7 @@ import { serverTexts } from '../l10n/texts';
 import { notifyContractorTelegramClient } from '../telegram/client';
 import { sendClientAnswer } from '../telegram/client/pay';
 import type { BotAction, BotPressResult, BotReplyResult } from '../telegram/press';
+import { orgAccessClosed } from './org-closed';
 import { telegramSectionFor } from './telegram';
 
 /*
@@ -29,7 +31,7 @@ import { telegramSectionFor } from './telegram';
  * `tgAct('cptg-no')`). Решение — то же, что кнопками карточки контрагента, и по тем же правилам: права
  * «Просматривать контрагентов» и «Управлять страницей контрагента», контрагент в области «Свои / Все
  * контрагенты», запрос ещё ждёт, «Подтвердить» — только пока раздел «Telegram» страницы действует,
- * подключено не больше 5. Привязку чата, блокировки и «Действия из Telegram» проверяет основа бота;
+ * подключено не больше 5, доступ организации не закрыт по подписке (п. К-24). Привязку чата, блокировки и «Действия из Telegram» проверяет основа бота;
  * номер запроса из кнопки ничего не разрешает сам — запрос ищется в организации нажавшего (RLS).
  */
 
@@ -57,6 +59,10 @@ const decide = (action: 'approve' | 'reject'): BotAction => ({
       if (found === 'hidden') return refuse('tgActNoRight');
       // Запрос уже рассмотрен или страница выключена — кнопка устарела (прототип `stale`).
       if (found === 'off' || link.status !== 'wait' || !found.pageOn) return refuse('tgActStale');
+      // Доступ организации закрыт по подписке: клиенту бот не пишет, решение ждёт оплаты (п. К-24).
+      if (await orgAccessClosed(tx, bishkekDate(ctx.deps.clock.now()))) {
+        return { reply: ctx.tr('cppage.tg.org_closed'), alert: true };
+      }
       const t = await serverTexts(ctx.deps);
       // Защита строже прототипа, как в карточке: новое подключение — только пока раздел «Telegram»
       // страницы действует.
@@ -141,6 +147,10 @@ const answer: BotAction = {
       if (!current) return refuse('tgActStale');
       if (found === 'off' || !current.linked) {
         return { say: ctx.tr('cppage.tg.bot.answer_unlinked') };
+      }
+      // Доступ организации закрыт по подписке: ответ клиенту не уходит, просьба ждёт оплаты (п. К-24).
+      if (await orgAccessClosed(tx, bishkekDate(ctx.deps.clock.now()))) {
+        return { again: ctx.tr('cppage.tg.org_closed') };
       }
       const message: BotMessage = {
         heading: ctx.tr('cppage.tg.answer_heading'),

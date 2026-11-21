@@ -25,6 +25,7 @@ import {
   botAskLive,
   botReturnReason,
   hasPermission,
+  memoryFullParams,
   periodFull,
   RecordNotFoundError,
   reportConfirmRefusal,
@@ -41,6 +42,7 @@ import {
   type TelegramTemplateKey,
   type Translate,
 } from '@buhuchet/domain';
+import { memoryFullOf, subscriptionToday } from '../../subscription-access';
 import { attachStoredFile } from '../files/attach';
 import { assigneeScopeOf, reportScopeOf } from '../reports/common';
 import { taskAccessOf } from '../tasks/common';
@@ -259,14 +261,17 @@ const reportDone: BotAction = {
     }),
 };
 
-/** Прикрепить присланный файл к записи по правилам сайта; отказ — ключ шаблона. */
+/** Отказ прикрепить файл из чата: ключ шаблона и его подстановки. */
+type ChatAttachRefusal = { key: TelegramTemplateKey; values?: Record<string, string> };
+
+/** Прикрепить присланный файл к записи по правилам сайта; отказ — шаблон. */
 async function attachFromChat(
   ctx: Ctx,
   tx: Tx,
   subject: AccessSubject,
   source: { kind: 'report' | 'task'; id: string },
   reply: { file: BotReplyFile; note: string | null },
-): Promise<{ id: string } | TelegramTemplateKey> {
+): Promise<{ id: string } | ChatAttachRefusal> {
   const attached = await attachStoredFile(ctx.deps, tx, subject, ctx.user.orgId!, {
     id: reply.file.id,
     source,
@@ -276,8 +281,14 @@ async function attachFromChat(
     storageKey: reply.file.storageKey,
     note: reply.note,
   });
-  if (attached === 'files_off') return 'tgActRepSite';
-  if (attached === 'not_found' || attached === 'forbidden') return 'tgActNoRight';
+  if (attached === 'files_off') return { key: 'tgActRepSite' };
+  if (attached === 'not_found' || attached === 'forbidden') return { key: 'tgActNoRight' };
+  if (attached === 'mem_full') {
+    // Память заполнена (доработки 20.11.2026, блок 2, пункт 5): сколько занято — в той же транзакции.
+    const full = await memoryFullOf(tx, subscriptionToday(ctx.deps));
+    const gb = full ? memoryFullParams(full) : { used: '', limit: '' };
+    return { key: 'tgActMemFull', values: { занято: gb.used, лимит: gb.limit } };
+  }
   return attached;
 }
 
@@ -304,7 +315,7 @@ const reportFile: BotAction = {
         { kind: 'report', id: r.id },
         reply,
       );
-      if (typeof file === 'string') return said(ctx, file, { отчёт: full });
+      if ('key' in file) return said(ctx, file.key, { отчёт: full, ...file.values });
       const done = await submitFromChat(ctx, tx, o, [file.id]);
       // Отчёт не сдан — файл не прикрепляется: транзакция откатывается целиком.
       if (typeof done === 'string') throw new ReportStateError(r.id, 'not_open');
@@ -553,8 +564,8 @@ const taskFile: BotAction = {
       if (typeof o === 'string') return said(ctx, o);
       if (!taskOpen(o.lock.status)) return said(ctx, 'tgActStale');
       const file = await attachFromChat(ctx, tx, o.subject, { kind: 'task', id: o.lock.id }, reply);
-      if (typeof file === 'string')
-        return said(ctx, file === 'tgActRepSite' ? 'tgActFailed' : file);
+      if ('key' in file)
+        return said(ctx, file.key === 'tgActRepSite' ? 'tgActFailed' : file.key, file.values);
       const done = await finishTask(ctx, tx, o, file.id);
       return {
         done: done.done,

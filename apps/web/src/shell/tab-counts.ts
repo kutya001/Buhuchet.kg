@@ -10,6 +10,8 @@ import { contractorTabCountsQuery } from '../contractors/contractor-data';
 import { sentCountQuery } from '../files/sent-data';
 import { finSummaryQuery } from '../finance/journal-data';
 import { leadSummaryQuery } from '../admin/leads-data';
+import { subsSummaryQuery } from '../admin/subs-data';
+import { storageSummaryQuery } from '../afiles/afiles-data';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { videoAdminStatusValuesQuery } from '../kb/video/video-data';
@@ -46,6 +48,13 @@ export function useTabCounts(modules: readonly MenuModuleId[]): TabCounts {
     enabled: modules.includes('kbadm'),
   });
   const leads = useQuery({ ...leadSummaryQuery, enabled: modules.includes('orgs') });
+  const subs = useQuery({ ...subsSummaryQuery, enabled: modules.includes('orgs') });
+  // Счётчику «Проверки хранилища» хватает сводки минутной давности: экран «Хранилище» берёт свежую.
+  const storage = useQuery({
+    ...storageSummaryQuery,
+    staleTime: 60_000,
+    enabled: modules.includes('afiles'),
+  });
   const sent = useQuery({ ...sentCountQuery, enabled: modules.includes('files') });
   return useMemo(
     () => ({
@@ -62,7 +71,17 @@ export function useTabCounts(modules: readonly MenuModuleId[]): TabCounts {
         ? { kbadm: { ...kbadm.data, ...videoDrafts(t, videoStatus.data) } }
         : {}),
       // «Заявки» — новых заявок с сайта (прототип registry.js: `count: leadNew()`).
-      ...(leads.data ? { orgs: { leads: { value: leads.data.fresh } } } : {}),
+      // «Подписки» — чеков на проверке (прототип v154 registry.js: `count: subWaitN()`).
+      ...(leads.data || subs.data
+        ? {
+            orgs: {
+              ...(leads.data ? { leads: { value: leads.data.fresh } } : {}),
+              ...(subs.data ? { subs: { value: subs.data.pending } } : {}),
+            },
+          }
+        : {}),
+      // «Проверка хранилища» — расхождений последней сверки (прототип `afTabs`: `count: afDiffN() || ''`).
+      ...(storage.data?.diff ? { afiles: { check: { value: storage.data.diff } } } : {}),
       // «Файлы от контрагентов» — новых файлов (прототип v112 `filesTabs`: `count: sntNew() || null`).
       ...(sent.data ? { files: { sent: { value: sent.data, title: t('files.sent.badge') } } } : {}),
     }),
@@ -78,6 +97,8 @@ export function useTabCounts(modules: readonly MenuModuleId[]): TabCounts {
       kbadm.data,
       videoStatus.data,
       leads.data,
+      subs.data,
+      storage.data,
       sent.data,
       t,
     ],

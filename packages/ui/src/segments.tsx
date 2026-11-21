@@ -10,6 +10,8 @@ export interface SegmentOption<T extends string> {
   icon?: IconName;
   /** Подсказка кнопки при наведении (что входит в «Важные»). */
   title?: string;
+  /** Вариант недоступен (причина — в `title`): «Со следующего месяца» в последнем месяце подписки. */
+  disabled?: boolean;
 }
 
 /** Размер кнопок: обычный (`.seg`) и маленький (`.seg.sm`, область группы прав). */
@@ -55,7 +57,7 @@ export function Segments<T extends string>({
           type="button"
           aria-pressed={o.value === value}
           title={o.title}
-          disabled={disabled}
+          disabled={disabled || o.disabled}
           onClick={() => onChange(o.value)}
           className={`inline-flex cursor-pointer items-center disabled:cursor-default disabled:opacity-60 gap-1.5 rounded-md border-0 ${SEGMENT_SIZES[size]} font-[550] focus-visible:outline-2 focus-visible:outline-accent ${fill === 'wrap' ? 'flex-[1_1_auto] justify-start' : fill ? 'flex-1 justify-center' : 'justify-center'} ${o.value === value ? 'bg-raised text-ink shadow-flat-strong' : 'bg-transparent text-muted'}`}
         >

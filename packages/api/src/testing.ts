@@ -14,8 +14,8 @@ import {
   seedPhoneCodes,
   testTextsDbOf,
 } from '@buhuchet/db/testing';
-import { SCOPE_GROUPS } from '@buhuchet/domain';
-import { eq } from 'drizzle-orm';
+import { SCOPE_GROUPS, type ScopeGroupId } from '@buhuchet/domain';
+import { and, eq } from 'drizzle-orm';
 import { createApp } from './app';
 import type { ApiDeps } from './deps';
 
@@ -232,6 +232,14 @@ export function apiRequest(
   });
 }
 
+/** Подписка организаций `createStaffFixture`: 1 000 мест, оплачено до 2099 года. */
+export const TEST_SUBSCRIPTION = {
+  seats: 1000,
+  paidUntil: '2099-12-31',
+  free: false,
+  reason: 'Подписка тестовой организации',
+} as const;
+
 /** Пароль всех учётных записей `createStaffFixture`. */
 export const TEST_PASSWORD = 'Верный-пароль-1';
 
@@ -257,6 +265,9 @@ export async function createStaffFixture() {
       inn,
       slug,
       owner: { fullName: `Владелец ${owner}`, login: owner, passwordHash },
+      // Подписка без пределов на время тестов (доработки 20.11.2026): закрытие доступа и пакет
+      // проверяют свои тесты на своих организациях.
+      subscription: TEST_SUBSCRIPTION,
     });
   const a = await org('Организация А', '01811201810456', 'org-a', 'owner-a');
   const b = await org('Организация Б', '02811201810457', 'org-b', 'owner-b');
@@ -401,4 +412,48 @@ export async function leadDocDraft(
   }
   if (!current || !read) throw new Error('черновик без документов');
   return { draft: current, ids, read };
+}
+
+/**
+ * Роль сотрудника на время `run`: без права «Видеть всех контрагентов» (`viewAll`, оно делает любую
+ * область «Все») и с областями `scopes` по группам; после — права и области роли как были.
+ */
+export async function withRoleScopes(
+  db: Db,
+  employeeId: string,
+  scopes: Partial<Record<ScopeGroupId, 'own' | 'all'>>,
+  run: () => Promise<void>,
+): Promise<void> {
+  const [employee] = await db
+    .select({ orgId: schema.employees.orgId, roleId: schema.employees.roleId })
+    .from(schema.employees)
+    .where(eq(schema.employees.id, employeeId));
+  const { orgId, roleId } = employee!;
+  const before = await db
+    .select()
+    .from(schema.roleScopes)
+    .where(eq(schema.roleScopes.roleId, roleId));
+  const viewAll = and(
+    eq(schema.rolePermissions.roleId, roleId),
+    eq(schema.rolePermissions.permissionId, 'viewAll'),
+  );
+  const hadViewAll =
+    (await db.delete(schema.rolePermissions).where(viewAll).returning()).length > 0;
+  for (const [permGroup, scope] of Object.entries(scopes)) {
+    await db
+      .insert(schema.roleScopes)
+      .values({ orgId, roleId, permGroup, scope })
+      .onConflictDoUpdate({
+        target: [schema.roleScopes.roleId, schema.roleScopes.permGroup],
+        set: { scope },
+      });
+  }
+  try {
+    await run();
+  } finally {
+    await db.delete(schema.roleScopes).where(eq(schema.roleScopes.roleId, roleId));
+    if (before.length) await db.insert(schema.roleScopes).values(before);
+    if (hadViewAll)
+      await db.insert(schema.rolePermissions).values({ orgId, roleId, permissionId: 'viewAll' });
+  }
 }

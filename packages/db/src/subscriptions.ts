@@ -1,6 +1,7 @@
 import type { IsoDate, SubscriptionStatus } from '@buhuchet/domain';
 import { sql } from 'drizzle-orm';
 import type { Db, Tx } from './client';
+import { writeHistory } from './history';
 
 /*
  * Занято мест и памяти и закрыт ли доступ (доработки 20.11.2026, блоки 2 и 4; пакет 2, блок 5, пункт 2;
@@ -92,4 +93,61 @@ export async function adminOrgUsage(
   opts: { bytes?: boolean } = {},
 ): Promise<OrgUsage[]> {
   return usageRows(db, today, opts.bytes ?? true);
+}
+
+/**
+ * Закрыт ли доступ организации контекста (`withOrgContext`) по подписке на день `today` (блок 4,
+ * пункты 4–5): срок прошёл или подписки нет, и нет чека, открывшего доступ до проверки. Демо и вне
+ * контекста организации — нет.
+ */
+export async function orgSubscriptionClosed(tx: Tx, today: IsoDate): Promise<boolean> {
+  return (await orgUsage(tx, today, { bytes: false }))?.closed ?? false;
+}
+
+/** Подписка новой организации (`createOrganization`): что ставит администратор или служебная команда. */
+export interface NewOrgSubscription {
+  /** Вид подписки; нет — первый действующий по порядку («Месяц»). */
+  planId?: string | null;
+  /** Пакет; нет — шаг пакета из «Цен и реквизитов». */
+  seats?: number | null;
+  extraGb?: number;
+  /** «Оплачено до», включительно. */
+  paidUntil: IsoDate;
+  extraDiscountPct?: number;
+  /** Бесплатный период: ещё и строка «Истории оплат» без суммы. */
+  free: boolean;
+  /** Причина — в историю подписки и в строку «Истории оплат». */
+  reason: string;
+}
+
+/**
+ * Поставить подписку организации, созданной в этой же транзакции (функция базы
+ * `app.subscription_new_org`, миграция 0167: другой организации она подписку не поставит), и записать
+ * это в историю подписки. Только `tx` транзакции `createOrganization`.
+ */
+export async function startOrgSubscription(
+  tx: Tx,
+  orgId: string,
+  sub: NewOrgSubscription,
+): Promise<void> {
+  const extraGb = sub.extraGb ?? 0;
+  const discount = sub.extraDiscountPct ?? 0;
+  const [row] = await tx.execute<{ plan: string; pack: number }>(sql`
+    select plan, pack from app.subscription_new_org(${sub.planId ?? null}::text,
+      ${sub.seats ?? null}::integer, ${extraGb}::integer, ${sub.paidUntil}::date,
+      ${discount}::integer, ${sub.free}, ${sub.reason})`);
+  await writeHistory(tx, {
+    entity: 'subscription',
+    entityId: orgId,
+    action: 'create',
+    changes: [
+      { field: 'planId', to: row!.plan },
+      { field: 'seats', to: Number(row!.pack) },
+      ...(extraGb ? [{ field: 'extraGb', to: extraGb }] : []),
+      { field: 'paidUntil', to: sub.paidUntil },
+      ...(discount ? [{ field: 'extraDiscountPct', to: discount }] : []),
+      ...(sub.free ? [{ field: 'free', to: true }] : []),
+    ],
+    reason: sub.reason,
+  });
 }

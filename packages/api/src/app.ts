@@ -29,6 +29,7 @@ import { onboardingModule } from './modules/onboarding';
 import { orgModule } from './modules/org';
 import { platformDictsModule } from './modules/platform-dicts';
 import { projectsModule } from './modules/projects';
+import { datamartModule } from './modules/datamart';
 import { dictsModule } from './modules/dicts';
 import { filesModule } from './modules/files';
 import { LOGO_PATH } from './modules/org/logo';
@@ -121,6 +122,7 @@ export function createApp(deps: ApiDeps) {
     .route('/', projectsModule(deps))
     .route('/', kpiModule(deps))
     .route('/', filesModule(deps))
+    .route('/', datamartModule(deps))
     .route('/', viewsModule(deps))
     .route('/', adminModule(deps));
 
