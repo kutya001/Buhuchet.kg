@@ -68,6 +68,7 @@ describe('колокольчик: строки (доработки 16.11.2026, �
       'sub',
       'sub_check',
       'storage_check',
+      'dm_template',
     ]);
   });
 });

@@ -94,8 +94,12 @@ export const platformAuditLog = pgTable(
     /** Изменённые поля: было → стало. */
     changes: jsonb('changes').$type<HistoryChange[]>().notNull().default([]),
     reason: text('reason'),
+    /**
+     * Пусто — система: проверка шаблонов «Витрины данных» после выпуска и ночью (функция
+     * `app.dm_check_mark`, миграция 0173). Роль приложения такие строки не пишет: политика вставки
+     * требует автора — вошедшего администратора платформы.
+     */
     actorUserId: uuid('actor_user_id')
-      .notNull()
       .default(sql`app.current_user_id()`)
       .references(() => users.id, { onDelete: 'restrict' }),
     at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),

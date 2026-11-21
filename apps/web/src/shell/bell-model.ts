@@ -146,6 +146,10 @@ export function bellGoOf(
       return record ? { kind: 'href', href: `${APP_PATH}/orgs/subs?org=${id}` } : null;
     case 'storage_check':
       return { kind: 'href', href: `${APP_PATH}/afiles/check` };
+    // «Шаблон перестал работать» (Витрина данных, этап 2, П4 и П7): Админка → «Витрина данных» →
+    // «Шаблоны» с окном шаблона.
+    case 'dm_template':
+      return record ? { kind: 'href', href: `${tabHref('dm', 'tpl')}?tpl=${id}` } : null;
     default:
       return null;
   }

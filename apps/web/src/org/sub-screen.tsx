@@ -316,7 +316,9 @@ export function SubScreen({ view, admin = false, onOpen, onReceipt }: SubScreenP
             t('sub.head.kept'),
           ].join(' ')}
         </Note>
-      ) : view.status === 'expiring' && sub ? (
+      ) : view.status === 'expiring' && sub && admin ? (
+        // У владельца над экраном уже стоит полоса «Подписка оплачена до …» с «Продлить» (`SubRenewBar`):
+        // та же строка второй раз не нужна, пометка — только в окне Админки (прототип v156).
         <Note tone="warn" icon="clock">
           {t('sub.head.expiring', { date: formatDateRu(sub.paidUntil) })}
         </Note>

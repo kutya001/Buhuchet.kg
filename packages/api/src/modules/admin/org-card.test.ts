@@ -518,6 +518,11 @@ describe.skipIf(!databaseAvailable())('Админка → карточка ор�
       expect.objectContaining({ name: 'Устав.pdf', bytes: 2_097_152, by: 'acc-a' }),
     ]);
     expect(JSON.stringify(done)).not.toContain('/files/');
+    // Файл из списка окна открывается окном просмотра администратора: та же ссылка, что у «Всех файлов»
+    // (вид `file`; доработки 20.11.2026, пакет 2, блок 1, пункт 3 и «Стыки»).
+    const link = await get(`/api/admin/files/file/${done.files[0]!.id}/link?download=1`);
+    expect(link.status, await link.clone().text()).toBe(200);
+    expect((await link.json()) as { url: string }).toMatchObject({ url: expect.any(String) });
     // Отчёт другой организации в окне чужой организации не виден.
     expect(
       (await get(`/api/admin/organizations/${f.b.orgId}/reports/${reportIds.done}`)).status,

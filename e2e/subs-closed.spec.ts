@@ -178,7 +178,8 @@ test('(доработки 20.11.2026, блок 4, пункт 3; прототип
 
   await page.goto('/app');
   const bar = page.locator('[data-sub-renew]');
-  await expect(bar).toContainText(await dictText(page.request, 'sub.head.expiring', soon));
+  const expiring = await dictText(page.request, 'sub.head.expiring', soon);
+  await expect(bar).toContainText(expiring);
   await bar.getByRole('link').click();
   await expect(page).toHaveURL(/\/app\/org\/sub/);
   await expect(page.locator('[data-sub-pay="renew"]')).toBeVisible();
@@ -186,4 +187,9 @@ test('(доработки 20.11.2026, блок 4, пункт 3; прототип
   await expect(
     page.locator('[data-sub-pay="renew"] [data-sub-kind][aria-checked="true"]'),
   ).toHaveCount(1);
+  // Экран «Подписка» под полосой ту же строку не повторяет (общий план 20.11, этап 2, П5;
+  // прототип v156): «Подписка оплачена до …» на странице — только в полосе.
+  await expect(page.locator('[data-sub-screen="own"]')).toBeVisible();
+  await expect(page.locator('[data-sub-screen="own"]')).not.toContainText(expiring);
+  await expect(bar).toContainText(expiring);
 });

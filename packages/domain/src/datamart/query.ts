@@ -70,12 +70,14 @@ export const isDmParamType = (v: string): v is DmParamType =>
 
 /**
  * Почему текст запроса не годится для исполнителя: позиционный `$1`, второй оператор, незакрытая
- * строка или комментарий, параметров больше `DM_PARAMS_MAX`, параметр, которого нет в шаблоне.
+ * строка или комментарий, непарные скобки, параметров больше `DM_PARAMS_MAX`, параметр, которого нет
+ * в шаблоне.
  */
 export type DmSqlProblem =
   | { problem: 'positional' }
   | { problem: 'two_statements' }
   | { problem: 'unclosed' }
+  | { problem: 'parens' }
   | { problem: 'too_many_params' }
   | { problem: 'unknown_param'; name: string };
 
@@ -93,13 +95,16 @@ const NAME_PART = /[A-Za-z0-9_]/;
  * Разбор текста запроса по знакам, как его читает PostgreSQL: строки `'…'` и `E'…'`, имена `"…"`,
  * комментарии `--` и вложенные `/* *\/`, строки `$метка$…$метка$` и приведение `::` пропускаются;
  * `:имя` вне них — параметр. Позиционные `$1` запрещены (номера ставит система), «;» — только
- * последней (два оператора подряд отклоняются; исполнитель базы отклоняет их ещё раз сам).
+ * последней (два оператора подряд отклоняются; исполнитель базы отклоняет их ещё раз сам). Скобки вне
+ * строк и комментариев — парные: отбор «Свои» оборачивает весь текст подзапросом (`dmScopeQuery`), и
+ * лишняя «)» вывела бы часть запроса из-под отбора (`… ) a UNION ALL SELECT * FROM ( …`).
  */
 export function dmParseSql(sql: string, defs: readonly DmParamDef[]): DmParsedSql | DmSqlProblem {
   const byName = new Map(defs.map((d) => [d.k, d]));
   const names: string[] = [];
   let out = '';
   let i = 0;
+  let depth = 0;
   const n = sql.length;
   const prevIsName = () => i > 0 && NAME_PART.test(sql[i - 1]!);
   while (i < n) {
@@ -174,13 +179,17 @@ export function dmParseSql(sql: string, defs: readonly DmParamDef[]): DmParsedSq
       out += `($${num}::${CAST[def.type]})`;
       i = j;
     } else if (c === ';') {
-      if (dmRestIsEmpty(sql.slice(i + 1))) return { text: out.trimEnd(), names };
-      return { problem: 'two_statements' };
+      if (!dmRestIsEmpty(sql.slice(i + 1))) return { problem: 'two_statements' };
+      break;
     } else {
+      if (c === '(') depth += 1;
+      // ОТКЛОНЕНИЕ: docs/deviations.md#О-96 — прототип скобки не считает.
+      else if (c === ')' && --depth < 0) return { problem: 'parens' };
       out += c;
       i += 1;
     }
   }
+  if (depth !== 0) return { problem: 'parens' };
   return { text: out.trimEnd(), names };
 }
 

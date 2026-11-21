@@ -127,6 +127,13 @@ export const dmTemplateSql = pgTable(
       onDelete: 'set null',
     }),
     checkError: text('check_error'),
+    /**
+     * Последняя проверка системой (блок 8, пункт 7: после выпуска и каждую ночь) и число применённых
+     * миграций на её момент: другое число — был выпуск с миграциями, шаблон проверяется снова. Пишет
+     * только `app.dm_check_mark`.
+     */
+    autoCheckedAt: timestamp('auto_checked_at', { withTimezone: true }),
+    autoCheckedSchema: integer('auto_checked_schema'),
     updatedBy: uuid('updated_by').references(() => users.id),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

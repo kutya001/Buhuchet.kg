@@ -37,6 +37,36 @@ describe('история контрагента', () => {
     expect(file('file_delete', { field: 'file', from: 'vyp.pdf' })).not.toBe(t('cp.hist.update'));
   });
 
+  it('файл вернул администратор платформы (пакет 2 от 20.11.2026, блок 5, пункт 4): у файла, отчёта и задачи — «Файл «…» возвращён администратором платформы»', () => {
+    const restored = (over: Partial<Entry>) =>
+      contractorHistoryText(
+        t,
+        entry({
+          action: 'file_restore',
+          actor: 'Администратор платформы',
+          changes: [{ field: 'file', to: 'svid.pdf' }],
+          ...over,
+        }),
+        names,
+      );
+    const text = 'Файл «svid.pdf» возвращён администратором платформы';
+    expect(restored({ entity: 'file' })).toBe(text);
+    expect(restored({ entity: 'report', subject: 'НДС 09.2026' })).toBe(`НДС 09.2026 · ${text}`);
+    expect(restored({ entity: 'task', subject: 'Собрать первичку' })).toBe(text);
+    expect(plain(restored({ entity: 'money_operation' }))).toContain(text);
+    const item = contractorHistoryItem(
+      t,
+      entry({
+        entity: 'file',
+        action: 'file_restore',
+        actor: 'Администратор платформы',
+        changes: [{ field: 'file', to: 'svid.pdf' }],
+      }),
+      names,
+    );
+    expect(item.who).toBe('Администратор платформы');
+  });
+
   it('создание, смена ответственного и статуса, остальные поля — «Изменено: …» без повторов', () => {
     expect(contractorHistoryText(t, entry({ action: 'create' }), names)).toBe('Контрагент создан');
     const text = contractorHistoryText(

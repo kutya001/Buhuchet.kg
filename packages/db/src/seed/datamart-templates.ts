@@ -321,7 +321,8 @@ WHERE l.started_at::date BETWEEN :date_from AND :date_to
 GROUP BY 1, 2
 ORDER BY day DESC, org`,
 
-  // Прототип: `DM_RUN.subscriptions` (`SUB_WHAT`, `SUB_PAY_ST`) — оплаты подписок с датой записи в периоде.
+  // Прототип: `DM_RUN.subscriptions` (`SUB_WHAT`, `SUB_PAY_ST`) — оплаты подписок с датой записи в периоде;
+  // «Память сверх, ГБ» (`gb`) — с v156.
   subscriptions: `SELECT p.created_at::date AS at, o.name AS org,
        CASE p.kind
          WHEN 'renew' THEN 'Продление'
@@ -330,7 +331,7 @@ ORDER BY day DESC, org`,
          WHEN 'free' THEN 'Бесплатный период'
          ELSE 'Изменено администратором'
        END AS what,
-       coalesce(p.seats, 0) AS pack, coalesce(p.amount, 0) AS sum,
+       coalesce(p.seats, 0) AS pack, p.extra_gb AS gb, coalesce(p.amount, 0) AS sum,
        CASE p.status
          WHEN 'pending' THEN 'Ждёт подтверждения'
          WHEN 'confirmed' THEN 'Подтверждена'

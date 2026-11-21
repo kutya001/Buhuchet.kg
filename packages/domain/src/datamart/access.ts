@@ -8,6 +8,7 @@ import {
   type ScopeGroupId,
 } from '../roles/permissions';
 import type { DM_MODULES, DM_TEMPLATE_STATES } from './datamart';
+import { dmOwnScope } from './scope';
 
 /*
  * Кому из сотрудников организации виден шаблон «Витрины данных» (доработки 20.11.2026: Витрина данных,
@@ -59,8 +60,8 @@ const isPermission = (id: string, subject: AccessSubject): boolean =>
  * Виден ли шаблон сотруднику (прототип `dmSee`): «Для организаций», не черновик и не выключен; функция
  * модуля шаблона включена (у «Видеть плату за обслуживание» — ещё функция «Плата за обслуживание»);
  * есть просмотр модуля и дополнительное право шаблона; шаблон без столбца «Контрагент» (итоги по всей
- * организации) у модуля с областью — только при «Все контрагенты» в группе прав модуля (владельцу —
- * всегда).
+ * организации) — только при «Все контрагенты» в группе прав модуля (владельцу — всегда), у модуля без
+ * области («Сотрудники») — в группе «Контрагенты», как его отбор «Свои» (`dmOwnScope`).
  */
 export function dmTemplateSeen(
   t: DmTemplateSight,
@@ -73,9 +74,26 @@ export function dmTemplateSeen(
   if (t.needPermission === 'fee' && features.fee !== true) return false;
   if (group?.view && !hasPermission(subject, group.view)) return false;
   if (t.needPermission && !isPermission(t.needPermission, subject)) return false;
+  // ОТКЛОНЕНИЕ: docs/deviations.md#О-95 — модуль без области без «Контрагента» — по «Контрагентам».
   return (
     dmHasContractorColumn(t.columns) ||
-    !isScopeGroup(t.module) ||
-    scopeOf(subject, t.module) === 'all'
+    scopeOf(subject, isScopeGroup(t.module) ? t.module : 'cps') === 'all'
   );
+}
+
+/**
+ * Можно ли выпустить или перевыпустить токен к шаблону (строже прототипа `dmNewDlg`): токен отдаёт
+ * строки всей организации, как владельцу, — область «Свои контрагенты» по токену не действует
+ * (организация не сотрудник). Поэтому шаблон должен быть виден сотруднику (`dmTemplateSeen`) и «Вывод»
+ * не отбирал бы ему строки по «Свои» (`dmOwnScope` — то же правило, что у «Показать»: у модуля с
+ * областью — группа прав модуля, у «Сотрудников» со столбцом «Контрагент» — группа «Контрагенты»):
+ * иначе сотрудник с областью «Свои» вынес бы через токен строки чужих контрагентов.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Т-26
+export function dmTemplateTokenable(
+  t: DmTemplateSight,
+  subject: AccessSubject,
+  features: Readonly<Partial<Record<Feature, boolean>>>,
+): boolean {
+  return dmTemplateSeen(t, subject, features) && !dmOwnScope(t.module, subject, t.columns);
 }

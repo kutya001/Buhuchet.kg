@@ -1,7 +1,15 @@
 import { defaultUiTexts } from '@buhuchet/domain';
 import { describe, expect, it } from 'vitest';
 import { makeTranslate } from '../l10n/translate';
-import { follow, keyIndex, pasteWrites, selectionTsv, undoWrites, type ExCell } from './ex-table';
+import {
+  follow,
+  keyIndex,
+  pasteWrites,
+  roBlockedKey,
+  selectionTsv,
+  undoWrites,
+  type ExCell,
+} from './ex-table';
 import { cellChanges, cellOk, cellText, exCellOf, putCells, type KxRef } from './kpi-ex';
 
 // Таблица как в Excel (прототип v81 ui/extable.js `paste`, `copy`; modules/kpi.js `kTxt`, `kCellOk`,
@@ -90,6 +98,47 @@ describe('копирование выделения', () => {
   it('строки — через перевод строки, ячейки — через табуляцию, тексты как для правки', () => {
     const get = (r: number, c: number): ExCell => ({ t: `${r}${c}`, n: null, ed: true, why: '' });
     expect(selectionTsv({ r0: 0, r1: 1, c0: 1, c1: 2 }, get)).toBe('01\t02\n11\t12');
+  });
+});
+
+describe('только просмотр (вывод «Витрины данных»)', () => {
+  const key = (key: string, o: { code?: string; ctrl?: boolean; alt?: boolean } = {}) =>
+    roBlockedKey({
+      key,
+      code: o.code ?? '',
+      ctrlKey: o.ctrl ?? false,
+      metaKey: false,
+      altKey: o.alt ?? false,
+    });
+
+  it('правки нет: Delete, Backspace, F2, Ctrl+Z, Ctrl+D, Ctrl+X, Ctrl+V и набор текста', () => {
+    expect(['Delete', 'Backspace', 'F2', '7', 'а'].map((k) => key(k))).toEqual([
+      true,
+      true,
+      true,
+      true,
+      true,
+    ]);
+    expect(['KeyZ', 'KeyD', 'KeyX', 'KeyV'].map((code) => key('x', { code, ctrl: true }))).toEqual([
+      true,
+      true,
+      true,
+      true,
+    ]);
+  });
+
+  it('выделение, переходы, Ctrl+A и Ctrl+C остаются', () => {
+    expect(key('a', { code: 'KeyA', ctrl: true })).toBe(false);
+    expect(key('c', { code: 'KeyC', ctrl: true })).toBe(false);
+    expect(['ArrowDown', 'Enter', 'Tab', 'Home', 'Escape', 'Shift'].map((k) => key(k))).toEqual([
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+    ]);
+    expect(key('7', { alt: true })).toBe(false);
   });
 });
 

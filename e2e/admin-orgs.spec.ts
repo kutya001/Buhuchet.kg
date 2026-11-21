@@ -7,7 +7,8 @@ import {
   search,
   uniqueInn,
 } from './admin';
-import { cardTab, showStats, signIn, uniqueLogin } from './helpers';
+import { cardTab, newOrgOwner, showStats, signIn, uniqueLogin } from './helpers';
+import { newContractor } from './reports';
 
 // Админка → «Организации» (ТЗ «Админка» → «Модуль организаций»; просьба заказчика 27.10.2026 —
 // стенд, где администратор платформы создаёт организации): плашки, список всех организаций,
@@ -312,7 +313,8 @@ test.describe('Админка: организации', () => {
     await expect(report).toContainText(DEMO_CP);
     await expect(report.locator('[data-org-report-history]')).toBeVisible();
     await expect(report).toContainText('Файлы отчёта ·');
-    await expect(report.locator('button')).toHaveCount(0);
+    // Кнопок смены статуса нет: кнопки в окне — только файлы отчёта (открывают окно просмотра).
+    await expect(report.locator('button:not([data-org-report-file])')).toHaveCount(0);
     await expect(win).toContainText('Только просмотр: статус отчёта меняет сама организация');
     await win.getByRole('button', { name: 'Готово' }).click();
     await expect(report).toBeHidden();
@@ -329,6 +331,88 @@ test.describe('Админка: организации', () => {
     // Раскрытый блок «По месяцам и видам отчётов» — строки по месяцам срока.
     await months.locator('summary').click();
     await expect(months.locator('[data-org-reports] [data-group]').first()).toBeVisible();
+  });
+
+  test('(доработки 20.11.2026, пакет 2, блок 1, пункт 3; прототип v150) окно «Отчёт» карточки организации: файл отчёта открывается окном просмотра, после него — снова окно «Отчёт»', async ({
+    page,
+    baseURL,
+    isMobile,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    // Своя организация: отчёт и его файл — только этого теста (у демо-отчётов файлов нет).
+    await newOrgOwner(page.request, origin);
+    const connected = await page.request.post('/api/org-report-types/connect', {
+      headers: { origin },
+      data: { connect: ['t1m'], disconnect: [] },
+    });
+    expect(connected.status(), await connected.text()).toBe(200);
+    const word = uniqueLogin('rep-file');
+    const cp = await newContractor(page.request, origin, { tariff: false, name: `ОсОО «${word}»` });
+    const created = await page.request.post('/api/reports', {
+      headers: { origin },
+      data: {
+        contractorId: cp.id,
+        reportTypeCode: 't1m',
+        month: '2026-09-01',
+        due: '2030-01-15',
+        reasonCode: 'ПРЧ-001',
+      },
+    });
+    expect(created.status(), await created.text()).toBe(201);
+    const reportId = ((await created.json()) as { id: string }).id;
+    // Файл в блок «Файлы» отчёта, как браузер: начать → PUT в хранилище → закончить.
+    const name = `${word}.txt`;
+    const body = Buffer.from(`Справка ${word}\n`, 'utf8');
+    const start = await page.request.post('/api/files/uploads', {
+      headers: { origin },
+      data: { source: { kind: 'report', id: reportId }, name, size: body.length },
+    });
+    expect(start.status(), await start.text()).toBe(201);
+    const ticket = (await start.json()) as {
+      id: string;
+      upload: { url: string; headers: Record<string, string> };
+    };
+    const put = await page.request.put(ticket.upload.url, {
+      headers: ticket.upload.headers,
+      data: body,
+    });
+    expect(put.status(), await put.text()).toBe(200);
+    const done = await page.request.post(`/api/files/${ticket.id}/complete`, {
+      headers: { origin },
+    });
+    expect(done.status(), await done.text()).toBe(200);
+    const me = (await (await page.request.get('/api/auth/me')).json()) as {
+      organization: { id: string; name: string; slug: string };
+    };
+    await page.request.post('/api/auth/logout', { headers: { origin } });
+
+    // Администратор платформы: карточка этой организации → «Отчёты» → строка → окно «Отчёт».
+    await platformAdmin(page.request, origin);
+    const loaded = page.waitForResponse(
+      (r) => r.url().includes(`/api/admin/organizations/${me.organization.id}/card`) && r.ok(),
+    );
+    await page.goto(`/app/orgs#orgs/${me.organization.slug}`);
+    await loaded;
+    const card = page.getByRole('dialog', { name: me.organization.name });
+    await expect(card.locator('[data-org-states]')).toBeVisible();
+    await cardTab(page, card, isMobile, 'Отчёты');
+    const rows = card.locator('[data-org-rep-list] [data-grid] [data-id]');
+    await expect(rows).toHaveCount(1);
+    await rows.first().getByText(word).first().click();
+    const report = page.locator('[data-org-report]');
+    await expect(report).toContainText(word);
+    await expect(report).toContainText('Файлы отчёта · 1');
+
+    // Файл открывается тем же окном просмотра, что у модуля «Файлы» Админки: текст файла виден.
+    await report.locator(`[data-org-report-file="${ticket.id}"]`).click();
+    const viewer = page.getByRole('dialog', { name });
+    await expect(viewer.locator(`[data-file-viewer="${ticket.id}"]`)).toBeVisible();
+    await expect(viewer.locator('[data-fv="text"]')).toContainText(`Справка ${word}`);
+    await expect(viewer.locator('[data-fv-download]')).toBeVisible();
+    // Закрыли просмотр — снова окно «Отчёт», карточка организации на месте.
+    await page.keyboard.press('Escape');
+    await expect(viewer).toHaveCount(0);
+    await expect(report).toContainText(word);
   });
 
   test('(доработки 20.11.2026, пакет 2, блок 1; прототип v150) карточка организации: «Сотрудники» и «Контрагенты» — общий список; неверная вкладка — первая вкладка модуля', async ({

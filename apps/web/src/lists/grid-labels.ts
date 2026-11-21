@@ -57,7 +57,10 @@ export type CountKey =
   | 'runs.jobs.count'
   | 'runs.count'
   | 'tgadm.count'
-  | 'dm.tok.count';
+  | 'dm.tok.count'
+  | 'dm.log.count'
+  | 'dm.tpl.count'
+  | 'dm.out.count';
 
 /** Тексты списка из словаря; число записей — в форме для числа (1 сотрудник, 2 сотрудника, 5 сотрудников). */
 export function gridLabels(t: Translate, count: CountKey): GridLabels {

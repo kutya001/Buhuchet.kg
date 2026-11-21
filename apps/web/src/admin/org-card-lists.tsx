@@ -54,8 +54,11 @@ import {
 } from '@buhuchet/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useId, useMemo, useState, type ReactNode } from 'react';
+import { storageFileDownloadHref, storageFileViewSrc } from '../afiles/afiles-data';
 import { api, apiFailure } from '../api-client';
 import { contractorTone, ServiceCell } from '../contractors/contractor-columns';
+import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
+import { FileViewer } from '../files/file-viewer';
 import { fileSizeText } from '../files/files-data';
 import type { Translate } from '../l10n/translate';
 import { useListExport } from '../lists/export';
@@ -746,9 +749,9 @@ function ReportsGrid({
 
 /**
  * Окно «Отчёт» карточки организации (прототип v150 ocRepWin): только просмотр — поля отчёта, «Суммы»,
- * «История статусов» и файлы отчёта; кнопок смены статуса нет.
+ * «История статусов» и файлы отчёта; кнопок смены статуса нет. Файл отчёта открывается окном просмотра
+ * администратора (`/api/admin/files/file/{id}/link`, «Скачать» — `…/download`), как в «Файлах» Админки.
  */
-// ОТКЛОНЕНИЕ: docs/deviations.md#О-85 — файлы отчёта — списком, без окна просмотра (этап 1 пакета 2).
 function OrgReportWindow({
   t,
   orgId,
@@ -777,6 +780,13 @@ function OrgReportWindow({
     gcTime: 0,
   });
   const r = query.data ?? row;
+  const [viewer, setViewer] = useState<DialogSlot<number> | null>(null);
+  const files = (query.data?.files ?? []).map((f) => ({
+    id: f.id,
+    name: f.name,
+    size: f.bytes,
+    contentType: f.contentType,
+  }));
   return (
     <Modal
       open={open}
@@ -807,8 +817,22 @@ function OrgReportWindow({
           </Box>
         ) : null}
         {query.isError ? <Note tone="bad">{t('orgs.card.rep.win.error')}</Note> : null}
-        {query.data ? <Details t={t} report={query.data} /> : null}
+        {query.data ? (
+          <Details t={t} report={query.data} onOpen={(i) => setViewer(openSlot(i))} />
+        ) : null}
       </div>
+      {viewer && files.length ? (
+        <FileViewer
+          key={`org-report-file-${viewer.n}`}
+          files={files}
+          index={viewer.data}
+          open={viewer.open}
+          onClose={() => setViewer(closeSlot)}
+          src={(id) => storageFileViewSrc({ kind: 'file', id })}
+          download={(id) => storageFileDownloadHref({ kind: 'file', id })}
+          sub={() => `${r.type.shortName} · ${r.periodLabel} · ${r.contractor.name}`}
+        />
+      ) : null}
     </Modal>
   );
 }
@@ -872,8 +896,19 @@ function sumFields(t: Translate, r: ReportRow): KeyValueItem[] {
   ];
 }
 
-/** «История статусов» и «Файлы отчёта»: файлы из истории в Админке не открываются. */
-function Details({ t, report }: { t: Translate; report: AdminOrgReport }) {
+/**
+ * «История статусов» и «Файлы отчёта»: файл списка открывается окном просмотра (прототип `fileView`), в
+ * истории — только название (у чужих организаций прототип показывает историю без файлов).
+ */
+function Details({
+  t,
+  report,
+  onOpen,
+}: {
+  t: Translate;
+  report: AdminOrgReport;
+  onOpen: (index: number) => void;
+}) {
   const history = historyView(
     t,
     'report',
@@ -884,16 +919,20 @@ function Details({ t, report }: { t: Translate; report: AdminOrgReport }) {
   );
   const files: ReactNode = report.files.length ? (
     <ul data-org-report-files="" className="m-0 flex list-none flex-col p-0">
-      {report.files.map((f) => (
-        <li
-          key={f.id}
-          className="flex min-w-0 items-center gap-2.5 border-b border-line px-0.5 py-[9px] last:border-b-0"
-        >
-          <Icon name="file" className="flex-none text-muted" />
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-[13px] font-semibold text-ink">{f.name}</div>
-            <div className="truncate text-xs text-faint">{fileSizeText(t, f.bytes)}</div>
-          </div>
+      {report.files.map((f, i) => (
+        <li key={f.id} className="border-b border-line last:border-b-0">
+          <button
+            type="button"
+            data-org-report-file={f.id}
+            onClick={() => onOpen(i)}
+            className="flex w-full min-w-0 cursor-pointer items-center gap-2.5 rounded-sm border-0 bg-transparent px-0.5 py-[9px] text-left hover:bg-hover"
+          >
+            <Icon name="file" className="flex-none text-muted" />
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[13px] font-semibold text-ink">{f.name}</div>
+              <div className="truncate text-xs text-faint">{fileSizeText(t, f.bytes)}</div>
+            </div>
+          </button>
         </li>
       ))}
     </ul>

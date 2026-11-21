@@ -245,6 +245,71 @@ describe.skipIf(!databaseAvailable())('Админка → «Файлы»: API', 
     );
   });
 
+  it('файл контрагента и в поступлении — одна строка «Все файлы» с обоими «Источниками»; просмотр и «Скачать» администратором историю организации не пишут (этап 2, П5)', async () => {
+    await seedAllPlatformDictionaries(f.t.admin.db);
+    await f.t.admin.db
+      .update(orgSettings)
+      .set({ features: { files: true, taxpay: true } })
+      .where(eq(orgSettings.orgId, f.a.orgId));
+    const created = await call('POST', '/api/contractors', owner, {
+      name: 'ОсОО «Одна строка»',
+      inn: '03744097401873',
+      phone: '+996505890077',
+      kind: 'regular',
+      formCode: 'ФС-01',
+      regimeCode: 'РЕЖ-01',
+      gked: '46.34.0',
+      gkedExtra: [],
+      bases: [],
+      startDate: '2024-07-16',
+      responsibleEmployeeId: f.people['acc-a']!.employeeId,
+    });
+    const cp = Contractor.parse(await ok(created, 201));
+    const name = `Чек одной строки ${randomUUID().slice(0, 8)}.pdf`;
+    const doc = await upload(owner, name, cp.id);
+    const [op] = await f.t.admin.db
+      .insert(moneyOperations)
+      .values({
+        orgId: f.a.orgId,
+        contractorId: cp.id,
+        kind: 'in',
+        amount: 50_000,
+        total: 50_000,
+        opDate: '2026-10-11',
+        holderKind: 'org',
+      })
+      .returning({ id: moneyOperations.id });
+    await ok(
+      await call('POST', '/api/files/links', owner, {
+        kind: 'receipt',
+        id: op!.id,
+        fileIds: [doc.id],
+      }),
+    );
+
+    const list = AdminStorageFileList.parse(
+      await ok(await call('GET', `/api/admin/files?org=${f.a.orgId}&size=all`, admin)),
+    );
+    const rows = list.items.filter((r) => r.name === name);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.sizeBytes).toBe(5);
+    expect(rows[0]!.srcText.split(' · ')).toContain('Поступление');
+    expect(rows[0]!.srcText.split(' · ').length).toBe(2);
+
+    const historyRows = async () =>
+      (
+        await f.t.admin.db
+          .select({ n: sql<number>`count(*)::int` })
+          .from(auditLog)
+          .where(eq(auditLog.orgId, f.a.orgId))
+      )[0]!.n;
+    const before = await historyRows();
+    await ok(await call('GET', `/api/admin/files/file/${doc.id}/link`, admin));
+    await ok(await call('GET', `/api/admin/files/file/${doc.id}/link?download=1`, admin));
+    expect((await call('GET', `/api/admin/files/file/${doc.id}/download`, admin)).status).toBe(302);
+    expect(await historyRows()).toBe(before);
+  });
+
   it('«Удалить» лишний файл: старше суток — в «Ждут удаления», моложе и пропавший — отказ', async () => {
     const key = `org/${f.a.orgId}/files/${randomUUID()}`;
     const old = await extraItem(key, 30);

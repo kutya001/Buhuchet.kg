@@ -190,6 +190,36 @@ describe('вкладки и «+ Добавить» по правам и учёт
     expect(ids(addActions('kbadm', access, 'video'))).toEqual(['video']);
     expect(addActions('kbadm', access, 'vviews')).toEqual([]);
   });
+
+  it('«Витрина данных» (прототип v155 dmTabs, dmAdd): Админке — «Шаблон» и «Токен»; организации — «Токен» только с «Управлять API-токенами» и «Попросить шаблон»', () => {
+    // Вкладки — «Вывод» первой, «Шаблоны» и «API Токены» (другие вкладки модуля добавляют свои задачи).
+    const admin = shellAccess(me({ admin: true }));
+    expect(ids(visibleTabs('dm', admin)).slice(0, 3)).toEqual(['out', 'tpl', 'tok']);
+    expect(ids(addActions('dm', admin))).toEqual(['tpl', 'tok']);
+    const owner = shellAccess(me());
+    expect(ids(visibleTabs('dm', owner)).slice(0, 3)).toEqual(['out', 'tpl', 'tok']);
+    expect(ids(addActions('dm', owner))).toEqual(['tok', 'ask']);
+    const viewer = shellAccess(
+      me({ permissions: PERMISSION_IDS.filter((p) => p !== 'dmTokens') as PermissionId[] }),
+    );
+    expect(ids(visibleTabs('dm', viewer)).slice(0, 2)).toEqual(['out', 'tpl']);
+    expect(ids(visibleTabs('dm', viewer))).not.toContain('tok');
+    expect(ids(addActions('dm', viewer))).toEqual(['ask']);
+  });
+
+  it('«Витрина данных» → «Журнал запросов» — только у Админки: вкладки Админки ровно «Вывод», «Шаблоны», «API Токены», «Журнал запросов»', () => {
+    expect(ids(visibleTabs('dm', shellAccess(me({ admin: true }))))).toEqual([
+      'out',
+      'tpl',
+      'tok',
+      'log',
+    ]);
+    expect(ids(visibleTabs('dm', shellAccess(me())))).toEqual(['out', 'tpl', 'tok']);
+    const viewer = shellAccess(
+      me({ permissions: PERMISSION_IDS.filter((p) => p !== 'dmTokens') as PermissionId[] }),
+    );
+    expect(ids(visibleTabs('dm', viewer))).toEqual(['out', 'tpl']);
+  });
 });
 
 describe('вошедший для правил формы роли', () => {

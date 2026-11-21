@@ -142,7 +142,11 @@ export const storageSummaryRoute = createRoute({
   },
 });
 
-/** «Хранилище» (прототип `renderAFStore`): «Занято всего» — всё, что лежит, с платформой и «Ждут удаления». */
+/**
+ * «Хранилище» (прототип `renderAFStore`): «Занято всего» — всё, что лежит, с платформой и «Ждут удаления».
+ * Объём строки «По организациям» — то же число, что «Занято» у владельца на экране «Подписка» и на вкладке
+ * «Подписки» (`app.org_usage`; пакет 2, блок 5, пункт 2): одна функция на три экрана.
+ */
 export function storageSummaryHandler(
   deps: ApiDeps,
 ): RouteHandler<typeof storageSummaryRoute, AppEnv> {
@@ -152,9 +156,10 @@ export function storageSummaryHandler(
     const months = lastTwelveMonths(today);
     const { s, usage } = await withUserContext(deps.db, adminOf(c), async (tx) => ({
       s: await adminStorageSummary(tx, `${months[0]}-01`),
-      usage: await adminOrgUsage(tx, today, { bytes: false }),
+      usage: await adminOrgUsage(tx, today),
     }));
     const limits = new Map(usage.map((u) => [u.orgId, u.bytesLimit]));
+    const used = new Map(usage.map((u) => [u.orgId, u.bytesUsed ?? 0]));
     const parts = [s.org, s.sent, s.lead, s.rcpt, s.platform, s.trash];
     const byMonth = new Map(s.months.map((m) => [m.month, m.bytes]));
     return c.json(
@@ -174,13 +179,14 @@ export function storageSummaryHandler(
         months: months.map((month) => ({ month, bytes: byMonth.get(month) ?? 0 })),
         orgs: s.orgs.map((o) => {
           const limitBytes = limits.get(o.orgId) ?? null;
+          const bytes = used.get(o.orgId) ?? 0;
           return {
             orgId: o.orgId,
             name: o.name,
             n: o.n,
-            bytes: o.bytes,
+            bytes,
             limitBytes,
-            pct: memoryPct(o.bytes, limitBytes),
+            pct: memoryPct(bytes, limitBytes),
             last: o.last,
           };
         }),

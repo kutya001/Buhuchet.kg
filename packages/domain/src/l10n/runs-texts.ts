@@ -212,7 +212,7 @@ export const RUNS_TEXTS = {
     section: S,
   },
   'runs.what.system_cleanup_scheduler_runs': {
-    ru: 'Удаляет запуски старше 30 дней и переписку бота старше 90 дней',
+    ru: 'Удаляет запуски старше 30 дней, переписку бота и журнал запросов «Витрины данных» старше 90 дней',
     section: S,
   },
 } as const satisfies Record<string, UiTextDefault>;

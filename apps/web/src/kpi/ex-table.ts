@@ -20,6 +20,10 @@ import type { ActionEntry, IconName } from '@buhuchet/ui';
  * содержимое, выделение остаётся). Поле правки — поверх ячейки, а не внутри: содержимое ячейки
  * остаётся за React.
  *
+ * Только просмотр (`ro`, вывод «Витрины данных», прототип v155 `exTable` `ro`): выделение, строка
+ * состояния и Ctrl+C, без ввода, вставки, очистки и отмены; в меню правой кнопки — только «Копировать»;
+ * на телефоне нажатие только выделяет ячейку.
+ *
  * ОТКЛОНЕНИЕ: docs/deviations.md#О-60 — в прототипе таблица создаётся заново при каждой отрисовке
  * экрана, здесь — живёт на экране всё время, а строки под теми же номерами могут смениться (другой
  * месяц, сортировка, перечитанный список). Поэтому выделение, поле правки и «Отменить» помнят ячейку
@@ -89,6 +93,8 @@ export interface ExTexts {
     clear: string;
     undo: string;
     undoReason: string;
+    /** Пояснение «Копировать» в режиме только просмотра: «Ctrl+C — для вставки в Excel». */
+    copyRo?: string;
   };
 }
 
@@ -102,6 +108,8 @@ export interface ExOptions {
   label?: (r: number, c: number) => string;
   /** Дополнительные пункты меню правой кнопки для ячейки. */
   menu?: (r: number, c: number) => ActionEntry[];
+  /** Только просмотр: выделение, строка состояния и копирование, без правки (прототип `ro`). */
+  ro?: boolean;
   /** Строка состояния (как внизу Excel): количество, сумма, среднее выделенного. */
   stat?: HTMLElement | null;
   hint?: readonly ExHintItem[];
@@ -143,6 +151,23 @@ export function cellMap(root: ParentNode): HTMLElement[][] {
     (out[r] ??= [])[c] = t;
   });
   return out;
+}
+
+/**
+ * Клавиша правки, которой в режиме только просмотра нет (прототип `exTable`, `ro`): Delete, Backspace,
+ * F2, Ctrl+Z, Ctrl+D, Ctrl+X, Ctrl+V и набор текста.
+ */
+export function roBlockedKey(e: {
+  key: string;
+  code: string;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  altKey: boolean;
+}): boolean {
+  const ctl = e.ctrlKey || e.metaKey;
+  if (e.key === 'Delete' || e.key === 'Backspace' || e.key === 'F2') return true;
+  if (ctl) return /^Key[ZDXV]$/.test(e.code);
+  return !e.altKey && e.key.length === 1;
 }
 
 /**
@@ -498,6 +523,7 @@ export class ExTable {
 
   /** Запись: только в доступные ячейки; отмена — прежние тексты изменённых ячеек. */
   private async write(list: readonly ExWrite[], how: ExHow) {
+    if (this.o.ro) return 0;
     const ok: (ExWrite & { t0: string; k: string | null })[] = [];
     const skip: ExCell[] = [];
     for (const x of list) {
@@ -553,7 +579,7 @@ export class ExTable {
 
   /** Правка ячейки: `enter` — начали печатать (стрелки сохраняют и переходят), `edit` — F2 или двойной щелчок. */
   private edit(mode: 'enter' | 'edit', init: string | null, quiet = false) {
-    if (!this.a) return false;
+    if (!this.a || this.o.ro) return false;
     const { r, c } = this.a;
     const g = this.o.get(r, c);
     if (!g.ed) {
@@ -702,6 +728,7 @@ export class ExTable {
         { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] } as const
       )[k as 'ArrowUp'] as readonly [number, number] | undefined;
       const stop = () => e.preventDefault();
+      if (this.o.ro && roBlockedKey(e)) return;
       if (D) {
         stop();
         return this.go(ctl ? D[0] * 1e6 : D[0], ctl ? D[1] * 1e6 : D[1], e.shiftKey);
@@ -746,7 +773,7 @@ export class ExTable {
     this.on(kb, 'input', () => {
       const v = kb.value.replace(Z, '');
       this.arm();
-      if (v && !this.ed && this.a) this.edit('enter', v);
+      if (v && !this.ed && this.a && !this.o.ro) this.edit('enter', v);
     });
     this.on(kb, 'copy', (e) => {
       if (!this.a) return;
@@ -757,11 +784,12 @@ export class ExTable {
       if (!this.a) return;
       e.preventDefault();
       e.clipboardData?.setData('text/plain', selectionTsv(this.rect(), this.o.get));
-      this.clear();
+      if (!this.o.ro) this.clear();
     });
     this.on(kb, 'paste', (e) => {
       if (!this.a) return;
       e.preventDefault();
+      if (this.o.ro) return;
       this.paste(e.clipboardData?.getData('text') ?? '');
     });
 
@@ -887,6 +915,20 @@ export class ExTable {
       this.focus();
       const M = this.o.texts.menu;
       const extra = this.o.menu && this.a ? this.o.menu(this.a.r, this.a.c) : [];
+      const more = extra.length ? [{ id: 'sep3', separator: true } as const, ...extra] : [];
+      if (this.o.ro) {
+        this.o.openMenu({ x: e.clientX, y: e.clientY }, [
+          {
+            id: 'copy',
+            label: M.copy,
+            icon: 'copy',
+            sub: M.copyRo ?? 'Ctrl+C',
+            run: () => this.copyOut(),
+          },
+          ...more,
+        ]);
+        return;
+      }
       this.o.openMenu({ x: e.clientX, y: e.clientY }, [
         { id: 'copy', label: M.copy, icon: 'copy', sub: 'Ctrl+C', run: () => this.copyOut() },
         {
@@ -937,7 +979,7 @@ export class ExTable {
           reason: M.undoReason,
           run: () => this.undo(),
         },
-        ...(extra.length ? [{ id: 'sep3', separator: true } as const, ...extra] : []),
+        ...more,
       ]);
     });
   }

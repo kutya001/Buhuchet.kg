@@ -1,4 +1,10 @@
-import { DM_MODULES, DM_TOKEN_NAME_MAX, DM_TOKEN_STATES, DM_TOKEN_STOPS } from '@buhuchet/domain';
+import {
+  DM_CODE_RE,
+  DM_MODULES,
+  DM_TOKEN_NAME_MAX,
+  DM_TOKEN_STATES,
+  DM_TOKEN_STOPS,
+} from '@buhuchet/domain';
 import { z } from 'zod';
 import { Uuid } from './common';
 import { listPageSchema } from './list';
@@ -99,12 +105,24 @@ export const DmTokenRequestRow = z.object({
   ip: z.string().nullable(),
 });
 
+/** Столбец внешнего ответа (прототип `dmHow`: `{ key, title, type }`, без «Контрагента»). */
+export const DmExtColumn = z.object({ key: z.string(), title: z.string(), type: z.string() });
+
+/**
+ * «Как подключить» (этап 2, П12; прототип `dmHow`): адрес с параметрами по умолчанию на сегодня и
+ * столбцы ответа. Примеры запроса, ответа и скрипт с токеном собирает экран (`dmExtHow` домена).
+ */
+export const DmTokenHow = z.object({ url: z.string(), columns: z.array(DmExtColumn) });
+export type DmTokenHow = z.infer<typeof DmTokenHow>;
+
 /** Окно токена (прототип `dmTokDlg`): строки сведений, журнал запросов (последние 50) и действия. */
 export const DmTokenCard = DmTokenRow.extend({
   stop: z.enum(DM_TOKEN_STOPS).nullable(),
   /** Начало токена, который этот заменил при перевыпуске. */
   prevPrefix: z.string().nullable(),
   log: z.object({ total: z.number().int().nonnegative(), items: z.array(DmTokenRequestRow) }),
+  /** «Как подключить» — у своего не отозванного и не истёкшего токена, пока его шаблон виден; иначе null. */
+  how: DmTokenHow.nullable(),
 });
 export type DmTokenCard = z.infer<typeof DmTokenCard>;
 
@@ -114,3 +132,58 @@ export const DmTokenIssued = z.object({
   item: DmTokenCard,
 });
 export type DmTokenIssued = z.infer<typeof DmTokenIssued>;
+
+/*
+ * Админка → «Журнал запросов» (блок 6, пункт 7; поток Т, этап 2, П11; прототип `renderDmLog`): все
+ * запросы внешних программ по токенам за 90 дней — только администратору платформы.
+ */
+
+/** Строка журнала: итог «Успешно» — `ok`, иначе «Ошибка» с текстом; токен и шаблон — пусто, если удалены. */
+export const DmRequestRow = z.object({
+  id: z.number().int(),
+  at: z.iso.datetime(),
+  ok: z.boolean(),
+  orgName: z.string(),
+  tokenId: Uuid.nullable(),
+  tokenName: z.string().nullable(),
+  prefix: z.string().nullable(),
+  tplName: z.string().nullable(),
+  /** Параметры строкой «month=2026-11». */
+  params: z.string(),
+  rows: z.number().int().nonnegative().nullable(),
+  ms: z.number().int().nonnegative().nullable(),
+  error: z.string().nullable(),
+  ip: z.string().nullable(),
+});
+export type DmRequestRow = z.infer<typeof DmRequestRow>;
+
+export const DmRequestList = listPageSchema(DmRequestRow);
+export type DmRequestList = z.infer<typeof DmRequestList>;
+
+/** Плашки над журналом: запросов и ошибок сегодня по Бишкеку, действующих токенов. */
+export const DmRequestSummary = z.object({
+  today: z.number().int().nonnegative(),
+  errors: z.number().int().nonnegative(),
+  tokens: z.number().int().nonnegative(),
+});
+export type DmRequestSummary = z.infer<typeof DmRequestSummary>;
+
+/*
+ * Внешний адрес GET /api/ext/v1/<код шаблона> (доработки 20.11.2026: Витрина данных, блок 6; поток Т,
+ * этап 2, П11; прототип `dmHow`): токен — только в заголовке Authorization, параметры шаблона — в
+ * адресе (`?month=2026-11`), `format=csv` — таблица, `page` и `limit` — страница (1 000, до 5 000).
+ */
+
+/** Код шаблона в пути. */
+export const DmExtCodeParam = z.object({ code: z.string().regex(new RegExp(DM_CODE_RE)) });
+
+/** Ответ JSON: столбцы, строки страницы, всего строк, ссылка на следующую страницу. */
+export const DmExtAnswer = z.object({
+  columns: z.array(DmExtColumn),
+  rows: z.array(z.record(z.string(), z.unknown())),
+  total: z.number().int().nonnegative(),
+  next: z.string().nullable(),
+  /** Результат длиннее 50 000 строк: отданы первые 50 000 (только тогда поле есть). */
+  more: z.literal(true).optional(),
+});
+export type DmExtAnswer = z.infer<typeof DmExtAnswer>;

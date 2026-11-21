@@ -155,4 +155,24 @@ describe.skipIf(!databaseAvailable())('Справочники → «Справо
     };
     expect(summary.requests).toBe(1);
   });
+
+  it('«Попросить шаблон» «Витрины данных» — только с правом «Смотреть витрину данных» (прототип v155 dmAskDlg)', async () => {
+    const body = { dict: 'dm', what: 'Отчёты, сданные с опозданием', comment: 'Контрагент, срок' };
+    const denied = await apiRequest(f.app, 'POST', '/api/dict-requests', acc, body);
+    expect([denied.status, await errorCode(denied)]).toEqual([403, 'forbidden']);
+    const res = await apiRequest(f.app, 'POST', '/api/dict-requests', owner, body);
+    expect(res.status).toBe(201);
+    const dmRequest = DictRequest.parse(await res.json());
+    expect(dmRequest).toMatchObject({
+      dict: 'dm',
+      what: 'Отчёты, сданные с опозданием',
+      comment: 'Контрагент, срок',
+      status: 'new',
+    });
+    // «Мои запросы»: запрос шаблона видит только тот, кому открыта «Витрина данных».
+    const ownerList = DictRequests.parse(await (await get(owner, '/api/dict-requests')).json());
+    expect(ownerList.items.map((r) => r.id)).toContain(dmRequest.id);
+    const accList = DictRequests.parse(await (await get(acc, '/api/dict-requests')).json());
+    expect(accList.items.some((r) => r.dict === 'dm')).toBe(false);
+  });
 });

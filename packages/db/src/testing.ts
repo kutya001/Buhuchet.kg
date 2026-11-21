@@ -1,11 +1,14 @@
 import { randomBytes } from 'node:crypto';
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import {
   hasDatabaseEnv,
   integrationTestsRequired,
   loadDatabaseConfig,
 } from '@buhuchet/adapters/config';
 import { createDb, type Db, type DbHandle } from './client';
-import { ensureAppLoginRole, runMigrations } from './migrate';
+import { ensureAppLoginRole, MIGRATIONS_FOLDER, runMigrations } from './migrate';
 import { countryPhoneCodes, platformReference } from './schema';
 import { seedPermissions, seedRoleTemplates } from './seed/access';
 import { referenceSections, seedGked, seedPlatformReference } from './seed/platform';
@@ -67,24 +70,80 @@ const MIGRATION_LOCK = 704_118;
 export async function createTestDatabase(
   options: { onMigrationNotice?: (line: string) => void } = {},
 ): Promise<TestDatabase> {
-  const config = loadDatabaseConfig();
-  const serverAdminUrl = config.DATABASE_ADMIN_URL!;
-  const name = `test_${randomBytes(6).toString('hex')}`;
-  const maintenance = createDb(serverAdminUrl, { max: 1, applicationName: 'buhuchet-test' });
-  await maintenance.sql.unsafe(`create database "${name}"`);
+  return (await openTestDatabase(MIGRATIONS_FOLDER, options.onMigrationNotice)).db;
+}
 
-  const adminUrl = withDatabase(serverAdminUrl, name);
-  const appUrl = withDatabase(config.DATABASE_URL, name);
+/** Применить миграции папки по очереди с другими файлами тестов (общие для сервера роли). */
+async function migrateLocked(
+  serverAdminUrl: string,
+  adminUrl: string,
+  folder: string,
+  onNotice?: (line: string) => void,
+): Promise<void> {
   // Миграции создают роли, общие для всего сервера (buhuchet_app, роль входа): параллельные файлы
   // тестов делают это по очереди, иначе одновременный CREATE ROLE падает на уникальности имени.
+  const maintenance = createDb(serverAdminUrl, { max: 1, applicationName: 'buhuchet-test' });
   await maintenance.sql`select pg_advisory_lock(${MIGRATION_LOCK})`;
   try {
-    await runMigrations(adminUrl, undefined, options.onMigrationNotice);
-    await ensureAppLoginRole(adminUrl, appUrl);
+    await runMigrations(adminUrl, undefined, onNotice, folder);
   } finally {
     await maintenance.sql`select pg_advisory_unlock(${MIGRATION_LOCK})`;
     await maintenance.close();
   }
+}
+
+/** Папка миграций до `tag` включительно: копия папки продукта с укороченным журналом. */
+function migrationsUntil(tag: string): string {
+  const dir = mkdtempSync(path.join(tmpdir(), 'buhuchet-migrations-'));
+  cpSync(MIGRATIONS_FOLDER, dir, { recursive: true });
+  const file = path.join(dir, 'meta', '_journal.json');
+  const journal = JSON.parse(readFileSync(file, 'utf8')) as { entries: { tag: string }[] };
+  const at = journal.entries.findIndex((e) => e.tag === tag);
+  if (at < 0) throw new Error(`Нет миграции ${tag}`);
+  journal.entries = journal.entries.slice(0, at + 1);
+  writeFileSync(file, JSON.stringify(journal));
+  return dir;
+}
+
+/**
+ * Временная база «до выпуска»: применены миграции до `tag` включительно, как на рабочей базе перед
+ * выпуском; `migrateRest` применяет остальные — как выпуск. Данные «до выпуска» тест вставляет
+ * подключением владельца (`admin`), в столбцы той версии схемы.
+ */
+export async function createTestDatabaseAt(
+  tag: string,
+): Promise<TestDatabase & { migrateRest(onNotice?: (line: string) => void): Promise<void> }> {
+  const folder = migrationsUntil(tag);
+  try {
+    const { db, serverAdminUrl } = await openTestDatabase(folder);
+    return {
+      ...db,
+      migrateRest: (onNotice) =>
+        migrateLocked(serverAdminUrl, db.adminUrl, MIGRATIONS_FOLDER, onNotice),
+    };
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
+}
+
+async function openTestDatabase(
+  folder: string,
+  onNotice?: (line: string) => void,
+): Promise<{ db: TestDatabase; serverAdminUrl: string }> {
+  const config = loadDatabaseConfig();
+  const serverAdminUrl = config.DATABASE_ADMIN_URL!;
+  const name = `test_${randomBytes(6).toString('hex')}`;
+  const maintenance = createDb(serverAdminUrl, { max: 1, applicationName: 'buhuchet-test' });
+  try {
+    await maintenance.sql.unsafe(`create database "${name}"`);
+  } finally {
+    await maintenance.close();
+  }
+
+  const adminUrl = withDatabase(serverAdminUrl, name);
+  const appUrl = withDatabase(config.DATABASE_URL, name);
+  await migrateLocked(serverAdminUrl, adminUrl, folder, onNotice);
+  await ensureAppLoginRole(adminUrl, appUrl);
 
   const admin = createDb(adminUrl, { max: 2, applicationName: 'buhuchet-test-admin' });
   const app = createDb(appUrl, {
@@ -93,7 +152,7 @@ export async function createTestDatabase(
   });
   const texts = createDb(appUrl, { max: 1, applicationName: 'buhuchet-test-texts' });
   textsDbs.set(app.db, texts.db);
-  return {
+  const db: TestDatabase = {
     name,
     adminUrl,
     appUrl,
@@ -106,6 +165,7 @@ export async function createTestDatabase(
       await m.close();
     },
   };
+  return { db, serverAdminUrl };
 }
 
 /** Права и шаблоны ролей из spec/data/refDB.json: без них организацию не создать. */

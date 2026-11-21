@@ -77,4 +77,24 @@ describe('записи истории о файле (прототип v95 fileEd
       }),
     ).toBe('Удалён файл «Акт сверки.pdf» (был прикреплён из файлов контрагента)');
   });
+
+  it('«Вернуть» администратора платформы (пакет 2 от 20.11.2026, блок 5, пункт 4; прототип v154 ftRestore)', () => {
+    const restored = 'Файл «Акт сверки.pdf» возвращён администратором платформы';
+    expect(
+      fileHistoryText(t, {
+        action: 'file_restore',
+        changes: [{ field: 'file', to: 'Акт сверки.pdf' }],
+      }),
+    ).toBe(restored);
+    // У записи, куда файл был прикреплён ссылкой, — тот же текст.
+    expect(
+      fileHistoryText(t, {
+        action: 'file_restore',
+        changes: [
+          { field: 'file', to: 'Акт сверки.pdf' },
+          { field: 'linked', to: true },
+        ],
+      }),
+    ).toBe(restored);
+  });
 });
