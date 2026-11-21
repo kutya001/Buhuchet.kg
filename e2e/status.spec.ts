@@ -120,6 +120,8 @@ test.describe('Этап 1: шкала статусов и «История ст�
     await card.getByRole('button', { name: /^В работе/ }).click();
     const dialog = page.getByRole('dialog', { name: 'Откатить: «Не выполнена» → «В работе»' });
     await expect(dialog).toContainText('Задача снова станет открытой у исполнителя');
+    // Окно отката на телефоне тоже въезжает шторкой: нажатие по едущей кнопке теряется (№ 34).
+    await stillElement(dialog);
     await dialog.getByRole('button', { name: 'Откатить' }).click();
     await expect(dialog.getByText('Укажите причину')).toBeVisible();
     await dialog.getByLabel('Причина отката').fill('  Поставили по ошибке  ');
@@ -163,6 +165,7 @@ test.describe('Этап 1: шкала статусов и «История ст�
     await card.getByRole('button', { name: 'Снять подтверждение' }).click();
     const unconfirm = page.getByRole('dialog', { name: 'Снять подтверждение сдачи' });
     await expect(unconfirm).toContainText('отчёт снова будет ждать подтверждения');
+    await stillElement(unconfirm);
     await unconfirm.getByLabel('Причина отката').fill('Подтвердили не тот отчёт');
     await unconfirm.getByRole('button', { name: 'Откатить' }).click();
     await expect(card.locator('ol[data-status-scale]')).toContainText('Ждёт подтверждения · ');
