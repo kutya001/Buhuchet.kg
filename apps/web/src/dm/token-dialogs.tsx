@@ -436,7 +436,7 @@ function TokenCardDialog({
             <Box>
               <KeyValues items={info} />
             </Box>
-            {k.how ? <HowBox how={k.how} token={`${k.prefix}…`} /> : null}
+            {k.how ? <HowBox how={k.how} token={null} /> : null}
             <Box title={t('dm.tok.log.title', { n: k.log.total })}>
               <MiniTable
                 label={t('dm.tok.log.title', { n: k.log.total })}

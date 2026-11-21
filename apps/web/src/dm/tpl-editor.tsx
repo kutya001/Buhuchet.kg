@@ -37,6 +37,7 @@ import { useId, useMemo, useState, type ReactNode } from 'react';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { tabHref } from '../shell/modules';
+import { SqlField } from './sql-field';
 import {
   checkResultOf,
   checkTemplate,
@@ -476,15 +477,12 @@ export function TemplateEditor({
               error={errors.query}
             >
               {(control) => (
-                <textarea
-                  {...control}
-                  className={`${inputClass({ multiline: true, mono: true })} !min-h-[240px] text-[12.5px] leading-[1.5] whitespace-pre [tab-size:2] max-md:!min-h-[180px]`}
+                <SqlField
+                  control={control}
                   value={draft.query}
                   maxLength={DM_QUERY_MAX}
-                  spellCheck={false}
                   readOnly={builtin}
-                  data-dm-ed-query=""
-                  onChange={(e) => patch({ query: e.target.value }, 'query')}
+                  onChange={(query) => patch({ query }, 'query')}
                 />
               )}
             </Field>

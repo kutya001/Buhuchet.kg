@@ -118,6 +118,18 @@ test.describe('Витрина данных: «Шаблоны» и «Вывод»
 
     // Два оператора подряд: «Проверить» отклоняет с причиной, опубликовать по-прежнему нельзя.
     await query.fill('SELECT 7 AS seven; SELECT 8 AS eight');
+    // Подсветка SQL и номера строк (прототип v161): ключевые слова и числа — своим видом под
+    // прозрачным текстом поля; само поле прежнее — значение то же.
+    const sql = dialog.locator('[data-dm-ed-sql]');
+    await expect(sql.locator('[data-dm-ed-hl] [data-sql="keyword"]')).toHaveText([
+      'SELECT',
+      'AS',
+      'SELECT',
+      'AS',
+    ]);
+    await expect(sql.locator('[data-dm-ed-hl] [data-sql="number"]')).toHaveText(['7', '8']);
+    await expect(sql.locator('[data-dm-ed-lines]')).toHaveText('1');
+    await expect(query).toHaveValue('SELECT 7 AS seven; SELECT 8 AS eight');
     await expect(publish).toBeDisabled();
     await check();
     await expect(dialog).toContainText(texts['err.dm_sql_two_statements']!);

@@ -35,6 +35,7 @@ import {
   DM_TOKENS_LIVE_MAX,
   dmExtColumns,
   dmExtUrl,
+  dmParamDefault,
   dmTemplateTokenable,
   dmTokenFromBytes,
   dmTokenIssueRefusal,
@@ -364,6 +365,15 @@ async function howOf(tx: Tx, v: TokenView, at: HowAt) {
       tpl.params.map((p) => ({ k: p.code, def: p.default })),
       at.today,
     ),
+    // Прототип v160: адрес без параметров и каждый параметр отдельно — их меняют в своей программе.
+    base: dmExtUrl(at.base, tpl.code, [], at.today),
+    params: tpl.params.map((p) => ({
+      code: p.code,
+      name: p.name,
+      type: p.type,
+      required: p.required,
+      value: dmParamDefault(p.default, at.today),
+    })),
     columns: dmExtColumns(tpl.columns),
   };
 }

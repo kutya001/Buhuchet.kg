@@ -568,6 +568,9 @@ describe.skipIf(!databaseAvailable())('Витрина данных: внешни
     const month = bishkekDate(new Date('2026-10-18T03:00:00Z')).slice(0, 7);
     expect(a.item.how).toEqual({
       url: `http://localhost:3000/api/ext/v1/ext-staff?month=${month}`,
+      // Прототип v160: адрес без параметров и параметры по отдельности — со значением на сегодня.
+      base: 'http://localhost:3000/api/ext/v1/ext-staff',
+      params: [{ code: 'month', name: 'Месяц', type: 'month', required: true, value: month }],
       columns: STAFF_COLUMNS.filter((c) => c.type !== 'cp').map((c) => ({
         key: c.code,
         title: c.name,
@@ -593,7 +596,22 @@ describe.skipIf(!databaseAvailable())('Витрина данных: внешни
     );
     expect(revoked.how).toBeNull();
     const adm = await issue('platform-admin', 'ext-adm', 'Как подключить', '/api/admin/dm');
-    expect(adm.item.how?.url).toBe('http://localhost:3000/api/ext/v1/ext-adm');
+    expect(adm.item.how).toMatchObject({
+      url: 'http://localhost:3000/api/ext/v1/ext-adm',
+      base: 'http://localhost:3000/api/ext/v1/ext-adm',
+      params: [],
+    });
+    // В ответах окна токена — ни токена, ни текста запроса шаблона: только начало `bk_…`.
+    const again = await (
+      await apiRequest(
+        f.app,
+        'GET',
+        `/api/admin/dm/tokens/${adm.item.id}`,
+        cookies['platform-admin'],
+      )
+    ).text();
+    expect(again).not.toContain(adm.token);
+    expect(again).not.toMatch(/select/i);
   });
 
   it('Админка → «Журнал запросов»: только запросы по токенам всех организаций, плашки; другим — 403', async () => {

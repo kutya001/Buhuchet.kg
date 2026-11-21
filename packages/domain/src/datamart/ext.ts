@@ -1,5 +1,4 @@
 import type { IsoDate } from '../common/dates';
-import { monthOf } from '../common/months';
 import { dmCell, dmParamDefault } from './query';
 
 /*
@@ -211,77 +210,4 @@ export function dmExtUrl(
   let end = base.length;
   while (end > 0 && base[end - 1] === '/') end--;
   return `${base.slice(0, end)}${DM_EXT_PATH}${code}${qs ? `?${qs}` : ''}`;
-}
-
-/** Значение-образец ячейки по виду столбца (строка 0 или 1 примера ответа). */
-function sampleCell(type: string, i: number, today: IsoDate, word: string): unknown {
-  switch (type) {
-    case 'money':
-      return i === 0 ? 1250.5 : 300;
-    case 'num':
-    case 'int':
-      return i === 0 ? 3 : 1;
-    case 'date':
-      return today;
-    case 'datetime':
-      return `${today}T10:00:00+06:00`;
-    case 'month':
-      return monthOf(today);
-    case 'bool':
-      return i === 0;
-    default:
-      return `${word} ${i + 1}`;
-  }
-}
-
-/** Что показывает «Как подключить» под адресом: пример запроса, пример ответа, скрипт Google Таблиц. */
-export interface DmExtHow {
-  curl: string;
-  sample: string;
-  script: string;
-}
-
-/**
- * Примеры «Как подключить» (прототип `dmHow`): `curl` с заголовком, ответ JSON на двух строках и скрипт
- * Google Таблиц (`UrlFetchApp` с `format=csv`, `Utilities.parseCsv`). Строки примера — образцы по виду
- * столбца, а не запуск шаблона (docs/deviations.md п. Т-27); `word` — слово для текста («Пример»).
- */
-// ОТКЛОНЕНИЕ: docs/deviations.md#Т-27
-export function dmExtHow(o: {
-  url: string;
-  token: string;
-  columns: readonly DmExtColumn[];
-  today: IsoDate;
-  word: string;
-}): DmExtHow {
-  const rows = [0, 1].map((i) =>
-    Object.fromEntries(o.columns.map((c) => [c.key, sampleCell(c.type, i, o.today, o.word)])),
-  );
-  const sample = JSON.stringify(
-    {
-      columns: o.columns,
-      rows: o.columns.length ? rows : [],
-      total: o.columns.length ? 2 : 0,
-      next: null,
-    },
-    null,
-    2,
-  );
-  const csv = `${o.url}${o.url.includes('?') ? '&' : '?'}format=csv`;
-  const script = [
-    'function load() {',
-    `  const r = UrlFetchApp.fetch('${csv}', {`,
-    `    headers: { Authorization: 'Bearer ${o.token}' }`,
-    '  });',
-    '  const rows = Utilities.parseCsv(r.getContentText());',
-    '  const sh = SpreadsheetApp.getActiveSheet();',
-    '  sh.clearContents();',
-    '  sh.getRange(1, 1, rows.length, rows[0].length).setValues(rows);',
-    '}',
-  ].join('\n');
-  return {
-    curl: `curl -H "Authorization: Bearer ${o.token}" \\\n  "${o.url}"`,
-    sample,
-    script,
-  };
 }

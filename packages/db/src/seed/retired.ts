@@ -376,6 +376,14 @@ export const RETIRED = {
     'tggrp.summary_hint',
     'tggrp.title',
     'tgn.cp_fee.days',
+    // Прототип v160 (просьба заказчика 21.11.2026): «Как подключить» в окне API-токена — по программам;
+    // прежние подсказки одной строкой, «Пример запроса» и «Скрипт для Google Таблиц» больше не нужны.
+    'dm.how.curl',
+    'dm.how.script',
+    'dm.how.tip_apps',
+    'dm.how.tip_csv',
+    'dm.how.tip_limits',
+    'dm.how.tip_sheets',
   ],
 } as const;
 

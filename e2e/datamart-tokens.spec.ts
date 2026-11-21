@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext, type Response } from '@playwright/test';
 import { platformAdmin, search } from './admin';
-import { DEMO_PASSWORD, signIn } from './helpers';
+import { DEMO_PASSWORD, signIn, stillElement } from './helpers';
 
 // «Витрина данных» → «API Токены» в Админке (доработки 20.11.2026: Витрина данных, блок 5; общий план
 // 20.11, этап 1, П14; прототип v155 `renderDmTok`, `dmNewTok`, `dmShowTok`): администратор выпускает
@@ -47,6 +47,8 @@ const tokenList = (q: string) => (r: Response) =>
 
 /** Готовый шаблон Админки «Организации» (refDB.dmTemplates, код `orgs`). */
 const ADMIN_TEMPLATE = 'orgs';
+/** Готовый шаблон Админки с двумя параметрами-датами «Активность организаций по дням». */
+const PARAM_TEMPLATE = 'org-activity';
 
 test.describe('Витрина данных: API Токены', () => {
   test('(доработки 20.11.2026, Витрина данных) администратор выпускает токен шаблона «Для администратора»: 30 дней по умолчанию, токен показан один раз, в списке только начало; «Перевыпустить» и «Отозвать»', async ({
@@ -115,10 +117,59 @@ test.describe('Витрина данных: API Токены', () => {
       await expect(shown.locator('[data-dm-token-copy]')).toBeVisible();
       const how = shown.locator('[data-dm-how]');
       await expect(how).toContainText(texts['dm.how.title']!);
-      await expect(how.locator('[data-dm-how-url]')).toContainText(`/api/ext/v1/${ADMIN_TEMPLATE}`);
-      await expect(how.locator('[data-dm-how-header]')).toHaveText(
-        `Authorization: Bearer ${issued.token}`,
-      );
+      // Прототип v160: ссылка CSV, адрес и заголовок — отдельными кнопками, нажатие копирует; токен —
+      // только в заголовке, в адресах его нет.
+      const base = how.locator('[data-dm-how-chip="url"]');
+      await expect(base).toContainText(`/api/ext/v1/${ADMIN_TEMPLATE}`);
+      const csv = how.locator('[data-dm-how-chip="csv"]');
+      await expect(csv).toContainText(`/api/ext/v1/${ADMIN_TEMPLATE}?format=csv`);
+      await expect(csv).not.toContainText('bk_');
+      await expect(base).not.toContainText('bk_');
+      await expect(how.locator('[data-dm-how-chip="header"]')).toHaveText('Authorization');
+      await expect(how.locator('[data-dm-how-chip="bearer"]')).toHaveText(`Bearer ${issued.token}`);
+      await expect(how.locator('[data-dm-how-part]')).toHaveCount(0);
+      // Блок на каждую программу; Excel · Power Query открыт сразу, остальные раскрываются.
+      await expect(how.locator('[data-dm-how-app]')).toHaveCount(6);
+      for (const [app, title] of [
+        ['pq', 'dm.how.pq.title'],
+        ['vba', 'dm.how.vba.title'],
+        ['gs', 'dm.how.gs.title'],
+        ['pbi', 'dm.how.pbi.title'],
+        ['1c', 'dm.how.c1.title'],
+        ['oth', 'dm.how.oth.title'],
+      ] as const) {
+        await expect(how.locator(`[data-dm-how-app="${app}"] summary`)).toContainText(
+          texts[title]!,
+        );
+      }
+      const pq = how.locator('[data-dm-how-code="pq"]');
+      await expect(pq).toBeVisible();
+      await expect(pq).toContainText(`Token = "${issued.token}"`);
+      await expect(pq).toContainText('Query = [format = "csv"');
+      await expect(how.locator('[data-dm-how-code="vba"]')).toBeHidden();
+      // Первое нажатие в окне: на телефоне оно въезжает шторкой (типовая ошибка № 34).
+      await stillElement(shown);
+      await how.locator('[data-dm-how-app="vba"] summary').click();
+      await expect(how.locator('[data-dm-how-code="vba"]')).toBeVisible();
+      await expect(how.locator('[data-dm-how-code="vba"]')).toContainText('Sub LoadBuhuchet()');
+      // Нажатие на адрес и «Скопировать код» копируют: в буфере — адрес и код целиком.
+      await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin });
+      await page.evaluate(() => navigator.clipboard.writeText(''));
+      await base.click();
+      await expect(
+        page.getByRole('status').filter({ hasText: texts['dm.how.copied']! }),
+      ).toBeVisible();
+      await expect
+        .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+        .toMatch(new RegExp(`^https?://[^/]+/api/ext/v1/${ADMIN_TEMPLATE}$`));
+      await how.locator('[data-dm-how-copy="vba"]').click();
+      await expect(
+        page.getByRole('status').filter({ hasText: texts['dm.how.code_copied']! }),
+      ).toBeVisible();
+      await expect
+        .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+        .toContain(`Const TOKEN As String = "${issued.token}"`);
+      await page.evaluate(() => navigator.clipboard.writeText(''));
       await shown.getByRole('button', { name: texts['dm.tok.show.done']! }).click();
       await expect(shown).toBeHidden();
 
@@ -251,12 +302,18 @@ test.describe('Витрина данных: API Токены', () => {
       await expect(row).toContainText(`${issued.item.prefix}…`);
       await expect(row).toContainText(tpl.name);
 
-      // Строка открывает окно токена; «Как подключить» там — с началом токена, не с токеном.
+      // Строка открывает окно токена; «Как подключить» там — без токена.
       await row.getByText(tpl.name, { exact: true }).first().click();
       const card = page.locator('[data-dm-card]');
       await expect(card).toBeVisible();
-      await expect(card.locator('[data-dm-how-header]')).toHaveText(
-        `Authorization: Bearer ${issued.item.prefix}…`,
+      // В коде — «bk_ВАШ_ТОКЕН» и подсказка вставить полный токен (прототип v160): начала токена в
+      // коде нет, чтобы его не приняли за сам токен.
+      await expect(card.locator('[data-dm-how-chip="bearer"]')).toHaveText(
+        `Bearer ${texts['dm.how.placeholder']}`,
+      );
+      await expect(card.locator('[data-dm-how-part]')).toContainText(texts['dm.how.placeholder']!);
+      await expect(card.locator('[data-dm-how-code="pq"]')).toContainText(
+        `Token = "${texts['dm.how.placeholder']}"`,
       );
       await expect(page.locator('body')).not.toContainText(issued.token);
 
@@ -279,6 +336,115 @@ test.describe('Витрина данных: API Токены', () => {
       expect(((await after.json()) as { error: { code: string } }).error.code).toBe('dm_ext_token');
     } finally {
       await ext.dispose();
+      for (const id of mine) {
+        const res = await page.request.post(`/api/admin/dm/tokens/${id}/revoke`, {
+          headers: { origin },
+          maxRetries: 2,
+        });
+        expect([200, 409]).toContain(res.status());
+      }
+    }
+  });
+
+  test('(правки 21.11.2026, прототип v160) «Как подключить» у шаблона с параметрами: таблица параметров, параметры отдельными частями адреса и строками кода, шаги о параметрах', async ({
+    page,
+    baseURL,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    await platformAdmin(page.request, origin);
+    const texts = await dictionary(page.request);
+    const form = await tokenForm(page.request, '/api/admin/dm/tokens');
+    const tpl = form.templates.find((x) => x.code === PARAM_TEMPLATE)!;
+    expect(tpl, `готовый шаблон Админки «${PARAM_TEMPLATE}»`).toBeTruthy();
+    const name = uniqueWord('Параметры');
+    const mine: string[] = [];
+    try {
+      const res = await page.request.post('/api/admin/dm/tokens', {
+        headers: { origin },
+        data: { templateId: tpl.id, name, term: form.defaultTerm },
+      });
+      expect(res.status(), await res.text()).toBe(201);
+      const issued = (await res.json()) as Issued;
+      mine.push(issued.item.id);
+      // Параметры шаблона и их значения на сегодня — из ответа окна токена.
+      const cardRes = await page.request.get(`/api/admin/dm/tokens/${issued.item.id}`, {
+        maxRetries: 2,
+      });
+      expect(cardRes.status(), await cardRes.text()).toBe(200);
+      const { how: served } = (await cardRes.json()) as {
+        how: { base: string; params: { code: string; name: string; value: string | null }[] };
+      };
+      expect(served.params.map((p) => p.code)).toEqual(['date_from', 'date_to']);
+      const [from, to] = served.params as [(typeof served.params)[0], (typeof served.params)[0]];
+      expect(from.value).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(to.value).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+
+      await page.goto(`/app/dm/tok?tok=${issued.item.id}`);
+      const card = page.getByRole('dialog', { name });
+      const how = card.locator('[data-dm-how]');
+      await expect(how).toBeVisible();
+      // «Ссылка CSV» — с параметрами по умолчанию, «Адрес» — без них.
+      const query = `?format=csv&date_from=${from.value}&date_to=${to.value}`;
+      await expect(how.locator('[data-dm-how-chip="csv"]')).toHaveText(`${served.base}${query}`);
+      await expect(how.locator('[data-dm-how-chip="url"]')).toHaveText(served.base);
+      // Таблица «Параметр / Значение / Что это»: строка на параметр, код и значение — кнопками-копиями.
+      const rows = how.locator('[data-dm-how-params] tbody tr');
+      await expect(rows).toHaveCount(2);
+      for (const [i, p] of [from, to].entries()) {
+        await expect(rows.nth(i).getByRole('button', { name: p.code, exact: true })).toBeVisible();
+        await expect(
+          rows.nth(i).getByRole('button', { name: p.value!, exact: true }),
+        ).toBeVisible();
+        await expect(rows.nth(i)).toContainText(p.name);
+        await expect(rows.nth(i)).toContainText(texts['dm.how.fmt.date']!);
+        await expect(rows.nth(i)).not.toContainText(texts['dm.how.optional']!);
+      }
+      // Excel · Power Query открыт сразу: части адреса по одной, шаги о параметрах и формула ячейки.
+      const pq = how.locator('[data-dm-how-app="pq"]');
+      for (const part of [
+        `${served.base}?format=csv`,
+        `&date_from=${from.value}`,
+        `&date_to=${to.value}`,
+      ]) {
+        await expect(pq.getByRole('button', { name: part, exact: true })).toBeVisible();
+      }
+      await expect(pq).toContainText(texts['dm.how.pq.b3']!);
+      await expect(pq).toContainText(texts['dm.how.pq.b4_privacy']!);
+      await expect(
+        pq.getByRole('button', {
+          name: 'Date.ToText(Date.From(Excel.CurrentWorkbook(){[Name="date_from"]}[Content]{0}[Column1]), "yyyy-MM-dd")',
+          exact: true,
+        }),
+      ).toBeVisible();
+      const code = how.locator('[data-dm-how-code="pq"]');
+      await expect(code).toContainText(texts['dm.how.code.params_refresh']!);
+      await expect(code).toContainText(`= "${from.value}",   // date_from, `);
+      await expect(code).toContainText('Query = [format = "csv", date_from = #"');
+      // Остальные блоки раскрываются: у макроса и у «Других сервисов» — свои шаги о параметрах.
+      await stillElement(card);
+      await how.locator('[data-dm-how-app="vba"] summary').click();
+      const vba = how.locator('[data-dm-how-app="vba"]');
+      await expect(vba.locator('[data-dm-how-code="vba"]')).toBeVisible();
+      await expect(
+        vba.getByRole('button', { name: 'Range("B1").Text', exact: true }),
+      ).toBeVisible();
+      await expect(vba.locator('[data-dm-how-code="vba"]')).toContainText(
+        `?format=csv" & "&date_from=" & p1 & "&date_to=" & p2`,
+      );
+      await how.locator('[data-dm-how-app="oth"] summary').click();
+      const oth = how.locator('[data-dm-how-app="oth"]');
+      await expect(oth.locator('[data-dm-how-code="curl"]')).toBeVisible();
+      await expect(
+        oth.getByRole('button', { name: `date_from=${from.value}`, exact: true }),
+      ).toBeVisible();
+      await expect(oth.locator('[data-dm-how-code="curl"]')).toContainText(
+        `"${served.base}${query}"`,
+      );
+      await expect(oth.locator('[data-dm-how-code="py"]')).toContainText(
+        `PARAMS = {"date_from": "${from.value}", "date_to": "${to.value}"}`,
+      );
+      await expect(page.locator('body')).not.toContainText(issued.token);
+    } finally {
       for (const id of mine) {
         const res = await page.request.post(`/api/admin/dm/tokens/${id}/revoke`, {
           headers: { origin },
