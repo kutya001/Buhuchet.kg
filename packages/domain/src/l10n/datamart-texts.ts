@@ -269,6 +269,10 @@ export const DATAMART_TEXTS = {
   'dm.how.copy_code': { ru: 'Скопировать код', section: S },
   'dm.how.copied': { ru: 'Скопировано', section: S },
   'dm.how.code_copied': { ru: 'Код скопирован', section: S },
+  'dm.how.token_plain': {
+    ru: 'Токен хранится в файле открытым текстом: его видит каждый, у кого есть файл',
+    section: S,
+  },
   'dm.how.parts': {
     ru: 'В «Части URL-адреса» вставьте по одной строке, для каждой следующей — «Добавить часть»:',
     section: S,

@@ -458,6 +458,7 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
       'v160',
       'v161',
       'v162',
+      'v163',
     ]) {
       expect(rows.map((r) => r.id)).toContain(id);
     }

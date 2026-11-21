@@ -180,7 +180,8 @@ function AppBlock({
  * «Как подключить» (доработки 20.11.2026: Витрина данных, блок 6, пункт 6; поток Т, этап 2, П12;
  * просьба заказчика 21.11.2026, прототип v160 `dmHow`): общее — ссылка CSV, адрес, заголовок и
  * параметры по отдельности; ниже блок на каждую программу — Excel Power Query, Excel VBA, Google
- * Таблицы, Power BI, 1С, «Другие сервисы» — с шагами и тем, что куда вставить. Любой адрес, параметр,
+ * Таблицы, Power BI, 1С, «Другие сервисы» — с шагами и тем, что куда вставить; у Excel, Power BI и 1С
+ * первой строкой — предупреждение, что токен лежит в файле открытым текстом (v163). Любой адрес, параметр,
  * заголовок и код копируется нажатием. Адрес, параметры и столбцы — с сервера (`how` окна токена);
  * `token` — токен целиком в окне выпуска или null в окне уже выпущенного токена: его в системе нет, в
  * коде стоит «bk_ВАШ_ТОКЕН» и подсказка вставить полный. Пример ответа — по типам столбцов, шаблон не
@@ -244,6 +245,17 @@ export function HowBox({ how, token }: { how: DmTokenHow; token: string | null }
       label={t('dm.how.copy_code')}
       copy={copy}
     />
+  );
+  // Токен в коде и в запросе — открытым текстом: предупреждение первой строкой блоков Excel, Power BI и
+  // 1С (ТЗ, доработки 21.11.2026, п. 9; прототип v163 `.dm-tkw`); у Google Таблиц оно в самом скрипте.
+  const tokenPlain = (
+    <p
+      data-dm-how-plain=""
+      className="mt-1 mb-1.5 flex items-start gap-1.5 text-[12px] leading-[1.4] text-caution"
+    >
+      <Icon name="lock" size="sm" className="mt-0.5 flex-none" />
+      {t('dm.how.token_plain')}
+    </p>
   );
   const has = x.pairs.length > 0;
   const first = x.pairs[0];
@@ -334,6 +346,7 @@ export function HowBox({ how, token }: { how: DmTokenHow; token: string | null }
         ) : null}
         <div className="my-3 flex flex-col gap-2">
           <AppBlock id="pq" icon="table" title={t('dm.how.pq.title')} sub={t('dm.how.pq.sub')} open>
+            {tokenPlain}
             <h4 className={H4}>{t('dm.how.pq.h1')}</h4>
             <ol className={STEPS}>
               <li>{t('dm.how.pq.a1')}</li>
@@ -360,6 +373,7 @@ export function HowBox({ how, token }: { how: DmTokenHow; token: string | null }
             {code(x.powerQuery, 'pq')}
           </AppBlock>
           <AppBlock id="vba" icon="list" title={t('dm.how.vba.title')} sub={t('dm.how.vba.sub')}>
+            {tokenPlain}
             <ol className={STEPS}>
               <li>{t('dm.how.vba.a1')}</li>
               {has ? (
@@ -379,6 +393,7 @@ export function HowBox({ how, token }: { how: DmTokenHow; token: string | null }
             {code(x.sheets, 'gs')}
           </AppBlock>
           <AppBlock id="pbi" icon="chart" title={t('dm.how.pbi.title')} sub={t('dm.how.pbi.sub')}>
+            {tokenPlain}
             <ol className={STEPS}>
               <li>{t('dm.how.pbi.a1')}</li>
               {urlParts}
@@ -393,6 +408,7 @@ export function HowBox({ how, token }: { how: DmTokenHow; token: string | null }
             {code(x.powerQuery, 'pbi')}
           </AppBlock>
           <AppBlock id="1c" icon="building" title={t('dm.how.c1.title')} sub={t('dm.how.c1.sub')}>
+            {tokenPlain}
             <ol className={STEPS}>
               <li>{t('dm.how.c1.a1')}</li>
               {has ? <li>{t('dm.how.c1.a2')}</li> : null}

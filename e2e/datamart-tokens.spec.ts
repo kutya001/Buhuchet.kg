@@ -142,6 +142,14 @@ test.describe('Витрина данных: API Токены', () => {
           texts[title]!,
         );
       }
+      // (прототип v163) Токен в файле — открытым текстом: предупреждение у Excel, Power BI и 1С; у Google
+      // Таблиц оно в самом скрипте, у «Других сервисов» его нет.
+      await expect(how.locator('[data-dm-how-plain]')).toHaveCount(4);
+      for (const app of ['pq', 'vba', 'pbi', '1c'])
+        await expect(how.locator(`[data-dm-how-app="${app}"] [data-dm-how-plain]`)).toHaveText(
+          texts['dm.how.token_plain']!,
+        );
+      await expect(how.locator('[data-dm-how-app="pq"] [data-dm-how-plain]')).toBeVisible();
       const pq = how.locator('[data-dm-how-code="pq"]');
       await expect(pq).toBeVisible();
       await expect(pq).toContainText(`Token = "${issued.token}"`);
