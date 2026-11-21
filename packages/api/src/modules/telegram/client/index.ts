@@ -28,7 +28,8 @@ import {
   type TelegramTemplateKey,
 } from '@buhuchet/domain';
 import type { ApiDeps } from '../../../deps';
-import { orgClosedNow } from '../../contractor-page/org-closed';
+import { orgAccessClosed, orgClosedNow } from '../../contractor-page/org-closed';
+import { subscriptionToday } from '../../../subscription-access';
 import { serverTexts } from '../../l10n/texts';
 import { bellContractor } from '../bell';
 import { botText, sendNow } from '../bot';
@@ -186,7 +187,11 @@ export async function clientStart(
     return;
   }
   const name = cpTgName(chat);
+  const today = subscriptionToday(deps);
   const res = await withOrgContext(deps.db, { orgId: target.orgId, userId: null }, async (tx) => {
+    // Доступ могли закрыть после проверки выше: в транзакции записи — заново (ссылка не тратится).
+    // ОТКЛОНЕНИЕ: docs/deviations.md#К-24
+    if (await orgAccessClosed(tx, today)) return { outcome: 'closed' } as const;
     const r = await startContractorTelegram(tx, { tokenHash, chatId: chat.chatId, name });
     // Колокольчик (доработки 16.11.2026, блок 3): в транзакции запроса, и без бота у сотрудников.
     if (r.outcome === 'asked') {
@@ -198,6 +203,11 @@ export async function clientStart(
     }
     return r;
   });
+  if (res.outcome === 'closed') {
+    const t = await serverTexts(deps);
+    await sendNow(deps, chat.chatId, t('cppage.tg.org_closed'), 'cp_telegram');
+    return;
+  }
   if (res.outcome === 'invalid') return reply(deps, chat.chatId, 'tgCpLinkBad');
   const values = { контрагент: res.contractor };
   if (res.outcome === 'limit') return reply(deps, chat.chatId, 'tgCpLimit', values);

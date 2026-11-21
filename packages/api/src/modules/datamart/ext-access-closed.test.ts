@@ -80,7 +80,10 @@ describe.skipIf(!databaseAvailable())(
       const res = await ext();
       expect(res.status, await res.clone().text()).toBe(403);
       const { error } = (await res.json()) as { error: { code: string; message: string } };
-      expect(error).toMatchObject({ code: 'dm_ext_stopped', message: 'Доступ остановлен' });
+      expect(error).toMatchObject({
+        code: 'dm_ext_stopped',
+        message: UI_TEXTS['err.dm_ext_stopped'].ru,
+      });
       closedCalls += 1;
       expect(await card(admin, '/api/admin/dm')).toMatchObject({
         state: 'stopped',

@@ -1,4 +1,9 @@
-import { fixedClock, type FakeTelegram, type MemoryStorage } from '@buhuchet/adapters';
+import {
+  fixedClock,
+  type FakeTelegram,
+  type FixedClock,
+  type MemoryStorage,
+} from '@buhuchet/adapters';
 import { schema } from '@buhuchet/db';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
 import {
@@ -736,9 +741,100 @@ describe.skipIf(!databaseAvailable())(
           { name: 'Чек.pdf', state: 'pending', contractorId: cpA },
         ]);
         expect(await snapshot()).toEqual(snap);
+        // Хранилище: чек «Я оплатил», положенный под ключ файла, после отказа убран; файл «Отправить
+        // файл» незаконченной загрузки ждёт задачу по расписанию вместе со строкой (п. И-10).
+        const keys = await f.t.admin.db
+          .select({
+            name: schema.contractorSentFiles.name,
+            key: schema.contractorSentFiles.storageKey,
+          })
+          .from(schema.contractorSentFiles);
+        const stored = (name: string) => storage.files.has(keys.find((k) => k.name === name)!.key);
+        expect(stored('Чек.pdf')).toBe(false);
+        expect(stored('Выписка.pdf')).toBe(true);
       } finally {
         before.mockRestore();
         await setSubscription(TEST_SUBSCRIPTION.paidUntil);
+      }
+    });
+
+    it('этап 3, П4: полночь после «Оплачено до» наступила, пока копировался чек «Я оплатил», — «закончить» отвечает «Страница недоступна», сообщения об оплате нет, чек убран (п. К-24)', async () => {
+      const clock = f.deps.clock as FixedClock;
+      const was = clock.now().toISOString();
+      const paid = await paidBegin();
+      const keys = await f.t.admin.db
+        .select({ key: schema.contractorSentFiles.storageKey })
+        .from(schema.contractorSentFiles)
+        .where(eq(schema.contractorSentFiles.id, paid));
+      // Оплачено по сегодня (18.10): проверка до транзакции видит доступ открытым; первая копия чека
+      // переводит часы на 00:30 19.10 по Бишкеку — доступ закрыт с этого дня.
+      const copy = storage.copy.bind(storage);
+      const midnight = vi.spyOn(storage, 'copy').mockImplementationOnce(async (from, to) => {
+        clock.set('2026-10-18T18:30:00Z');
+        return copy(from, to);
+      });
+      try {
+        await setSubscription('2026-10-18');
+        await resetLimits();
+        const snap = await snapshot();
+        const res = await paidComplete(paid);
+        expect(midnight).toHaveBeenCalled();
+        expect(res.status, await res.clone().text()).toBe(404);
+        expect((await failure(res)).code).toBe('page_unavailable');
+        expect(await snapshot()).toEqual(snap);
+        expect(storage.files.has(keys[0]!.key)).toBe(false);
+      } finally {
+        midnight.mockRestore();
+        clock.set(was);
+        await setSubscription(TEST_SUBSCRIPTION.paidUntil);
+      }
+    });
+
+    it('этап 3, П4: «/start» по ссылке подключения при закрытом доступе — и когда он закрылся после проверки до транзакции — «Доступ организации закрыт», ссылка не тратится, запроса нет; после оплаты та же ссылка подключает (п. К-24)', async () => {
+      const NEW_CHAT = 9503;
+      await resetLimits();
+      const link = await pagePost(`/api/page/org-a/${INN_A}/telegram`, grantA);
+      expect(link.status, await link.clone().text()).toBe(200);
+      const token = new URL(PublicPageTelegramLink.parse(await link.json()).url).searchParams.get(
+        'start',
+      )!;
+      const links = () =>
+        f.t.admin.db
+          .select({ status: schema.contractorTelegramLinks.status })
+          .from(schema.contractorTelegramLinks)
+          .where(eq(schema.contractorTelegramLinks.chatId, NEW_CHAT));
+      const bell = () => f.t.admin.db.$count(schema.bellNotifications);
+      const check = vi.spyOn(subscriptionAccess, 'orgClosedNow');
+      try {
+        await setSubscription('2026-10-17');
+        const snap = await snapshot();
+        const bells = await bell();
+        const sent = tg.sent.length;
+        // Первый «Старт» — закрытие видит проверка до транзакции; второй — она «опоздала» (подмена
+        // отвечает «открыт»), закрытие ловит транзакция записи.
+        await toBot(`/start ${token}`, NEW_CHAT);
+        check.mockResolvedValueOnce(false);
+        await toBot(`/start ${token}`, NEW_CHAT);
+        expect(check).toHaveBeenCalledTimes(2);
+        expect(tg.sent.slice(sent).map((m) => [m.chatId, m.text])).toEqual([
+          [NEW_CHAT, CLOSED],
+          [NEW_CHAT, CLOSED],
+        ]);
+        expect(await links()).toEqual([]);
+        expect(await bell()).toBe(bells);
+        expect(await snapshot()).toEqual(snap);
+
+        // Оплачено: та же ссылка подключает — запрос «ждёт подтверждения».
+        await setSubscription(TEST_SUBSCRIPTION.paidUntil);
+        await toBot(`/start ${token}`, NEW_CHAT);
+        expect(sentTo(NEW_CHAT).at(-1)!.text).toBe(tpl('tgCpAsk', { контрагент: CP_A }));
+        expect(await links()).toEqual([{ status: 'wait' }]);
+      } finally {
+        check.mockRestore();
+        await setSubscription(TEST_SUBSCRIPTION.paidUntil);
+        await f.t.admin.db
+          .delete(schema.contractorTelegramLinks)
+          .where(eq(schema.contractorTelegramLinks.chatId, NEW_CHAT));
       }
     });
 

@@ -380,11 +380,12 @@ export function pageSentCompleteHandler(
     const written = await storePageUploads(deps, rows);
     // Строка не «Новая» после ошибки — незаконченная: её файлы удалит задача по расписанию (её не
     // встретит «закончить»: `SENT_COMPLETE_MINUTES`); закончила другая такая же отправка — файл её.
+    const today = subscriptionToday(deps);
     const done = await withOrgContext(deps.db, ctx, async (tx) => {
       // Доступ организации могли закрыть, пока файл загружался: проверка — и в транзакции записи,
       // ответ — тот же «Страница недоступна» (п. К-24).
       // ОТКЛОНЕНИЕ: docs/deviations.md#К-24
-      if (await orgAccessClosed(tx, subscriptionToday(deps))) return 'closed' as const;
+      if (await orgAccessClosed(tx, today)) return 'closed' as const;
       // Галочку могли выключить, пока файл загружался: тогда отправка не принимается.
       const state = await sentUploadState(tx, page.contractorId);
       if (!state || !sentUploadOn(state)) return false;

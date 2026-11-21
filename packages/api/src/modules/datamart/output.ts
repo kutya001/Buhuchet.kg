@@ -186,6 +186,7 @@ const seen = (
       module: isModule(tpl.module) ? tpl.module : null,
       needPermission: tpl.needPermission,
       columns: tpl.columns,
+      code: tpl.code,
     },
     subject,
     features,

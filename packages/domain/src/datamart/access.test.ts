@@ -131,4 +131,29 @@ describe('dmTemplateTokenable', () => {
     ).toBe(true);
     expect(dmTemplateTokenable(revenue, subject([], {}, true), ALL_ON)).toBe(true);
   });
+
+  it('«Выручка по контрагентам» без столбца «Контрагент» (п. К-28): видна только при «Все» и в «Контрагентах», и в «Проектах»', () => {
+    const totals = tpl({
+      module: 'cps',
+      needPermission: 'fee',
+      code: 'revenue',
+      columns: [{ code: 'total', name: 'Итого', type: 'money' }],
+    });
+    const fee = ['cpView', 'fee'] as PermissionId[];
+    expect(dmTemplateSeen(totals, subject(fee, { cps: 'all', projects: 'own' }), ALL_ON)).toBe(
+      false,
+    );
+    expect(dmTemplateSeen(totals, subject(fee, { cps: 'all', projects: 'all' }), ALL_ON)).toBe(
+      true,
+    );
+    // Тот же шаблон с другим кодом — только по «Контрагентам», как у прототипа.
+    expect(
+      dmTemplateSeen(
+        { ...totals, code: 'debtors' },
+        subject(fee, { cps: 'all', projects: 'own' }),
+        ALL_ON,
+      ),
+    ).toBe(true);
+    expect(dmTemplateSeen(totals, subject([], {}, true), ALL_ON)).toBe(true);
+  });
 });

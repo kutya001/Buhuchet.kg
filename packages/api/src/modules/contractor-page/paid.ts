@@ -69,6 +69,7 @@ import { sendPageCode } from '../telegram/client/code';
 import { flushEvents } from '../telegram/outbox';
 import { bellContractor } from '../telegram/bell';
 import { queueStaffNotice, seesFee } from '../telegram/client/pay';
+import { subscriptionToday } from '../../subscription-access';
 import { orgAccessClosed } from './org-closed';
 import { clientIpHash } from './public';
 import { contractorPageBody } from './view';
@@ -425,11 +426,13 @@ async function finishPaid(
       ? t(`pub.paid.staff.${purpose}_month`, { month: monthLabel(month) })
       : t(`pub.paid.staff.${purpose}`);
   // Отказ после загрузки (страницу или раздел скрыли, месяц оплачен) — положенный чек удаляется.
+  // День закрытия — после копии чека: пока он копировался, могла наступить полночь после «Оплачено до».
+  const closedDay = subscriptionToday(deps);
   const done = await withOrgContext(deps.db, ctxDb, async (tx) => {
     // Доступ организации могли закрыть, пока чек загружался: в этой транзакции записи — проверка
     // заново, ответ — тот же «Страница недоступна», что до загрузки (п. К-24).
     // ОТКЛОНЕНИЕ: docs/deviations.md#К-24
-    if (await orgAccessClosed(tx, today)) return 'closed' as const;
+    if (await orgAccessClosed(tx, closedDay)) return 'closed' as const;
     // Галочку могли выключить, пока чек загружался: тогда сообщение не принимается.
     const ctx = await paidContext(tx, { ...page, today, t });
     if (!ctx?.upload) return null;

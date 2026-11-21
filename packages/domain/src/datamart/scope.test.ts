@@ -68,8 +68,19 @@ describe('dmOwnScope', () => {
     expect(dmOwnScope('cps', subject([], {}, true), cp, 'revenue')).toBe(false);
     const viewAll = subject(['cpView', 'fee', 'viewAll'], { cps: 'own', projects: 'own' });
     expect(dmOwnScope('cps', viewAll, cp, 'revenue')).toBe(false);
-    // Без столбца «Контрагент» отбирать нечем — такой шаблон «Свои» не виден (`dmTemplateSeen`).
+    // Без столбца «Контрагент» отбирать нечем — такой шаблон при «Свои» в «Проектах» не виден
+    // (`dmTemplateSeen`, access.test.ts).
     expect(dmOwnScope('cps', projOwn, [{ code: 'n', type: 'num' }], 'revenue')).toBe(false);
+  });
+
+  it('«Проекты и разовые услуги» (п. К-28): «Свои» в «Финансовых операциях» — тоже отбор (разовые услуги — по их области)', () => {
+    const cp = [{ code: 'contractor_id', type: 'cp' }];
+    const finOwn = subject(['projView'], { projects: 'all', fin: 'own' });
+    expect(DM_ALSO_SCOPED['projects-services']).toEqual(['fin']);
+    expect(dmOwnScope('projects', finOwn, cp, 'projects-services')).toBe(true);
+    expect(dmOwnScope('projects', finOwn, cp)).toBe(false);
+    const all = subject(['projView'], { projects: 'all', fin: 'all' });
+    expect(dmOwnScope('projects', all, cp, 'projects-services')).toBe(false);
   });
 });
 

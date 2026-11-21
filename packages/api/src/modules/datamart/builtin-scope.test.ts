@@ -360,6 +360,41 @@ describe.skipIf(!databaseAvailable())(
       }
     });
 
+    it('«Проекты и разовые услуги» со «Все» в «Проектах», но «Свои» в «Финансовых операциях» — только свои контрагенты: в нём разовые услуги (этап 3, П4; п. К-28); «Все» в обеих — все строки', async () => {
+      // Роль бухгалтера с сотрудниками: «Контрагенты» — «Все», остальные группы — «Свои».
+      const [staffRole] = await t.admin.db
+        .select({ id: roles.id })
+        .from(roles)
+        .where(and(eq(roles.orgId, DEMO_ORG_ID), eq(roles.name, 'Бухгалтер с сотрудниками')));
+      const groupScope = (g: 'projects' | 'fin') =>
+        and(eq(roleScopes.roleId, staffRole!.id), eq(roleScopes.permGroup, g));
+      await t.admin.db.update(roleScopes).set({ scope: 'all' }).where(groupScope('projects'));
+      try {
+        const own = new Set(
+          (
+            await t.admin.db
+              .select({ id: contractors.id })
+              .from(contractors)
+              .where(eq(contractors.responsibleEmployeeId, demoId('employee', 'e5')))
+          ).map((r) => r.id),
+        );
+        const rows = await raw('projects-services');
+        const ownRows = rows.filter((r) => r.contractor !== null && own.has(r.contractor));
+        expect(ownRows.length).toBeGreaterThan(0);
+        expect(ownRows.length).toBeLessThan(rows.length);
+        expect(sorted((await shown(STAFF_ACC, 'projects-services')).rows)).toEqual(
+          sorted(ownRows.map((r) => r.shown)),
+        );
+        await t.admin.db.update(roleScopes).set({ scope: 'all' }).where(groupScope('fin'));
+        expect(sorted((await shown(STAFF_ACC, 'projects-services')).rows)).toEqual(
+          sorted(rows.map((r) => r.shown)),
+        );
+      } finally {
+        await t.admin.db.update(roleScopes).set({ scope: 'own' }).where(groupScope('projects'));
+        await t.admin.db.update(roleScopes).set({ scope: 'own' }).where(groupScope('fin'));
+      }
+    });
+
     it('«Задачи» — только с «Видеть задачи всех» (п. К-27): с «Просматривать сотрудников» без него шаблона нет, «Показать» — 404; отбор берёт область группы модуля шаблона', async () => {
       expect(await catalog(OWNER)).toContain('tasks');
       expect(await catalog(STAFF_ACC)).toEqual([

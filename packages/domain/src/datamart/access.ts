@@ -9,7 +9,7 @@ import {
   type ScopeGroupId,
 } from '../roles/permissions';
 import type { DM_MODULES, DM_TEMPLATE_STATES } from './datamart';
-import { dmOwnScope } from './scope';
+import { DM_ALSO_SCOPED, dmOwnScope } from './scope';
 
 /*
  * Кому из сотрудников организации виден шаблон «Витрины данных» (доработки 20.11.2026: Витрина данных,
@@ -72,7 +72,7 @@ const isPermission = (id: string, subject: AccessSubject): boolean =>
  * есть просмотр модуля и дополнительное право шаблона (его модуль, если выключается, — включён: п. К-28);
  * шаблон без столбца «Контрагент» (итоги по всей организации) — только при «Все контрагенты» в группе
  * прав модуля (владельцу — всегда), у модуля без области («Сотрудники») — в группе «Контрагенты», как
- * его отбор «Свои» (`dmOwnScope`).
+ * его отбор «Свои» (`dmOwnScope`), и в группах второго модуля готового шаблона (`DM_ALSO_SCOPED`).
  */
 export function dmTemplateSeen(
   t: DmTemplateSight,
@@ -91,11 +91,14 @@ export function dmTemplateSeen(
   if (needFeature && features[needFeature] !== true) return false;
   if (group?.view && !hasPermission(subject, group.view)) return false;
   if (t.needPermission && !isPermission(t.needPermission, subject)) return false;
+  if (dmHasContractorColumn(t.columns)) return true;
   // ОТКЛОНЕНИЕ: docs/deviations.md#О-95 — модуль без области без «Контрагента» — по «Контрагентам».
-  return (
-    dmHasContractorColumn(t.columns) ||
-    scopeOf(subject, isScopeGroup(t.module) ? t.module : 'cps') === 'all'
-  );
+  // ОТКЛОНЕНИЕ: docs/deviations.md#К-28 — и по группам второго модуля готового шаблона.
+  const groups = [
+    isScopeGroup(t.module) ? t.module : ('cps' as const),
+    ...(t.code ? (DM_ALSO_SCOPED[t.code] ?? []) : []),
+  ];
+  return groups.every((g) => scopeOf(subject, g) === 'all');
 }
 
 /**
