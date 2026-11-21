@@ -1,5 +1,6 @@
 import type { ApiDeps } from '../../deps';
 import { createModuleApp } from '../../module';
+import { EXT_ROUTE, extHandler } from './ext';
 import { ADMIN_TOKEN_ROUTES, ORG_TOKEN_ROUTES, tokenHandlers } from './tokens';
 
 /**
@@ -10,7 +11,8 @@ type A = typeof ADMIN_TOKEN_ROUTES;
 
 /**
  * «Витрина данных» (доработки 20.11.2026: Витрина данных): «API Токены» организации и Админки (поток Т,
- * этап 1, П14). Пути без номера («form», «values», «export») — раньше `{id}`.
+ * этап 1, П14) и внешний адрес по токену `GET /api/ext/v1/{code}` (этап 2, П11). Пути без номера
+ * («form», «values», «export») — раньше `{id}`.
  */
 export function datamartModule(deps: ApiDeps) {
   const org = tokenHandlers(deps, 'org');
@@ -31,5 +33,6 @@ export function datamartModule(deps: ApiDeps) {
     .openapi<A['create']>(ADMIN_TOKEN_ROUTES.create, adm.create)
     .openapi<A['card']>(ADMIN_TOKEN_ROUTES.card, adm.card)
     .openapi<A['revoke']>(ADMIN_TOKEN_ROUTES.revoke, adm.revoke)
-    .openapi<A['reissue']>(ADMIN_TOKEN_ROUTES.reissue, adm.reissue);
+    .openapi<A['reissue']>(ADMIN_TOKEN_ROUTES.reissue, adm.reissue)
+    .openapi(EXT_ROUTE, extHandler(deps));
 }

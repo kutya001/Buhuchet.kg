@@ -52,6 +52,9 @@ const PUBLIC_PATTERNS: readonly RegExp[] = [
   /^\/api\/auth\/setup\/[A-Za-z0-9_-]{43}$/,
   /^\/api\/landing\/videos\/[a-z0-9][a-z0-9_-]{0,63}\/(?:cover|play|start|watched)$/,
   /^\/api\/leads\/uploads\/[0-9a-f-]{36}\/read$/,
+  // Внешний адрес «Витрины данных» (доработки 20.11.2026: Витрина данных, блок 6): кто просит — API-токен
+  // в заголовке, его проверяет сам метод; cookie не читаются.
+  /^\/api\/ext\/v1\/[a-z0-9][a-z0-9-]{1,59}$/,
 ];
 
 const isPublicPath = (path: string) =>

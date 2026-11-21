@@ -1,4 +1,10 @@
-import { DM_MODULES, DM_TOKEN_NAME_MAX, DM_TOKEN_STATES, DM_TOKEN_STOPS } from '@buhuchet/domain';
+import {
+  DM_CODE_RE,
+  DM_MODULES,
+  DM_TOKEN_NAME_MAX,
+  DM_TOKEN_STATES,
+  DM_TOKEN_STOPS,
+} from '@buhuchet/domain';
 import { z } from 'zod';
 import { Uuid } from './common';
 import { listPageSchema } from './list';
@@ -114,3 +120,23 @@ export const DmTokenIssued = z.object({
   item: DmTokenCard,
 });
 export type DmTokenIssued = z.infer<typeof DmTokenIssued>;
+
+/*
+ * Внешний адрес GET /api/ext/v1/<код шаблона> (доработки 20.11.2026: Витрина данных, блок 6; поток Т,
+ * этап 2, П11; прототип `dmHow`): токен — только в заголовке Authorization, параметры шаблона — в
+ * адресе (`?month=2026-11`), `format=csv` — таблица, `page` и `limit` — страница (1 000, до 5 000).
+ */
+
+/** Код шаблона в пути. */
+export const DmExtCodeParam = z.object({ code: z.string().regex(new RegExp(DM_CODE_RE)) });
+
+/** Ответ JSON: столбцы, строки страницы, всего строк, ссылка на следующую страницу. */
+export const DmExtAnswer = z.object({
+  columns: z.array(z.object({ key: z.string(), title: z.string(), type: z.string() })),
+  rows: z.array(z.record(z.string(), z.unknown())),
+  total: z.number().int().nonnegative(),
+  next: z.string().nullable(),
+  /** Результат длиннее 50 000 строк: отданы первые 50 000 (только тогда поле есть). */
+  more: z.literal(true).optional(),
+});
+export type DmExtAnswer = z.infer<typeof DmExtAnswer>;

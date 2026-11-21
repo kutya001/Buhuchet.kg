@@ -1,0 +1,169 @@
+import { describe, expect, it } from 'vitest';
+import {
+  DM_EXT_PAGE,
+  DM_EXT_PAGE_MAX,
+  dmExtColumns,
+  dmExtCsv,
+  dmExtPage,
+  dmExtRequest,
+  dmExtRows,
+  dmExtTokenInQuery,
+} from './ext';
+
+// Внешний адрес «Витрины данных» — прототип v155 `dmHow` (блок 6; поток Т, этап 2, П11).
+
+const COLS = [
+  { code: 'name', name: 'Контрагент', type: 'text' },
+  { code: 'sum', name: 'Сумма', type: 'money' },
+  { code: 'n', name: 'Отчётов', type: 'num' },
+  { code: 'cp', name: 'Контрагент (для области)', type: 'cp' },
+];
+
+describe('dmExtColumns', () => {
+  it('столбцы шаблона наружу — без «Контрагента» для области (прототип: `type !== cp`)', () => {
+    expect(dmExtColumns(COLS)).toEqual([
+      { key: 'name', title: 'Контрагент', type: 'text' },
+      { key: 'sum', title: 'Сумма', type: 'money' },
+      { key: 'n', title: 'Отчётов', type: 'num' },
+    ]);
+  });
+
+  it('мусор в столбцах пропускается, без названия — код', () => {
+    expect(dmExtColumns('нет')).toEqual([]);
+    expect(dmExtColumns([null, 1, { code: 'x', type: 'text' }, { name: 'y', type: 'num' }])).toEqual([
+      { key: 'x', title: 'x', type: 'text' },
+    ]);
+  });
+});
+
+describe('dmExtTokenInQuery', () => {
+  it('токен в адресе не принимается: имя параметра или значение с bk_', () => {
+    const tok = `bk_${'a'.repeat(43)}`;
+    expect(dmExtTokenInQuery([['token', 'x']])).toBe(true);
+    expect(dmExtTokenInQuery([['Access_Token', 'x']])).toBe(true);
+    expect(dmExtTokenInQuery([['api_key', '']])).toBe(true);
+    expect(dmExtTokenInQuery([['month', tok]])).toBe(true);
+    expect(dmExtTokenInQuery([[tok, '']])).toBe(true);
+    expect(dmExtTokenInQuery([['month', '2026-11']])).toBe(false);
+    expect(dmExtTokenInQuery([])).toBe(false);
+  });
+});
+
+describe('dmExtRequest', () => {
+  it('по умолчанию — JSON, страница 1, 1 000 строк; лишние параметры отбрасываются', () => {
+    expect(dmExtRequest([['month', '2026-11'], ['zzz', '1']], ['month', 'cp'])).toEqual({
+      ok: true,
+      format: 'json',
+      page: 1,
+      limit: DM_EXT_PAGE,
+      input: { month: '2026-11' },
+    });
+  });
+
+  it('format=csv, страница и размер до 5 000', () => {
+    expect(
+      dmExtRequest(
+        [
+          ['format', 'csv'],
+          ['page', '3'],
+          ['limit', String(DM_EXT_PAGE_MAX)],
+        ],
+        [],
+      ),
+    ).toMatchObject({ ok: true, format: 'csv', page: 3, limit: DM_EXT_PAGE_MAX });
+  });
+
+  it('«Неверный параметр»: повтор, вид ответа, страница и размер вне пределов', () => {
+    expect(dmExtRequest([['format', 'xml']], [])).toEqual({ ok: false, param: 'format' });
+    expect(dmExtRequest([['page', '0']], [])).toEqual({ ok: false, param: 'page' });
+    expect(dmExtRequest([['page', '1.5']], [])).toEqual({ ok: false, param: 'page' });
+    expect(dmExtRequest([['page', '50001']], [])).toEqual({ ok: false, param: 'page' });
+    expect(dmExtRequest([['limit', '5001']], [])).toEqual({ ok: false, param: 'limit' });
+    expect(dmExtRequest([['limit', '']], [])).toEqual({ ok: false, param: 'limit' });
+    expect(
+      dmExtRequest(
+        [
+          ['month', '2026-10'],
+          ['month', '2026-11'],
+        ],
+        ['month'],
+      ),
+    ).toEqual({ ok: false, param: 'month' });
+    // Повтор чужого параметра не мешает: он отбрасывается.
+    expect(
+      dmExtRequest(
+        [
+          ['x', '1'],
+          ['x', '2'],
+        ],
+        [],
+      ).ok,
+    ).toBe(true);
+  });
+
+  it('параметр шаблона с кодом своего слова адреса — не параметр шаблона', () => {
+    expect(dmExtRequest([['page', '2']], ['page'])).toMatchObject({ ok: true, page: 2, input: {} });
+  });
+});
+
+describe('dmExtPage', () => {
+  it('страницы по `limit`: последняя короче, за концом — пусто', () => {
+    expect(dmExtPage(2500, 1, 1000)).toEqual({ from: 0, to: 1000, hasNext: true });
+    expect(dmExtPage(2500, 3, 1000)).toEqual({ from: 2000, to: 2500, hasNext: false });
+    expect(dmExtPage(2500, 4, 1000)).toEqual({ from: 2500, to: 2500, hasNext: false });
+    expect(dmExtPage(0, 1, 1000)).toEqual({ from: 0, to: 0, hasNext: false });
+  });
+});
+
+describe('dmExtRows', () => {
+  const result = {
+    columns: ['cp', 'name', 'sum', 'n'],
+    rows: [
+      ['c1', 'ОсОО «Альфа»', 125050, 3],
+      ['c2', 'ИП Бета', null, null],
+    ],
+  };
+
+  it('строки по ключам столбцов, деньги — сомами, пустые деньги — 0 (прототип `dmHow`)', () => {
+    expect(dmExtRows(result, dmExtColumns(COLS), 0, 10)).toEqual([
+      { name: 'ОсОО «Альфа»', sum: 1250.5, n: 3 },
+      { name: 'ИП Бета', sum: 0, n: null },
+    ]);
+  });
+
+  it('только строки страницы; столбца нет в запросе — пусто', () => {
+    const cols = [{ key: 'gone', title: 'Нет', type: 'text' }];
+    expect(dmExtRows(result, cols, 1, 2)).toEqual([{ gone: null }]);
+  });
+});
+
+describe('dmExtCsv', () => {
+  it('метка UTF-8, названия столбцов, CRLF, кавычки по RFC 4180', () => {
+    const cols = dmExtColumns(COLS);
+    const csv = dmExtCsv(cols, [
+      { name: 'ОсОО «Альфа, Бета»', sum: 1250.5, n: 3 },
+      { name: 'Say "hi"\nnext', sum: -5, n: null },
+    ]);
+    expect(csv).toBe(
+      '\uFEFFКонтрагент,Сумма,Отчётов\r\n"ОсОО «Альфа, Бета»",1250.5,3\r\n"Say ""hi""\nnext",-5,\r\n',
+    );
+  });
+
+  it('текст, похожий на формулу Excel, — с апострофом; числа не трогаются', () => {
+    const cols = [
+      { key: 't', title: 'Текст', type: 'text' },
+      { key: 'm', title: 'Сумма', type: 'money' },
+      { key: 'o', title: 'Объект', type: 'text' },
+    ];
+    const csv = dmExtCsv(cols, [
+      { t: '=HYPERLINK("x")', m: -1, o: { a: 1 } },
+      { t: '+1', m: 2, o: null },
+      { t: '@SUM(A1)', m: 0, o: '-x' },
+    ]);
+    expect(csv.split('\r\n').slice(1, 4)).toEqual([
+      `"'=HYPERLINK(""x"")",-1,"{""a"":1}"`,
+      `'+1,2,`,
+      `'@SUM(A1),0,'-x`,
+    ]);
+  });
+});

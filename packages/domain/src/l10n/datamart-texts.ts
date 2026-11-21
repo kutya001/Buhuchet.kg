@@ -197,4 +197,15 @@ export const DATAMART_TEXTS = {
     ru: 'Слишком много новых токенов за час. Попробуйте позже',
     section: E,
   },
+  // Ответы внешнего адреса по токену (блок 6, пункты 1, 4, 5; поток Т, этап 2, П11; прототип `dmHow`).
+  'err.dm_ext_token': { ru: 'Токен не подходит или истёк', section: E },
+  'err.dm_ext_token_in_url': {
+    ru: 'Токен в адресе не принимается: передайте его в заголовке Authorization: Bearer',
+    section: E,
+  },
+  'err.dm_ext_stopped': { ru: 'Доступ остановлен', section: E },
+  'err.dm_ext_param': { ru: 'Неверный параметр: {param}', section: E },
+  'err.dm_ext_rate': { ru: 'Слишком часто, повторите через {n} секунд', section: E },
+  'err.dm_ext_timeout': { ru: 'Запрос выполнялся слишком долго', section: E },
+  'err.dm_ext_broken': { ru: 'Шаблон временно не работает', section: E },
 } as const satisfies Record<string, UiTextDefault>;
