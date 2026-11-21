@@ -1,7 +1,8 @@
-import { DM_MODULES, DM_PARAM_TYPES, PERMISSIONS, type DmParamDef } from '@buhuchet/domain';
+import { DM_COLUMN_TYPES, DM_MODULES, DM_PARAM_TYPES, PERMISSIONS } from '@buhuchet/domain';
 import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../client';
+import { dmParamDefsOf, type DmTemplateColumn, type DmTemplateParam } from '../datamart-output';
 import { dmTemplateSql, dmTemplates } from '../schema';
 import { DM_BUILTIN_SQL } from './datamart-templates';
 import type { SeedOptions, SeedReport } from './platform';
@@ -16,17 +17,8 @@ import type { SeedOptions, SeedReport } from './platform';
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#К-26
 
-/** Типы столбцов шаблона (прототип `DM_CT`): `cp` — скрытый столбец «Контрагент» для области «Свои». */
-export const DM_COLUMN_TYPES = [
-  'text',
-  'num',
-  'money',
-  'date',
-  'datetime',
-  'month',
-  'bool',
-  'cp',
-] as const;
+/** Типы столбцов шаблона — из домена (`DM_COLUMN_TYPES`); здесь — для прежних вызовов. */
+export { DM_COLUMN_TYPES };
 
 const Param = z
   .object({
@@ -64,27 +56,8 @@ const Template = z.object({
   src: z.literal('system'),
 });
 
-/** Параметр шаблона в базе (`dm_templates.params`). */
-export interface DmTemplateParam {
-  code: string;
-  name: string;
-  type: DmParamDef['type'];
-  required: boolean;
-  default: string | null;
-}
-
-/** Столбец шаблона в базе (`dm_templates.columns`); `contractor` — столбец «Контрагент» области «Свои». */
-export interface DmTemplateColumn {
-  code: string;
-  name: string;
-  type: (typeof DM_COLUMN_TYPES)[number];
-  total: boolean;
-  contractor: boolean;
-}
-
-/** Параметры шаблона из базы — в вид `dmBind` (`@buhuchet/domain`). */
-export const dmParamDefsOf = (params: readonly DmTemplateParam[]): DmParamDef[] =>
-  params.map((p) => ({ k: p.code, type: p.type, req: p.required, def: p.default }));
+// Параметр и столбец шаблона в базе и их перевод в вид `dmBind` — общие с «Выводом» (`../datamart-output`).
+export { dmParamDefsOf, type DmTemplateColumn, type DmTemplateParam };
 
 const PERMISSION_CODES = new Set<string>(PERMISSIONS.map(([id]) => id));
 

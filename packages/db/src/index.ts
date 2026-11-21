@@ -22,6 +22,7 @@ export * from './datamart-tokens';
 export * from './datamart-roles';
 export * from './datamart-run';
 export * from './datamart-ext';
+export * from './datamart-output';
 export * from './auth';
 export * from './telegram';
 export * from './telegram-bot';

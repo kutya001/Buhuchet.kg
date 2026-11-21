@@ -12,6 +12,20 @@ export const DM_ACCESS = ['all', 'selected'] as const;
 export const DM_TEMPLATE_STATES = ['draft', 'published', 'off', 'broken'] as const;
 /** Модуль шаблона: сотрудник видит шаблон, если у него есть право просмотра этого модуля (блок 2, пункт 6). */
 export const DM_MODULES = ['cps', 'reports', 'fin', 'projects', 'kpi', 'staff'] as const;
+/**
+ * Типы столбцов шаблона (блок 2, пункт 5; прототип `DM_CT`): `cp` — скрытый столбец «Контрагент» для
+ * области «Свои» (в «Выводе» и во внешнем ответе его нет).
+ */
+export const DM_COLUMN_TYPES = [
+  'text',
+  'num',
+  'money',
+  'date',
+  'datetime',
+  'month',
+  'bool',
+  'cp',
+] as const;
 /** Откуда запрос журнала: вкладка «Вывод» или внешний адрес по токену. */
 export const DM_REQUEST_VIA = ['screen', 'api'] as const;
 export const DM_REQUEST_OUTCOMES = [

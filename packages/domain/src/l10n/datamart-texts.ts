@@ -1,3 +1,4 @@
+import { DATAMART_OUTPUT_TEXTS } from './datamart-output-texts';
 import type { UiTextDefault } from './texts';
 
 const S = 'Витрина данных';
@@ -197,6 +198,8 @@ export const DATAMART_TEXTS = {
     ru: 'Слишком много новых токенов за час. Попробуйте позже',
     section: E,
   },
+  // «Вывод» и каталог «Шаблоны» (этап 2, П3–П4).
+  ...DATAMART_OUTPUT_TEXTS,
   // Ответы внешнего адреса по токену (блок 6, пункты 1, 4, 5; поток Т, этап 2, П11; прототип `dmHow`).
   'err.dm_ext_token': { ru: 'Токен не подходит или истёк', section: E },
   'err.dm_ext_token_in_url': {
