@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { fixedClock } from '@buhuchet/adapters';
 import { schema } from '@buhuchet/db';
 import { databaseAvailable } from '@buhuchet/db/testing';
-import { TELEGRAM_TEMPLATE_DEFAULTS, UI_TEXTS } from '@buhuchet/domain';
+import { bishkekDate, formatDateRu, TELEGRAM_TEMPLATE_DEFAULTS, UI_TEXTS } from '@buhuchet/domain';
 import { BellPage, DmTokenIssued } from '@buhuchet/shared';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -15,7 +15,7 @@ import {
   signIn,
   TEST_PASSWORD,
 } from '../../testing';
-import { DM_TOKEN_NOTICE_KEYS, dmTokenExpiryJob } from './dm-tokens';
+import { DM_TOKEN_NOTICE_KEYS, dmTokenExpiryJob, dmTokenSiteUrl } from './dm-tokens';
 
 /*
  * Сообщения владельцам организации об API-токенах «Витрины данных» (доработки 20.11.2026: Витрина
@@ -152,7 +152,8 @@ describe.skipIf(!databaseAvailable())('Витрина данных: сообще
       организация: 'Организация А',
       название: 'Power BI директора',
       шаблон: 'Контрагенты для токена',
-      дата: k.till.slice(8, 10) + '.' + k.till.slice(5, 7) + '.' + k.till.slice(0, 4),
+      // «Действует до» в сообщении — день по Бишкеку, а `till` ответа — момент в UTC.
+      дата: formatDateRu(bishkekDate(new Date(k.till))),
       кто: await shortOf('senior-a'),
     });
     expect(rows[0]).toMatchObject({ chatId: CHAT.ownerA, text });
@@ -201,16 +202,54 @@ describe.skipIf(!databaseAvailable())('Витрина данных: сообще
       userOf('owner-a'),
       userOf('owner-a'),
     ]);
-    // Чужая организация: владельцу Б — только о своём токене.
-    const b = await f.t.admin.db
-      .select({ key: telegramOutbox.dedupeKey })
-      .from(telegramOutbox)
-      .where(
-        and(eq(telegramOutbox.kind, 'dm_token'), eq(telegramOutbox.userId, userOf('owner-b'))),
-      );
-    expect(b.map((r) => r.key)).toEqual([
-      `${DM_TOKEN_NOTICE_KEYS.new(kb.id)}:${userOf('owner-b')}`,
+    // Чужая организация: о токенах А владельцу Б ничего, о токене Б — только владельцу Б.
+    for (const id of [k.id, ka.id]) {
+      expect((await outbox(id)).filter((r) => r.userId === userOf('owner-b')).length, id).toBe(0);
+    }
+    expect((await outbox(kb.id)).map((r) => [r.userId, r.dedupeKey])).toEqual([
+      [userOf('owner-b'), `${DM_TOKEN_NOTICE_KEYS.new(kb.id)}:${userOf('owner-b')}`],
     ]);
+  });
+
+  it('сообщение об отзыве не записалось — токен всё равно отозван: у сотрудника и у Админки', async () => {
+    const mine = await issue('owner-a', 'Отзыв без сообщения');
+    const theirs = await issue('owner-a', 'Отзыв Админкой без сообщения');
+    const db = f.t.admin.db;
+    // Очередь не принимает вид `dm_token` — как если бы код опередил миграцию 0176.
+    await db.execute(
+      sql`alter table telegram_outbox add constraint test_no_dm_token check (kind <> 'dm_token') not valid`,
+    );
+    try {
+      const rv = await call('senior-a', 'POST', `/api/dm/tokens/${mine.id}/revoke`);
+      expect(rv.status, await rv.clone().text()).toBe(200);
+      const adm = await call('platform-admin', 'POST', `/api/admin/dm/tokens/${theirs.id}/revoke`);
+      expect(adm.status, await adm.clone().text()).toBe(200);
+    } finally {
+      await db.execute(sql`alter table telegram_outbox drop constraint test_no_dm_token`);
+    }
+    for (const id of [mine.id, theirs.id]) {
+      const [t] = await db
+        .select({ revokedAt: dmTokens.revokedAt })
+        .from(dmTokens)
+        .where(eq(dmTokens.id, id));
+      expect(t!.revokedAt, id).not.toBeNull();
+      const revokedRows = (await outbox(id)).filter((r) =>
+        r.dedupeKey?.startsWith('dm_tok_revoked:'),
+      );
+      expect(revokedRows.length, id).toBe(0);
+    }
+    // Копия истории отзыва Админкой в организации — записана.
+    const [h] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(schema.auditLog)
+      .where(
+        and(
+          eq(schema.auditLog.orgId, f.a.orgId),
+          eq(schema.auditLog.entityId, theirs.id),
+          eq(schema.auditLog.action, 'dm_revoke'),
+        ),
+      );
+    expect(h!.n).toBe(1);
   });
 
   it('токен Админки — без сообщений: владельцев у него нет', async () => {
@@ -286,20 +325,39 @@ describe.skipIf(!databaseAvailable())('Витрина данных: сообще
 
     const deps = createTestDeps({ db: f.t.app.db, clock: fixedClock(slot.toISOString()) });
     const job = dmTokenExpiryJob(BASE);
-    expect(await job.run(deps, slot)).toBe(2);
-    // Повтор того же запуска и следующий день ничего не добавляют.
-    expect(await job.run(deps, slot)).toBe(0);
-    expect(await job.run(deps, day(1))).toBe(0);
+    // У владельца Б на время запуска нет Telegram: ему — только строка колокольчика, и токен
+    // всё равно считается.
+    const { telegramLinks } = schema;
+    const [linkB] = await db
+      .delete(telegramLinks)
+      .where(eq(telegramLinks.userId, userOf('owner-b')))
+      .returning();
+    try {
+      expect(await job.run(deps, slot)).toBe(2);
+      // Повтор того же запуска и следующий день ничего не добавляют.
+      expect(await job.run(deps, slot)).toBe(0);
+      expect(await job.run(deps, day(1))).toBe(0);
+    } finally {
+      if (linkB) await db.insert(telegramLinks).values(linkB);
+    }
 
     const soonRows = await outbox(soon);
     expect(soonRows.map((r) => r.userId)).toEqual([userOf('owner-a')]);
     expect(soonRows[0]!.text).toContain('осталось дней: 5');
     expect(soonRows[0]!.dedupeKey).toBe(`${DM_TOKEN_NOTICE_KEYS.soon(soon)}:${userOf('owner-a')}`);
     expect((await bell(soon)).map((b) => b.userId)).toEqual([userOf('owner-a')]);
-    expect((await outbox(other)).map((r) => r.userId)).toEqual([userOf('owner-b')]);
+    expect((await outbox(other)).length).toBe(0);
+    expect((await bell(other)).map((b) => b.userId)).toEqual([userOf('owner-b')]);
     for (const id of [short, later, revoked, replaced]) {
       expect((await outbox(id)).length, id).toBe(0);
       expect((await bell(id)).length, id).toBe(0);
     }
+  });
+});
+
+describe('кнопка «Открыть» в сообщении о токене', () => {
+  it('ссылка на окно токена — только у сайта по https: у другого кнопки нет', () => {
+    expect(dmTokenSiteUrl(BASE, 'abc')).toBe(`${BASE}/app/dm/tok?tok=abc`);
+    expect(dmTokenSiteUrl('http://localhost:3000', 'abc')).toBeNull();
   });
 });

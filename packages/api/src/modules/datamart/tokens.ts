@@ -48,6 +48,7 @@ import {
   RecordNotFoundError,
   type AccessSubject,
   type DmModule,
+  type DmTokenNotice,
   type DmTokenState,
   type DmTokenStop,
   type Feature,
@@ -179,6 +180,32 @@ function tellCreated(tx: Tx, nc: DmTokenNoticeContext | null, v: TokenView) {
     },
     DM_TOKEN_NOTICE_KEYS.new(f.id),
   );
+}
+
+/**
+ * «API-токен отозван» владельцам организации токена — в точке сохранения: отзыв — защита доступа к
+ * данным, сбой записи сообщения (очередь, колокольчик, предел времени запроса) его не откатывает, а
+ * уходит в журнал ошибок.
+ */
+async function tellRevoked(
+  deps: ApiDeps,
+  tx: Tx,
+  nc: DmTokenNoticeContext,
+  orgId: string,
+  id: string,
+  notice: Extract<DmTokenNotice, { event: 'revoked' }>,
+) {
+  try {
+    await tx.transaction((sp) =>
+      notifyDmTokenOwners(sp, nc, orgId, id, notice, DM_TOKEN_NOTICE_KEYS.revoked(id)),
+    );
+  } catch (err) {
+    deps.logger.error(
+      { err, tokenId: id },
+      'Витрина данных: сообщение об отзыве токена не записано',
+    );
+    deps.errors?.capture(err);
+  }
 }
 
 /** «Сейчас» приложения до транзакции: «за 30 дней» и «сегодня» для подписки. */
@@ -841,14 +868,10 @@ export function tokenHandlers(deps: ApiDeps, side: Side) {
       ]);
       const after = await oneView(tx, side, m, tr, id);
       if (side === 'org' && nc && v.fact.orgId) {
-        await notifyDmTokenOwners(
-          tx,
-          nc,
-          v.fact.orgId,
-          id,
-          { ...revoked, who: after.fact.revokedByName ?? '' },
-          DM_TOKEN_NOTICE_KEYS.revoked(id),
-        );
+        await tellRevoked(deps, tx, nc, v.fact.orgId, id, {
+          ...revoked,
+          who: after.fact.revokedByName ?? '',
+        });
       }
       return {
         item: await cardOf(tx, after, howAt(m)),
@@ -860,29 +883,34 @@ export function tokenHandlers(deps: ApiDeps, side: Side) {
     // когда остановил её выгрузки), от его имени в контексте этой организации, как открытие карточки.
     // Там же — «API-токен отозван» её владельцам: «отозвал: Администратор платформы» (ТЗ, блок 8:
     // «Отозвать» останавливает токен организации, её владельцы получают сообщение).
+    // Токен уже отозван: сбой этой второй транзакции — в журнал ошибок, а не ответ 500.
     if (orgCopy) {
-      await withOrgContext(
-        deps.db,
-        { orgId: orgCopy.orgId, userId: c.get('session')!.userId },
-        async (tx) => {
-          await writeHistory(tx, {
-            entity: 'dm_token',
-            entityId: id,
-            action: 'dm_revoke',
-            changes: orgCopy.changes,
-          });
-          if (nc) {
-            await notifyDmTokenOwners(
-              tx,
-              nc,
-              orgCopy.orgId,
-              id,
-              { ...orgCopy.revoked, who: tr('dm.tok.who_admin') },
-              DM_TOKEN_NOTICE_KEYS.revoked(id),
-            );
-          }
-        },
-      );
+      try {
+        await withOrgContext(
+          deps.db,
+          { orgId: orgCopy.orgId, userId: c.get('session')!.userId },
+          async (tx) => {
+            await writeHistory(tx, {
+              entity: 'dm_token',
+              entityId: id,
+              action: 'dm_revoke',
+              changes: orgCopy.changes,
+            });
+            if (nc) {
+              await tellRevoked(deps, tx, nc, orgCopy.orgId, id, {
+                ...orgCopy.revoked,
+                who: tr('dm.tok.who_admin'),
+              });
+            }
+          },
+        );
+      } catch (err) {
+        deps.logger.error(
+          { err, tokenId: id, orgId: orgCopy.orgId },
+          'Витрина данных: отзыв Админкой не записан в организацию',
+        );
+        deps.errors?.capture(err);
+      }
     }
     return c.json(item, 200);
   };

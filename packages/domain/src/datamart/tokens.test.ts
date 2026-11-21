@@ -175,6 +175,10 @@ describe('сообщения владельцам о токене (блок 5, �
     expect(dmTokenSoonDays(t30, at('2026-11-25T09:00:00'))).toBeNull();
     expect(dmTokenSoonDays(t30, at('2026-11-25T10:00:00'))).toBeNull();
     expect(dmTokenSoonDays(t30, at('2026-11-26T09:00:00'))).toBeNull();
+    // Через конец месяца и года: до 03.01.2027 с 29.12.2026 — 5 дней.
+    const ny = { createdAt: at('2026-12-04T10:00:00'), expiresAt: at('2027-01-03T10:00:00') };
+    expect(dmTokenSoonDays(ny, at('2026-12-29T09:00:00'))).toBe(5);
+    expect(dmTokenSoonDays(ny, at('2027-01-02T09:00:00'))).toBe(1);
   });
 
   it('токен на 7 дней не напоминает: срок есть в «создан», напоминание пришло бы в день выпуска', () => {
