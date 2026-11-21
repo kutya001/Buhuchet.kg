@@ -6,6 +6,7 @@ import {
   type APIResponse,
   type Page,
 } from '@playwright/test';
+import { platformAdmin } from './admin';
 import { DEMO_PASSWORD, signIn, stillElement } from './helpers';
 import { orgWithTypes } from './orgs';
 
@@ -193,6 +194,110 @@ test.describe('Витрина данных: «Внешний доступ по A
       await expect(card.locator('[data-dm-card]')).toBeVisible();
       await expect(page).not.toHaveURL(/[?&]tok=/);
     } finally {
+      await ext.dispose();
+    }
+  });
+
+  test('(Витрина данных, «Админка») «Отозвать» в Админке останавливает токен организации: внешний адрес — «Токен не подходит или истёк», владельцу — строка колокольчика «API-токен отозван» (отозвал: Администратор платформы), она открывает окно токена «Отозван»', async ({
+    page,
+    baseURL,
+    browser,
+    playwright,
+  }) => {
+    // Длинный сценарий: своя организация (вход администратора, создание, смена пароля), второй браузер
+    // администратора платформы и обращение к внешнему адресу.
+    test.slow();
+    const origin = new URL(baseURL!).origin;
+    await orgWithTypes(page.request, origin, false);
+    const tx = await dictionary(page.request);
+
+    // Владелец своей организации: «Внешний доступ по API» включён, токен выпущен (экраны выпуска
+    // проверяет первый тест файла).
+    const policy = (await (await page.request.get('/api/org/policy')).json()) as {
+      version: number;
+    };
+    const on = await page.request.patch('/api/org/policy', {
+      headers: { origin },
+      data: { version: policy.version, extApi: true },
+    });
+    expect(on.status(), await on.text()).toBe(200);
+    const form = (await (await page.request.get('/api/dm/tokens/form')).json()) as {
+      templates: { id: string; code: string }[];
+    };
+    const template = form.templates.find((x) => x.code === 'contractors')!;
+    expect(template, 'готовый шаблон «contractors»').toBeTruthy();
+    const tokenName = uniqueWord('Отзыв');
+    const issued = await page.request.post('/api/dm/tokens', {
+      headers: { origin },
+      data: { templateId: template.id, name: tokenName, term: 30 },
+    });
+    expect(issued.status(), await issued.text()).toBe(201);
+    const { token, item } = (await issued.json()) as { token: string; item: { id: string } };
+
+    const admin = await browser.newContext({ baseURL });
+    const ext = await playwright.request.newContext({ baseURL });
+    try {
+      // Администратор платформы — своим браузером: окно токена организации по ссылке `?tok=`,
+      // «Отозвать» и подтверждение.
+      const adminPage = await admin.newPage();
+      await platformAdmin(adminPage.request, origin);
+      await adminPage.goto(`/app/dm/tok?tok=${item.id}`);
+      const adminCard = adminPage.getByRole('dialog', { name: tokenName });
+      await expect(adminCard.locator('[data-dm-card]')).toBeVisible();
+      await adminCard.locator('[data-dm-card-revoke]').click();
+      const confirm = adminPage.getByRole('dialog', { name: tx['dm.tok.revoke.title']! });
+      await expect(confirm).toContainText(tokenName);
+      const revoked = adminPage.waitForResponse(
+        (r) =>
+          new URL(r.url()).pathname === `/api/admin/dm/tokens/${item.id}/revoke` &&
+          r.request().method() === 'POST',
+      );
+      await confirm.getByRole('button', { name: tx['dm.tok.revoke.ok']! }).click();
+      expect((await revoked).status()).toBe(200);
+      await adminPage.close();
+
+      // Внешний адрес — «Токен не подходит или истёк» (одно место на платформу: 429 — спросить снова).
+      let res!: APIResponse;
+      await expect
+        .poll(
+          async () => {
+            res = await ext.get(`/api/ext/v1/${template.code}`, {
+              headers: { authorization: `Bearer ${token}` },
+            });
+            return res.status();
+          },
+          { timeout: 20_000 },
+        )
+        .not.toBe(429);
+      expect(res.status(), await res.text()).toBe(401);
+      expect(((await res.json()) as { error: { code: string } }).error.code).toBe('dm_ext_token');
+
+      // Владелец: своя строка «отозван» — с «Администратор платформы» (у строки «создан» — имя
+      // владельца); нажатие открывает окно токена «Отозван» и убирает номер из адреса.
+      await page.goto('/app/dm/tok');
+      const seen = page.waitForResponse(
+        (r) => new URL(r.url()).pathname === '/api/bell/seen' && r.request().method() === 'POST',
+      );
+      await page.locator('[data-bell]').click();
+      const panel = page.locator('[data-bell-panel]');
+      await expect(panel).toBeVisible();
+      expect((await seen).status()).toBe(200);
+      const row = panel
+        .locator('[data-bell-row]')
+        .filter({ hasText: tokenName })
+        .filter({ hasText: tx['dm.tok.who_admin']! });
+      await expect(row).toHaveCount(1);
+      // На телефоне панель въезжает шторкой (№ 34).
+      await stillElement(row);
+      await row.click();
+      await expect(panel).toBeHidden();
+      const card = page.getByRole('dialog', { name: tokenName });
+      await expect(card.locator('[data-dm-card]')).toBeVisible();
+      await expect(card).toContainText(tx['dm.tok.state.revoked']!);
+      await expect(card).toContainText(tx['dm.tok.who_admin']!);
+      await expect(page).not.toHaveURL(/[?&]tok=/);
+    } finally {
+      await admin.close();
       await ext.dispose();
     }
   });
