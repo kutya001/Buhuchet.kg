@@ -5,6 +5,7 @@ import { withOrgContext } from './context';
 import {
   cleanupDmRequests,
   dmExtTarget,
+  dmTokenTemplateHow,
   releaseDmExt,
   takeDmExt,
   type DmExtLimits,
@@ -48,17 +49,14 @@ describe.skipIf(!databaseAvailable())('витрина данных: внешни
       .values({ code: 'dme-rep', name: 'Шаблон', module: 'reports', state: 'published' })
       .returning({ id: dmTemplates.id });
     templateId = t!.id;
-    const made = await withOrgContext(
-      db.app.db,
-      { orgId: a.orgId, userId: a.ownerUserId },
-      (tx) =>
-        insertDmToken(tx, {
-          templateId,
-          name: 'Токен',
-          tokenHash: hash(raw),
-          prefix: raw.slice(0, 9),
-          termDays: 30,
-        }),
+    const made = await withOrgContext(db.app.db, { orgId: a.orgId, userId: a.ownerUserId }, (tx) =>
+      insertDmToken(tx, {
+        templateId,
+        name: 'Токен',
+        tokenHash: hash(raw),
+        prefix: raw.slice(0, 9),
+        termDays: 30,
+      }),
     );
     tokenId = made.id;
   });
@@ -156,6 +154,30 @@ describe.skipIf(!databaseAvailable())('витрина данных: внешни
       dmExtTarget(db.app.db, { tokenHash: hash(raw), ip: 'x', badMax: 0, badWindowSeconds: 1 }),
     ).rejects.toThrow();
     await expect(cleanupDmRequests(db.app.db, 0)).rejects.toThrow();
+  });
+
+  it('«Как подключить»: код, параметры и столбцы видимого шаблона; невидимый — null', async () => {
+    const inA = <T>(fn: Parameters<typeof withOrgContext<T>>[2]) =>
+      withOrgContext(db.app.db, { orgId: a.orgId, userId: a.ownerUserId }, fn);
+    expect(await inA((tx) => dmTokenTemplateHow(tx, templateId))).toEqual({
+      code: 'dme-rep',
+      params: [],
+      columns: [],
+    });
+    const [adm] = await db.admin.db
+      .insert(dmTemplates)
+      .values({ code: 'dme-adm', name: 'Админ', audience: 'admin', state: 'published' })
+      .returning({ id: dmTemplates.id });
+    expect(await inA((tx) => dmTokenTemplateHow(tx, adm!.id))).toBeNull();
+    await db.admin.db
+      .update(dmTemplates)
+      .set({ state: 'off' })
+      .where(eq(dmTemplates.id, templateId));
+    expect(await inA((tx) => dmTokenTemplateHow(tx, templateId))).toBeNull();
+    await db.admin.db
+      .update(dmTemplates)
+      .set({ state: 'published' })
+      .where(eq(dmTemplates.id, templateId));
   });
 
   it('журнал запросов хранится 90 дней: старые строки удаляются', async () => {

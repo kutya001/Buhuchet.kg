@@ -4,10 +4,12 @@ import {
   DM_EXT_PAGE_MAX,
   dmExtColumns,
   dmExtCsv,
+  dmExtHow,
   dmExtPage,
   dmExtRequest,
   dmExtRows,
   dmExtTokenInQuery,
+  dmExtUrl,
 } from './ext';
 
 // Внешний адрес «Витрины данных» — прототип v155 `dmHow` (блок 6; поток Т, этап 2, П11).
@@ -30,9 +32,9 @@ describe('dmExtColumns', () => {
 
   it('мусор в столбцах пропускается, без названия — код', () => {
     expect(dmExtColumns('нет')).toEqual([]);
-    expect(dmExtColumns([null, 1, { code: 'x', type: 'text' }, { name: 'y', type: 'num' }])).toEqual([
-      { key: 'x', title: 'x', type: 'text' },
-    ]);
+    expect(
+      dmExtColumns([null, 1, { code: 'x', type: 'text' }, { name: 'y', type: 'num' }]),
+    ).toEqual([{ key: 'x', title: 'x', type: 'text' }]);
   });
 });
 
@@ -51,7 +53,15 @@ describe('dmExtTokenInQuery', () => {
 
 describe('dmExtRequest', () => {
   it('по умолчанию — JSON, страница 1, 1 000 строк; лишние параметры отбрасываются', () => {
-    expect(dmExtRequest([['month', '2026-11'], ['zzz', '1']], ['month', 'cp'])).toEqual({
+    expect(
+      dmExtRequest(
+        [
+          ['month', '2026-11'],
+          ['zzz', '1'],
+        ],
+        ['month', 'cp'],
+      ),
+    ).toEqual({
       ok: true,
       format: 'json',
       page: 1,
@@ -165,5 +175,88 @@ describe('dmExtCsv', () => {
       `'+1,2,`,
       `'@SUM(A1),0,'-x`,
     ]);
+  });
+});
+
+describe('dmExtUrl', () => {
+  it('адрес «Как подключить»: значения по умолчанию на сегодня, пустые не пишутся (прототип `dmHow`)', () => {
+    const params = [
+      { k: 'month', def: 'month' },
+      { k: 'status', def: null },
+      { k: 'date_to', def: 'today' },
+    ];
+    expect(dmExtUrl('https://test.buhuchet.kg/', 'reports-due', params, '2026-11-21')).toBe(
+      'https://test.buhuchet.kg/api/ext/v1/reports-due?month=2026-11&date_to=2026-11-21',
+    );
+    expect(dmExtUrl('https://buhuchet.kg', 'cps', [], '2026-11-21')).toBe(
+      'https://buhuchet.kg/api/ext/v1/cps',
+    );
+  });
+
+  it('значение по умолчанию с особыми знаками — в кодировке адреса', () => {
+    expect(dmExtUrl('https://x.kg', 'a-b', [{ k: 'q', def: 'а&б' }], '2026-11-21')).toBe(
+      'https://x.kg/api/ext/v1/a-b?q=%D0%B0%26%D0%B1',
+    );
+  });
+});
+
+describe('dmExtHow', () => {
+  const cols = dmExtColumns(COLS);
+
+  it('пример запроса, ответ на двух строках по видам столбцов и скрипт Google Таблиц (п. Т-27)', () => {
+    const how = dmExtHow({
+      url: 'https://buhuchet.kg/api/ext/v1/x?month=2026-11',
+      token: 'bk_abc…',
+      columns: cols,
+      today: '2026-11-21',
+      word: 'Пример',
+    });
+    expect(how.curl).toBe(
+      'curl -H "Authorization: Bearer bk_abc…" \\\n  "https://buhuchet.kg/api/ext/v1/x?month=2026-11"',
+    );
+    expect(JSON.parse(how.sample)).toEqual({
+      columns: cols,
+      rows: [
+        { name: 'Пример 1', sum: 1250.5, n: 3 },
+        { name: 'Пример 2', sum: 300, n: 1 },
+      ],
+      total: 2,
+      next: null,
+    });
+    expect(how.script).toContain(
+      "UrlFetchApp.fetch('https://buhuchet.kg/api/ext/v1/x?month=2026-11&format=csv'",
+    );
+    expect(how.script).toContain("headers: { Authorization: 'Bearer bk_abc…' }");
+    expect(how.script).toContain('Utilities.parseCsv');
+  });
+
+  it('даты, месяц, момент и «да / нет»; адрес без параметров — «?format=csv»', () => {
+    const how = dmExtHow({
+      url: 'https://buhuchet.kg/api/ext/v1/x',
+      token: 't',
+      columns: [
+        { key: 'd', title: 'Дата', type: 'date' },
+        { key: 'm', title: 'Месяц', type: 'month' },
+        { key: 'at', title: 'Когда', type: 'datetime' },
+        { key: 'b', title: 'Да', type: 'bool' },
+      ],
+      today: '2026-11-21',
+      word: 'Пример',
+    });
+    expect(JSON.parse(how.sample).rows).toEqual([
+      { d: '2026-11-21', m: '2026-11', at: '2026-11-21T10:00:00+06:00', b: true },
+      { d: '2026-11-21', m: '2026-11', at: '2026-11-21T10:00:00+06:00', b: false },
+    ]);
+    expect(how.script).toContain("fetch('https://buhuchet.kg/api/ext/v1/x?format=csv'");
+    expect(
+      JSON.parse(
+        dmExtHow({ url: 'u', token: 't', columns: [], today: '2026-11-21', word: 'w' }).sample,
+      ),
+    ).toEqual({
+      columns: [],
+      rows: [],
+      total: 0,
+      next: null,
+    });
   });
 });

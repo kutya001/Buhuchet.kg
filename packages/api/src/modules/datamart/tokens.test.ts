@@ -227,7 +227,11 @@ describe.skipIf(!databaseAvailable())('Витрина данных: API-токе
 
   it('область «Свои контрагенты»: токен к шаблону контрагентов не выпустить и не перевыпустить (п. Т-26)', async () => {
     // Токен отдаёт строки всей организации — сотрудник со «Свои» вынес бы через него чужих контрагентов.
-    const made = await ok(await issue('senior-a', tpl.cpsOwn, 'До смены области'), 201, DmTokenIssued);
+    const made = await ok(
+      await issue('senior-a', tpl.cpsOwn, 'До смены области'),
+      201,
+      DmTokenIssued,
+    );
     const senior = f.people['senior-a']!;
     await withRoleScopes(f.t.admin.db, senior.employeeId, { cps: 'own' }, async () => {
       const form = await ok(await call('senior-a', 'GET', '/api/dm/tokens/form'), 200, DmTokenForm);

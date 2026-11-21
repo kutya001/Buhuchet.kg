@@ -1,4 +1,6 @@
-import { dmCell } from './query';
+import type { IsoDate } from '../common/dates';
+import { monthOf } from '../common/months';
+import { dmCell, dmParamDefault } from './query';
 
 /*
  * Внешний адрес «Витрины данных» GET /api/ext/v1/<код шаблона> (доработки 20.11.2026: Витрина данных,
@@ -169,4 +171,96 @@ export function dmExtCsv(
   const head = cols.map((c) => csvCell('text', c.title)).join(',');
   const body = rows.map((r) => cols.map((c) => csvCell(c.type, r[c.key])).join(','));
   return `\uFEFF${[head, ...body].join('\r\n')}\r\n`;
+}
+
+/**
+ * Адрес для «Как подключить» (прототип `dmHow`: `GET https://buhuchet.kg/api/ext/v1/<код>?month=…`):
+ * параметры шаблона со значениями по умолчанию на сегодня по Бишкеку; пустые не пишутся. `base` —
+ * адрес сайта (`APP_BASE_URL`), а не заголовок Host.
+ */
+export function dmExtUrl(
+  base: string,
+  code: string,
+  params: readonly { k: string; def: string | null }[],
+  today: IsoDate,
+): string {
+  const qs = params
+    .map((p) => [p.k, dmParamDefault(p.def, today)] as const)
+    .filter((x): x is readonly [string, string] => !!x[1])
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+    .join('&');
+  return `${base.replace(/\/+$/, '')}${DM_EXT_PATH}${code}${qs ? `?${qs}` : ''}`;
+}
+
+/** Значение-образец ячейки по виду столбца (строка 0 или 1 примера ответа). */
+function sampleCell(type: string, i: number, today: IsoDate, word: string): unknown {
+  switch (type) {
+    case 'money':
+      return i === 0 ? 1250.5 : 300;
+    case 'num':
+    case 'int':
+      return i === 0 ? 3 : 1;
+    case 'date':
+      return today;
+    case 'datetime':
+      return `${today}T10:00:00+06:00`;
+    case 'month':
+      return monthOf(today);
+    case 'bool':
+      return i === 0;
+    default:
+      return `${word} ${i + 1}`;
+  }
+}
+
+/** Что показывает «Как подключить» под адресом: пример запроса, пример ответа, скрипт Google Таблиц. */
+export interface DmExtHow {
+  curl: string;
+  sample: string;
+  script: string;
+}
+
+/**
+ * Примеры «Как подключить» (прототип `dmHow`): `curl` с заголовком, ответ JSON на двух строках и скрипт
+ * Google Таблиц (`UrlFetchApp` с `format=csv`, `Utilities.parseCsv`). Строки примера — образцы по виду
+ * столбца, а не запуск шаблона (docs/deviations.md п. Т-27); `word` — слово для текста («Пример»).
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Т-27
+export function dmExtHow(o: {
+  url: string;
+  token: string;
+  columns: readonly DmExtColumn[];
+  today: IsoDate;
+  word: string;
+}): DmExtHow {
+  const rows = [0, 1].map((i) =>
+    Object.fromEntries(o.columns.map((c) => [c.key, sampleCell(c.type, i, o.today, o.word)])),
+  );
+  const sample = JSON.stringify(
+    {
+      columns: o.columns,
+      rows: o.columns.length ? rows : [],
+      total: o.columns.length ? 2 : 0,
+      next: null,
+    },
+    null,
+    2,
+  );
+  const csv = `${o.url}${o.url.includes('?') ? '&' : '?'}format=csv`;
+  const script = [
+    'function load() {',
+    `  const r = UrlFetchApp.fetch('${csv}', {`,
+    `    headers: { Authorization: 'Bearer ${o.token}' }`,
+    '  });',
+    '  const rows = Utilities.parseCsv(r.getContentText());',
+    '  const sh = SpreadsheetApp.getActiveSheet();',
+    '  sh.clearContents();',
+    '  sh.getRange(1, 1, rows.length, rows[0].length).setValues(rows);',
+    '}',
+  ].join('\n');
+  return {
+    curl: `curl -H "Authorization: Bearer ${o.token}" \\\n  "${o.url}"`,
+    sample,
+    script,
+  };
 }

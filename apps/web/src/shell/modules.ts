@@ -431,14 +431,17 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
       { id: 'check', icon: 'alert', label: 'tab.afiles.check' },
     ],
   },
-  // «Витрина данных» (доработки 20.11.2026: Витрина данных; прототип v155 dmTabs, dmAdd): в Админке на
-  // этапе 1 — только «API Токены» (поток Т); «Вывод», «Шаблоны» и «Журнал запросов» — этап 2.
+  // «Витрина данных» (доработки 20.11.2026: Витрина данных; прототип v155 dmTabs, dmAdd): в Админке —
+  // «API Токены» (поток Т, этап 1) и «Журнал запросов» (поток Т, этап 2); «Вывод» и «Шаблоны» — поток И.
   dm: {
     icon: 'table',
     title: 'nav.dm',
     short: 'nav.short.dm',
     desc: 'nav.desc.dm',
-    tabs: [{ id: 'tok', icon: 'key', label: 'tab.dm.tok' }],
+    tabs: [
+      { id: 'tok', icon: 'key', label: 'tab.dm.tok' },
+      { id: 'log', icon: 'history', label: 'tab.dm.log', when: (a) => a.admin },
+    ],
     add: [{ id: 'tok', icon: 'key', label: 'add.dm.tok' }],
   },
   // Способы добавления содержимого «Базы знаний» зависят от вкладки — придут с его экраном (поток Д).

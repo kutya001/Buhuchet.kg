@@ -1,7 +1,13 @@
 import { schema } from '@buhuchet/db';
 import { databaseAvailable } from '@buhuchet/db/testing';
-import { DM_EXT_PER_MINUTE, UI_TEXTS } from '@buhuchet/domain';
-import { DmExtAnswer, DmTokenCard, DmTokenIssued } from '@buhuchet/shared';
+import { bishkekDate, DM_EXT_PER_MINUTE, UI_TEXTS } from '@buhuchet/domain';
+import {
+  DmExtAnswer,
+  DmRequestList,
+  DmRequestSummary,
+  DmTokenCard,
+  DmTokenIssued,
+} from '@buhuchet/shared';
 import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../testing';
@@ -118,7 +124,9 @@ describe.skipIf(!databaseAvailable())('Витрина данных: внешни
     await add('ext-adm', 'SELECT count(*)::integer AS orgs FROM organizations', {
       audience: 'admin',
       module: null,
-      columns: [{ code: 'orgs', name: 'Организаций', type: 'num', total: false, contractor: false }],
+      columns: [
+        { code: 'orgs', name: 'Организаций', type: 'num', total: false, contractor: false },
+      ],
     });
   });
 
@@ -196,7 +204,11 @@ describe.skipIf(!databaseAvailable())('Витрина данных: внешни
     const big = await answer(await ext('ext-many?limit=2000', { token: a.token }));
     expect(big.next).toBe('http://localhost:3000/api/ext/v1/ext-many?limit=2000&page=2');
     for (const q of ['limit=5001', 'page=0', 'page=x', 'format=xml', 'page=1&page=2']) {
-      const e = await expectErr(await ext(`ext-many?${q}`, { token: a.token }), 400, 'dm_ext_param');
+      const e = await expectErr(
+        await ext(`ext-many?${q}`, { token: a.token }),
+        400,
+        'dm_ext_param',
+      );
       expect(e.message).toMatch(/^Неверный параметр: (limit|page|format)$/);
     }
   });
@@ -307,7 +319,10 @@ describe.skipIf(!databaseAvailable())('Витрина данных: внешни
     await stopped();
     await db.update(schema.orgSubscriptions).set({ paidUntil: '2099-12-31' }).where(sub);
     await works();
-    await db.update(organizations).set({ status: 'blocked' }).where(eq(organizations.id, f.a.orgId));
+    await db
+      .update(organizations)
+      .set({ status: 'blocked' })
+      .where(eq(organizations.id, f.a.orgId));
     await stopped();
     await db.update(organizations).set({ status: 'active' }).where(eq(organizations.id, f.a.orgId));
     await works();
@@ -412,5 +427,100 @@ describe.skipIf(!databaseAvailable())('Витрина данных: внешни
       .where(and(eq(dmTokens.id, a.item.id)));
     expect(token).toMatchObject({ lastIp: ip });
     expect(token!.lastUsedAt).not.toBeNull();
+  });
+  it('«Как подключить»: адрес с параметрами по умолчанию и столбцы без «Контрагента» — у своего живого токена', async () => {
+    const a = await issue('owner-a', 'ext-staff', 'Как подключить');
+    // «Сегодня» — по часам приложения (в тестах — 18.10.2026).
+    const month = bishkekDate(new Date('2026-10-18T03:00:00Z')).slice(0, 7);
+    expect(a.item.how).toEqual({
+      url: `http://localhost:3000/api/ext/v1/ext-staff?month=${month}`,
+      columns: STAFF_COLUMNS.filter((c) => c.type !== 'cp').map((c) => ({
+        key: c.code,
+        title: c.name,
+        type: c.type,
+      })),
+    });
+    // Администратору платформы токен организации — без «Как подключить» (не его токен).
+    const seen = DmTokenCard.parse(
+      await (
+        await apiRequest(
+          f.app,
+          'GET',
+          `/api/admin/dm/tokens/${a.item.id}`,
+          cookies['platform-admin'],
+        )
+      ).json(),
+    );
+    expect(seen.how).toBeNull();
+    const revoked = DmTokenCard.parse(
+      await (
+        await apiRequest(f.app, 'POST', `/api/dm/tokens/${a.item.id}/revoke`, cookies['owner-a'])
+      ).json(),
+    );
+    expect(revoked.how).toBeNull();
+    const adm = await issue('platform-admin', 'ext-adm', 'Как подключить', '/api/admin/dm');
+    expect(adm.item.how?.url).toBe('http://localhost:3000/api/ext/v1/ext-adm');
+  });
+
+  it('Админка → «Журнал запросов»: только запросы по токенам всех организаций, плашки; другим — 403', async () => {
+    const a = await issue('owner-a', 'ext-staff', 'Журнал Админки');
+    const ip = nextIp();
+    await answer(await ext('ext-staff?month=2026-09', { token: a.token, ip }));
+    await expectErr(await ext('ext-staff?page=0', { token: a.token, ip }), 400, 'dm_ext_param');
+    const list = async (q = '') => {
+      const res = await apiRequest(
+        f.app,
+        'GET',
+        `/api/admin/dm/requests${q}`,
+        cookies['platform-admin'],
+      );
+      expect(res.status, await res.clone().text()).toBe(200);
+      return DmRequestList.parse(await res.json());
+    };
+    const all = await list('?size=all');
+    const mine = all.items.filter((x) => x.tokenId === a.item.id);
+    expect(mine.map((x) => [x.ok, x.params, x.ip, x.orgName, x.tokenName])).toEqual([
+      [false, '', ip, 'Организация А', 'Журнал Админки'],
+      [true, 'month=2026-09', ip, 'Организация А', 'Журнал Админки'],
+    ]);
+    expect(mine[0]!.error).toBe('Неверный параметр: page');
+    expect(new Set(all.items.map((x) => x.orgName))).toEqual(
+      new Set(['Организация А', 'Организация Б', txt('dm.tok.who_admin')]),
+    );
+    const errors = await list(
+      `?filters=${encodeURIComponent(JSON.stringify({ res: { type: 'enum', vals: ['err'] } }))}`,
+    );
+    expect(errors.items.every((x) => !x.ok)).toBe(true);
+    const sum = DmRequestSummary.parse(
+      await (
+        await apiRequest(f.app, 'GET', '/api/admin/dm/requests/summary', cookies['platform-admin'])
+      ).json(),
+    );
+    expect(sum.today).toBeGreaterThanOrEqual(2);
+    expect(sum.errors).toBeGreaterThanOrEqual(1);
+    expect(sum.tokens).toBeGreaterThanOrEqual(1);
+    const values = await apiRequest(
+      f.app,
+      'GET',
+      '/api/admin/dm/requests/values?col=res',
+      cookies['platform-admin'],
+    );
+    expect(values.status).toBe(200);
+    const file = await apiRequest(
+      f.app,
+      'GET',
+      '/api/admin/dm/requests/export?cols=at,res,org,tok',
+      cookies['platform-admin'],
+    );
+    expect(file.status).toBe(200);
+    for (const path of ['', '/summary', '/values?col=res', '/export?cols=at']) {
+      const res = await apiRequest(
+        f.app,
+        'GET',
+        `/api/admin/dm/requests${path}`,
+        cookies['owner-a'],
+      );
+      expect(res.status).toBe(403);
+    }
   });
 });

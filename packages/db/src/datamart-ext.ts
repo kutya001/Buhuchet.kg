@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
-import type { Db } from './client';
+import type { Db, Tx } from './client';
+import type { DmTemplateColumn, DmTemplateParam } from './datamart-output';
 
 /*
  * Внешний адрес «Витрины данных» (доработки 20.11.2026: Витрина данных, блок 6; блок 8, пункт 6; поток Т,
@@ -66,8 +67,7 @@ export interface DmExtLimits {
 }
 
 export type DmExtTake =
-  | { ok: true; ticket: number }
-  | { ok: false; reason: 'busy' | 'limited'; waitSeconds: number };
+  { ok: true; ticket: number } | { ok: false; reason: 'busy' | 'limited'; waitSeconds: number };
 
 /** Занять запрос токена; после запроса — `releaseDmExt`, иначе следующий ждёт `leaseSeconds`. */
 export async function takeDmExt(db: Db, tokenId: string, l: DmExtLimits): Promise<DmExtTake> {
@@ -96,4 +96,30 @@ export async function cleanupDmRequests(db: Db, days: number): Promise<number> {
     sql`select app.dm_requests_cleanup(${days}::integer) as removed`,
   );
   return row?.removed ?? 0;
+}
+
+/** Шаблон токена для «Как подключить» (этап 2, П12): код, параметры и столбцы. */
+export interface DmTokenTemplateHow {
+  code: string;
+  params: DmTemplateParam[];
+  columns: DmTemplateColumn[];
+}
+
+/**
+ * Шаблон токена для «Как подключить»: опубликованный или сломанный, видимый в контексте (организации —
+ * только «Для организаций» с её доступом, RLS `dm_templates_org_read`; администратору — любой); иначе
+ * null. Текста запроса здесь нет.
+ */
+export async function dmTokenTemplateHow(
+  tx: Tx,
+  templateId: string,
+): Promise<DmTokenTemplateHow | null> {
+  const [row] = await tx.execute<{
+    code: string;
+    params: DmTemplateParam[];
+    columns: DmTemplateColumn[];
+  }>(sql`
+    select code, params, columns from public.dm_templates
+    where id = ${templateId}::uuid and state in ('published', 'broken')`);
+  return row ? { code: row.code, params: row.params, columns: row.columns } : null;
 }

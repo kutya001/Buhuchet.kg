@@ -19,6 +19,7 @@ export const DATAMART_TEXTS = {
     section: 'Меню',
   },
   'tab.dm.tok': { ru: 'API Токены', section: 'Вкладки' },
+  'tab.dm.log': { ru: 'Журнал запросов', section: 'Вкладки' },
   'add.dm.tok': { ru: 'Токен', section: 'Добавление' },
   // Над списком.
   'dm.tok.note': {
@@ -211,4 +212,52 @@ export const DATAMART_TEXTS = {
   'err.dm_ext_rate': { ru: 'Слишком часто, повторите через {n} секунд', section: E },
   'err.dm_ext_timeout': { ru: 'Запрос выполнялся слишком долго', section: E },
   'err.dm_ext_broken': { ru: 'Шаблон временно не работает', section: E },
+  // «Как подключить» в окне нового токена и окне своего токена (блок 6, пункт 6; поток Т, этап 2,
+  // П12; прототип `dmHow`). В подсказках `**…**` — жирным, `` `…` `` — моноширинным.
+  'dm.how.title': { ru: 'Как подключить', section: S },
+  'dm.how.url': { ru: 'Адрес', section: S },
+  'dm.how.header': { ru: 'Заголовок', section: S },
+  'dm.how.curl': { ru: 'Пример запроса', section: S },
+  'dm.how.answer': { ru: 'Пример ответа', section: S },
+  'dm.how.sample': { ru: 'Пример', section: S },
+  'dm.how.tip_csv': {
+    ru: 'С `format=csv` — таблица для Excel; страница — 1 000 строк, до 5 000 с `limit=5000`. Деньги — числом в сомах.',
+    section: S,
+  },
+  'dm.how.tip_limits': {
+    ru: 'Пределы на токен: 1 запрос одновременно, 30 в минуту, 5 000 в сутки. Токен в адресе не принимается — только в заголовке.',
+    section: S,
+  },
+  'dm.how.tip_apps': {
+    ru: '**Excel**: «Данные» → «Из Интернета» → «Дополнительно»: адрес и заголовок Authorization. **Power BI**: «Получить данные» → «Интернет» → «Дополнительно». **1С**: HTTPСоединение с заголовком Authorization.',
+    section: S,
+  },
+  'dm.how.tip_sheets': {
+    ru: '**Google Таблицы** по адресу с заголовком не загружают: «Расширения» → «Apps Script», вставьте скрипт ниже и запустите load.',
+    section: S,
+  },
+  'dm.how.script': { ru: 'Скрипт для Google Таблиц', section: S },
+  'dm.how.note': {
+    ru: 'Данные уходят за пределы системы: за то, куда они попадут дальше, отвечает организация, выпустившая токен.',
+    section: S,
+  },
+  // Админка → «Журнал запросов» (блок 6, пункт 7; поток Т, этап 2, П11; прототип `renderDmLog`).
+  'dm.log.plate.today': { ru: 'Запросов сегодня', section: S },
+  'dm.log.plate.errors': { ru: 'Ошибок сегодня', section: S },
+  'dm.log.plate.tokens': { ru: 'Действующих токенов', section: S },
+  'dm.log.empty_title': { ru: 'Запросов пока не было', section: S },
+  'dm.log.empty_text': { ru: 'Здесь появятся запросы внешних программ по токенам.', section: S },
+  'dm.log.count.one': { ru: '{n} запрос', section: S },
+  'dm.log.count.few': { ru: '{n} запроса', section: S },
+  'dm.log.count.many': { ru: '{n} запросов', section: S },
+  'dm.log.col.at': { ru: 'Когда', section: S },
+  'dm.log.col.res': { ru: 'Итог', section: S },
+  'dm.log.col.org': { ru: 'Организация', section: S },
+  'dm.log.col.tok': { ru: 'Токен', section: S },
+  'dm.log.col.tpl': { ru: 'Шаблон', section: S },
+  'dm.log.col.params': { ru: 'Параметры', section: S },
+  'dm.log.col.rows': { ru: 'Строк', section: S },
+  'dm.log.col.ms': { ru: 'Время, мс', section: S },
+  'dm.log.col.err': { ru: 'Ошибка', section: S },
+  'dm.log.col.ip': { ru: 'Адрес', section: S },
 } as const satisfies Record<string, UiTextDefault>;

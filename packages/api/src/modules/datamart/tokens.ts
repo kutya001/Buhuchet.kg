@@ -3,6 +3,7 @@ import { createRoute, type RouteHandler } from '@hono/zod-openapi';
 import {
   dmTokenFacts,
   dmTokenRequests,
+  dmTokenTemplateHow,
   dmTokenTemplates,
   exportDmTokens,
   insertDmToken,
@@ -32,6 +33,8 @@ import {
   DM_TOKEN_NAME_MAX,
   DM_TOKEN_TERMS,
   DM_TOKENS_LIVE_MAX,
+  dmExtColumns,
+  dmExtUrl,
   dmTemplateTokenable,
   dmTokenFromBytes,
   dmTokenIssueRefusal,
@@ -174,9 +177,9 @@ interface TokenView {
   list: DmTokenListRow;
 }
 
-/** Состояние, пояснение и подписи токена (прототип `dmTokSt`, `dmWho`, `dmOrgN`). */
-function viewOf(f: DmTokenFact, now: Date, side: Side, tr: Tr): TokenView {
-  const { state, stop } = dmTokenState(
+/** Состояние токена по фактам базы (прототип `dmTokSt`). */
+const stateOf = (f: DmTokenFact, now: Date) =>
+  dmTokenState(
     {
       expiresAt: f.expiresAt,
       revokedAt: f.revokedAt,
@@ -190,6 +193,10 @@ function viewOf(f: DmTokenFact, now: Date, side: Side, tr: Tr): TokenView {
     },
     now,
   );
+
+/** Состояние, пояснение и подписи токена (прототип `dmTokSt`, `dmWho`, `dmOrgN`). */
+function viewOf(f: DmTokenFact, now: Date, side: Side, tr: Tr): TokenView {
+  const { state, stop } = stateOf(f, now);
   const till = f.graceUntil && f.graceUntil < f.expiresAt ? f.graceUntil : f.expiresAt;
   const admin = tr('dm.tok.who_admin');
   const note =
@@ -256,6 +263,16 @@ function viewOf(f: DmTokenFact, now: Date, side: Side, tr: Tr): TokenView {
   };
 }
 
+/**
+ * Действующих токенов в контексте (плашка «Действующих токенов» «Журнала запросов» Админки, прототип
+ * `DM_TOK.filter(dmLive)`: состояние «Действует»).
+ */
+export async function activeTokenCount(tx: Tx, deps: ApiDeps): Promise<number> {
+  const m = momentOf(deps);
+  const { now, items } = await dmTokenFacts(tx, { since: m.since, today: m.today });
+  return items.filter((f) => stateOf(f, now).state === 'active').length;
+}
+
 /** Все токены стороны с состоянием «сейчас» по часам базы. */
 async function tokenViews(tx: Tx, side: Side, m: Moment, tr: Tr, id?: string) {
   const { now, items } = await dmTokenFacts(tx, { since: m.since, today: m.today, id });
@@ -268,13 +285,39 @@ const paramsText = (params: Record<string, unknown>) =>
     .map(([k, v]) => `${k}=${typeof v === 'string' ? v : JSON.stringify(v)}`)
     .join('&');
 
-/** Окно токена: сведения, журнал запросов (последние 50) и действия. */
-async function cardOf(tx: Tx, v: TokenView) {
+/** Для «Как подключить»: адрес сайта и «сегодня» по Бишкеку (значения параметров по умолчанию). */
+interface HowAt {
+  base: string;
+  today: IsoDate;
+}
+
+/**
+ * «Как подключить» (прототип `dmHow`, этап 2, П12): только у своего живого токена (прототип
+ * `mine && live`), пока шаблон виден в контексте токена; столбцы — без «Контрагента».
+ */
+async function howOf(tx: Tx, v: TokenView, at: HowAt) {
+  if (!v.mine || !v.live) return null;
+  const tpl = await dmTokenTemplateHow(tx, v.fact.templateId);
+  if (!tpl) return null;
+  return {
+    url: dmExtUrl(
+      at.base,
+      tpl.code,
+      tpl.params.map((p) => ({ k: p.code, def: p.default })),
+      at.today,
+    ),
+    columns: dmExtColumns(tpl.columns),
+  };
+}
+
+/** Окно токена: сведения, журнал запросов (последние 50), «Как подключить» и действия. */
+async function cardOf(tx: Tx, v: TokenView, at: HowAt) {
   const log = await dmTokenRequests(tx, v.fact.id, 50);
   return DmTokenCard.parse({
     ...v.row,
     stop: v.stop,
     prevPrefix: v.fact.prevPrefix,
+    how: await howOf(tx, v, at),
     log: {
       total: log.total,
       items: log.items.map((r) => ({
@@ -560,6 +603,7 @@ type Routes = typeof ORG_TOKEN_ROUTES;
 /** Обработчики стороны: одни и те же правила, разные контекст, права и история. */
 export function tokenHandlers(deps: ApiDeps, side: Side) {
   const texts = async () => trOf(await serverTexts(deps));
+  const howAt = (m: Moment): HowAt => ({ base: deps.config.APP_BASE_URL, today: m.today });
 
   const list: RouteHandler<Routes['list'], AppEnv> = async (c) => {
     const m = momentOf(deps);
@@ -714,7 +758,7 @@ export function tokenHandlers(deps: ApiDeps, side: Side) {
         { field: 'term', to: body.term },
         { field: 'prefix', to: made.prefix },
       ]);
-      return cardOf(tx, await oneView(tx, side, m, tr, row.id));
+      return cardOf(tx, await oneView(tx, side, m, tr, row.id), howAt(m));
     });
     return c.json({ token: made.token, item }, 201);
   };
@@ -724,7 +768,7 @@ export function tokenHandlers(deps: ApiDeps, side: Side) {
     const m = momentOf(deps);
     const tr = await texts();
     const item = await inSide(deps, c, side, async (tx) =>
-      cardOf(tx, await oneView(tx, side, m, tr, id)),
+      cardOf(tx, await oneView(tx, side, m, tr, id), howAt(m)),
     );
     return c.json(item, 200);
   };
@@ -748,7 +792,7 @@ export function tokenHandlers(deps: ApiDeps, side: Side) {
         ...(side === 'admin' && v.fact.orgId ? [{ field: 'org', to: v.fact.orgName ?? '' }] : []),
       ]);
       return {
-        item: await cardOf(tx, await oneView(tx, side, m, tr, id)),
+        item: await cardOf(tx, await oneView(tx, side, m, tr, id), howAt(m)),
         orgCopy: side === 'admin' && v.fact.orgId ? { orgId: v.fact.orgId, changes } : null,
       };
     });
@@ -813,7 +857,7 @@ export function tokenHandlers(deps: ApiDeps, side: Side) {
         { field: 'term', to: term },
         { field: 'prefix', from: v.fact.prefix, to: made.prefix },
       ]);
-      return cardOf(tx, await oneView(tx, side, m, tr, row.id));
+      return cardOf(tx, await oneView(tx, side, m, tr, row.id), howAt(m));
     });
     return c.json({ token: made.token, item }, 201);
   };

@@ -149,7 +149,7 @@ export function ModuleScreen({
     return tabId === 'leads' ? <LeadsList /> : <OrgsList />;
   }
   if (moduleId === 'afiles') return <AdminFilesScreen tab={tabId ?? 'store'} />;
-  // Админка → «Витрина данных»: на этапе 1 — только «API Токены» (поток Т, П14).
+  // Админка → «Витрина данных»: «API Токены» (поток Т, П14) и «Журнал запросов» (поток Т, этап 2, П11).
   if (moduleId === 'dm') return <DmScreen tab={tabId ?? 'tok'} admin />;
   if (moduleId === 'pdicts') return <PlatformDictsAdmin tabId={tabId ?? 'types'} />;
   if (moduleId === 'l10n') return <L10nList />;
@@ -213,6 +213,8 @@ const SCREENS_WITH_PLATES: ReadonlySet<string> = new Set<string>([
   'runs/jobs',
   'tg/',
   'tg/log',
+  // «Журнал запросов» Витрины данных (прототип v155 `renderDmLog`).
+  'dm/log',
 ]);
 
 const TASK_TABS: readonly TaskTab[] = ['mine', 'byme', 'all', 'overdue'];
