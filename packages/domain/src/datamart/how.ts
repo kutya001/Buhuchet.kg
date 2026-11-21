@@ -146,7 +146,13 @@ const dq = (s: string) => `"${oneLine(s).replace(/"/g, '""')}"`;
 /** Строка и имя в кавычках Power Query: ещё и `#(` — начало управляющей записи языка M. */
 const mq = (s: string) => dq(s).replaceAll('#(', '#(#)(');
 /** Комментарий VBA: ` _` в конце строки втянул бы в комментарий следующую строку кода. */
-const vbaNote = (s: string) => oneLine(s).replace(/[\s_]+$/u, '');
+function vbaNote(s: string): string {
+  const text = oneLine(s);
+  let end = text.length;
+  // Без регулярного выражения: хвост из пробелов любого вида и «_» снимается за один проход.
+  while (end > 0 && (text[end - 1] === '_' || text.slice(end - 1, end).trim() === '')) end -= 1;
+  return text.slice(0, end);
+}
 /** Строка оболочки в двойных кавычках: `\`, `"`, `$` и обратная кавычка — с обратной чертой. */
 const shq = (s: string) => `"${oneLine(s).replace(/[\\"$`]/g, '\\$&')}"`;
 /** Строка JavaScript в одинарных кавычках. */
