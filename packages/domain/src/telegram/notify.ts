@@ -68,6 +68,9 @@ export const OUTBOX_KINDS = [
   // появление расхождений сверки хранилища (пакет 2, блок 3, пункт 6).
   'sub_check',
   'storage_check',
+  // «Витрина данных» (Витрина данных, блок 5, пункт 10; общий план 20.11, этап 3, П5): владельцам —
+  // API-токен создан, отозван, до конца срока 7 дней.
+  'dm_token',
 ] as const;
 export type OutboxKind = (typeof OUTBOX_KINDS)[number];
 

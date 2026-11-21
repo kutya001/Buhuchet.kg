@@ -94,6 +94,12 @@ describe('куда ведёт строка — как bellGo прототипа'
       href: `/app/dm/tpl?tpl=${ID}`,
     });
     expect(bellGoOf({ kind: 'dm_template', id: 'x' }, ctx)).toBeNull();
+    // «API-токен создан», «отозван», «истекает» — окно токена на вкладке «API Токены» (этап 3, П5).
+    expect(bellGoOf({ kind: 'dm_token', id: ID }, ctx)).toEqual({
+      kind: 'href',
+      href: `/app/dm/tok?tok=${ID}`,
+    });
+    expect(bellGoOf({ kind: 'dm_token', id: 'x' }, ctx)).toBeNull();
     expect(bellGoOf({ kind: 'news', id: 'v123' }, ctx)).toEqual({
       kind: 'href',
       href: '/app/kb/news?news=v123',

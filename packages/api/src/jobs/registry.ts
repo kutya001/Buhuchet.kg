@@ -29,6 +29,7 @@ import { createDueReportsJob } from '../modules/reports/job';
 import { bellCleanupJob, bellDayJob } from '../modules/telegram/bell-day';
 import { contractorDebtJob } from '../modules/telegram/client/debt';
 import { contractorPayJob } from '../modules/telegram/client/pay';
+import { dmTokenExpiryJob } from '../modules/telegram/dm-tokens';
 
 import { botMenuCommands } from '../modules/telegram/command-view';
 import { telegramSendJob } from '../modules/telegram/outbox';
@@ -213,6 +214,8 @@ export function jobsFor(
     subsRemindersJob(config.APP_BASE_URL),
     subsMemoryChecksJob(config.APP_BASE_URL),
     storageReconcileJob(config.APP_BASE_URL),
+    // Срок API-токенов «Витрины данных» (общий план 20.11, этап 3, П5): ссылка «Открыть» — окно токена.
+    dmTokenExpiryJob(config.APP_BASE_URL),
   ];
   if (
     !config.TELEGRAM_BOT_TOKEN ||

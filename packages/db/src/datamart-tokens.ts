@@ -191,6 +191,49 @@ export async function replaceDmToken(tx: Tx, oldId: string, newId: string): Prom
   return rows.length ? asDate(rows[0]!.grace_until) : null;
 }
 
+/** Токен организации, у которого скоро конец срока: для напоминания владельцам. */
+export interface DmTokenExpiring {
+  id: string;
+  name: string;
+  templateName: string;
+  createdAt: Date;
+  expiresAt: Date;
+}
+
+/**
+ * Токены своей организации (контекст задачи, без вошедшего), которые действуют на `now` и кончаются не
+ * позже `until`: не отозваны и не перевыпущены (у перевыпущенного свой срок — сутки, напоминает новый).
+ * Шаблон — видимый организации по RLS: токен отключённого шаблона «Остановлен», напоминать незачем.
+ * Окно дней и срок токена проверяет правило `dmTokenSoonDays` домена.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Т-31
+export async function dmTokensExpiring(
+  tx: Tx,
+  o: { now: Date; until: Date },
+): Promise<DmTokenExpiring[]> {
+  const rows = await tx.execute<{
+    id: string;
+    name: string;
+    template_name: string;
+    created_at: unknown;
+    expires_at: unknown;
+  }>(sql`
+    select t.id, t.name, d.name as template_name, t.created_at, t.expires_at
+    from public.dm_tokens t
+    join public.dm_templates d on d.id = t.template_id
+    where t.org_id = app.current_org_id() and t.revoked_at is null and t.replaced_by is null
+      and t.expires_at > ${o.now.toISOString()}::timestamptz
+      and t.expires_at <= ${o.until.toISOString()}::timestamptz
+    order by t.expires_at, t.id`);
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    templateName: r.template_name,
+    createdAt: mustDate(r.created_at),
+    expiresAt: mustDate(r.expires_at),
+  }));
+}
+
 /** «Внешний доступ по API» своей организации (`org_settings.ext_api`, по умолчанию выключен). */
 export async function orgExtApi(tx: Tx): Promise<boolean> {
   const [row] = await tx.execute<{ ext_api: boolean }>(sql`

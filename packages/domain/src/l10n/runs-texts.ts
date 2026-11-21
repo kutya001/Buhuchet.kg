@@ -114,6 +114,7 @@ export const RUNS_TEXTS = {
   'runs.done.files_storage_reconcile': { ru: 'Проверено объектов хранилища: {n}', section: S },
   'runs.done.subs_reminders': { ru: 'Напоминаний об оплате: {n}', section: S },
   'runs.done.subs_memory_checks': { ru: 'Сообщений о памяти и чеках: {n}', section: S },
+  'runs.done.dm_token_expiry': { ru: 'Напоминаний о сроке токенов: {n}', section: S },
   'runs.done.auth_cleanup_login_attempts': { ru: 'Удалено записей: {n}', section: S },
   'runs.done.system_cleanup_rate_limits': { ru: 'Удалено записей: {n}', section: S },
   'runs.done.contractor_page_cleanup_grants': { ru: 'Удалено записей: {n}', section: S },
@@ -188,6 +189,10 @@ export const RUNS_TEXTS = {
   },
   'runs.what.subs_memory_checks': {
     ru: 'Память 80 % и 100 % — владельцам один раз, пока занятое не опустится ниже порога; непроверенные чеки — повтор администраторам, через 3 дня — пометка «Ждёт проверки больше 3 дней»',
+    section: S,
+  },
+  'runs.what.dm_token_expiry': {
+    ru: 'Напоминает владельцам организации в Telegram и колокольчик за 7 дней до конца срока API-токена — один раз на токен',
     section: S,
   },
   'runs.what.files_storage_retry': {

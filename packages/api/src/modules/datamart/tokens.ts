@@ -75,6 +75,12 @@ import { apiFail, listQueryOf, listQueryResponses } from '../../errors';
 import { exportRateResponses, withExportSlot, xlsxContent, xlsxResponse } from '../../lists/export';
 import { orgContextOf, requirePermission, requirePlatformAdmin } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
+import {
+  DM_TOKEN_NOTICE_KEYS,
+  dmTokenNoticeContext,
+  notifyDmTokenOwners,
+  type DmTokenNoticeContext,
+} from '../telegram/dm-tokens';
 
 /*
  * «Витрина данных» → «API Токены» (доработки 20.11.2026: Витрина данных, блок 5; блок 8, пункт 6;
@@ -149,6 +155,30 @@ function inSide<T>(
   return side === 'org'
     ? withOrgContext(deps.db, { ...orgContextOf(c), kind }, fn)
     : withUserContext(deps.db, c.get('session')!.userId, fn, kind);
+}
+
+/**
+ * «API-токен создан» владельцам организации токена (блок 5, пункт 10; общий план 20.11, этап 3, П5):
+ * в транзакции выпуска или перевыпуска, по свежему токену. Токен Админки — без сообщений.
+ */
+function tellCreated(tx: Tx, nc: DmTokenNoticeContext | null, v: TokenView) {
+  const f = v.fact;
+  if (!nc || !f.orgId) return Promise.resolve(null);
+  return notifyDmTokenOwners(
+    tx,
+    nc,
+    f.orgId,
+    f.id,
+    {
+      event: 'new',
+      org: f.orgName ?? '',
+      name: f.name,
+      template: f.templateName,
+      expiresAt: f.expiresAt,
+      who: f.createdByName ?? '',
+    },
+    DM_TOKEN_NOTICE_KEYS.new(f.id),
+  );
 }
 
 /** «Сейчас» приложения до транзакции: «за 30 дней» и «сегодня» для подписки. */
@@ -604,6 +634,12 @@ type Routes = typeof ORG_TOKEN_ROUTES;
 export function tokenHandlers(deps: ApiDeps, side: Side) {
   const texts = async () => trOf(await serverTexts(deps));
   const howAt = (m: Moment): HowAt => ({ base: deps.config.APP_BASE_URL, today: m.today });
+  // Сообщения владельцам — только о токенах организаций: у выпуска Админки их нет, у отзыва Админкой —
+  // есть (токен организации). Шаблоны читаются до транзакции.
+  const noticeContext = (anySide = false) =>
+    side === 'org' || anySide
+      ? dmTokenNoticeContext(deps, deps.config.APP_BASE_URL)
+      : Promise.resolve(null);
 
   const list: RouteHandler<Routes['list'], AppEnv> = async (c) => {
     const m = momentOf(deps);
@@ -725,6 +761,7 @@ export function tokenHandlers(deps: ApiDeps, side: Side) {
     }
     await takeIssueSlot(deps, c, tr);
     const made = newToken();
+    const nc = await noticeContext();
     const item = await inSide(deps, c, side, async (tx) => {
       await lockDmTokens(tx, sight?.orgId ?? null);
       const { views } = await tokenViews(tx, side, m, tr);
@@ -758,7 +795,9 @@ export function tokenHandlers(deps: ApiDeps, side: Side) {
         { field: 'term', to: body.term },
         { field: 'prefix', to: made.prefix },
       ]);
-      return cardOf(tx, await oneView(tx, side, m, tr, row.id), howAt(m));
+      const fresh = await oneView(tx, side, m, tr, row.id);
+      await tellCreated(tx, nc, fresh);
+      return cardOf(tx, fresh, howAt(m));
     });
     return c.json({ token: made.token, item }, 201);
   };
@@ -777,12 +816,21 @@ export function tokenHandlers(deps: ApiDeps, side: Side) {
     const { id } = c.req.valid('param');
     const m = momentOf(deps);
     const tr = await texts();
+    const nc = await noticeContext(true);
     const { item, orgCopy } = await inSide(deps, c, side, async (tx) => {
       const v = await oneView(tx, side, m, tr, id);
       await lockDmTokens(tx, v.fact.orgId);
       if (!v.live || !(await revokeDmToken(tx, id))) {
         apiFail(409, 'dm_token_dead', tr('err.dm_token_dead'));
       }
+      // «API-токен отозван» владельцам (блок 5, пункт 10): «отозвал» — тот, кто вошёл; администратор
+      // платформы отзывает токен организации — сообщение уходит в её контексте ниже.
+      const revoked = {
+        event: 'revoked' as const,
+        org: v.fact.orgName ?? '',
+        name: v.fact.name,
+        template: v.fact.templateName,
+      };
       const changes: HistoryChange[] = [
         { field: 'name', to: v.fact.name },
         { field: 'prefix', to: v.fact.prefix },
@@ -791,24 +839,49 @@ export function tokenHandlers(deps: ApiDeps, side: Side) {
         ...changes,
         ...(side === 'admin' && v.fact.orgId ? [{ field: 'org', to: v.fact.orgName ?? '' }] : []),
       ]);
+      const after = await oneView(tx, side, m, tr, id);
+      if (side === 'org' && nc && v.fact.orgId) {
+        await notifyDmTokenOwners(
+          tx,
+          nc,
+          v.fact.orgId,
+          id,
+          { ...revoked, who: after.fact.revokedByName ?? '' },
+          DM_TOKEN_NOTICE_KEYS.revoked(id),
+        );
+      }
       return {
-        item: await cardOf(tx, await oneView(tx, side, m, tr, id), howAt(m)),
-        orgCopy: side === 'admin' && v.fact.orgId ? { orgId: v.fact.orgId, changes } : null,
+        item: await cardOf(tx, after, howAt(m)),
+        orgCopy:
+          side === 'admin' && v.fact.orgId ? { orgId: v.fact.orgId, changes, revoked } : null,
       };
     });
     // Администратор отозвал токен организации — запись и в истории организации (для разбора: кто и
     // когда остановил её выгрузки), от его имени в контексте этой организации, как открытие карточки.
+    // Там же — «API-токен отозван» её владельцам: «отозвал: Администратор платформы» (ТЗ, блок 8:
+    // «Отозвать» останавливает токен организации, её владельцы получают сообщение).
     if (orgCopy) {
       await withOrgContext(
         deps.db,
         { orgId: orgCopy.orgId, userId: c.get('session')!.userId },
-        (tx) =>
-          writeHistory(tx, {
+        async (tx) => {
+          await writeHistory(tx, {
             entity: 'dm_token',
             entityId: id,
             action: 'dm_revoke',
             changes: orgCopy.changes,
-          }),
+          });
+          if (nc) {
+            await notifyDmTokenOwners(
+              tx,
+              nc,
+              orgCopy.orgId,
+              id,
+              { ...orgCopy.revoked, who: tr('dm.tok.who_admin') },
+              DM_TOKEN_NOTICE_KEYS.revoked(id),
+            );
+          }
+        },
       );
     }
     return c.json(item, 200);
@@ -821,6 +894,7 @@ export function tokenHandlers(deps: ApiDeps, side: Side) {
     const sight = sightOf(c, side);
     await takeIssueSlot(deps, c, tr);
     const made = newToken();
+    const nc = await noticeContext();
     const item = await inSide(deps, c, side, async (tx) => {
       const before = await oneView(tx, side, m, tr, id);
       if (!before.mine) apiFail(403, 'dm_token_not_mine', tr('err.dm_token_not_mine'));
@@ -857,7 +931,10 @@ export function tokenHandlers(deps: ApiDeps, side: Side) {
         { field: 'term', to: term },
         { field: 'prefix', from: v.fact.prefix, to: made.prefix },
       ]);
-      return cardOf(tx, await oneView(tx, side, m, tr, row.id), howAt(m));
+      // Перевыпуск — новый токен: владельцам тоже «создан» (прототип v158: `dmIssue` и у перевыпуска).
+      const fresh = await oneView(tx, side, m, tr, row.id);
+      await tellCreated(tx, nc, fresh);
+      return cardOf(tx, fresh, howAt(m));
     });
     return c.json({ token: made.token, item }, 201);
   };

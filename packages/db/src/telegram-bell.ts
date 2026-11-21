@@ -92,7 +92,8 @@ export interface BellSight {
   staff: boolean;
   /**
    * Владелец организации: строки «Подписка» (напоминания об оплате, итог проверки чека, память) — только
-   * владельцам, как экран «Подписка» (доработки 20.11.2026; прототип `subTellOwners`).
+   * владельцам, как экран «Подписка» (доработки 20.11.2026; прототип `subTellOwners`), и строки об
+   * API-токенах «Витрины данных» (`dm_token`, прототип v158 `dmTell`).
    */
   owner: boolean;
   /**
@@ -140,6 +141,7 @@ function seen(s: BellSight): SQL {
       when 'sub' then ${s.owner}::boolean
       when 'sub_check' then app.is_platform_admin()
       when 'storage_check' then app.is_platform_admin()
+      when 'dm_token' then ${s.owner}::boolean
       else true end`;
 }
 
