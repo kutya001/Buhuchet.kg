@@ -69,6 +69,9 @@ const CLIENT_1 = 9501;
 const CLIENT_2 = 9502;
 
 const CLOSED = UI_TEXTS['cppage.tg.org_closed'].ru;
+/** Номера реквизитов в сообщении «Реквизиты для перевода»: ответственного (налоги) и организации (обслуживание). */
+const TAX_REQUISITE_PART = '0555 123 456';
+const FEE_REQUISITE_PART = '0555 987 654';
 const enc = (s: string) => new TextEncoder().encode(s);
 const PDF = enc('%PDF-1.7\nчек');
 const tpl = (
@@ -202,10 +205,14 @@ describe.skipIf(!databaseAvailable())(
       f.app.request(`/api/page/org-a/${INN_A}`, { headers: cookie ? { cookie } : {} });
     const pageState = async (cookie?: string) =>
       PublicPage.parse(await (await readPage(cookie)).json());
-    const forgot = async () => {
+    /** Ответ страницы как есть, без разбора схемой: лишнее поле в ответе тоже заметно. */
+    const pageRaw = async (cookie?: string): Promise<unknown> => (await readPage(cookie)).json();
+    const forgot = async (): Promise<unknown> => {
       const res = await pagePost(`/api/page/org-a/${INN_A}/forgot`, undefined);
       expect(res.status, await res.clone().text()).toBe(200);
-      return PageForgot.parse(await res.json());
+      const body: unknown = await res.json();
+      PageForgot.parse(body);
+      return body;
     };
     const PAID_TAX = { purpose: 'tax' as const, month: SEP, amount: SEP_TOTAL };
     /** «Я оплатил» на странице: начать и положить чек по ссылке загрузки (закончить — отдельно). */
@@ -278,6 +285,7 @@ describe.skipIf(!databaseAvailable())(
         .select({
           name: schema.contractorSentFiles.name,
           state: schema.contractorSentFiles.state,
+          contractorId: schema.contractorSentFiles.contractorId,
         })
         .from(schema.contractorSentFiles)
         .orderBy(asc(schema.contractorSentFiles.name)),
@@ -295,7 +303,7 @@ describe.skipIf(!databaseAvailable())(
     });
     /** Пределы частоты не мешают следующему шагу: «Забыли код?» и «/code» — 3 раза в сутки на страницу. */
     const resetLimits = () =>
-      f.t.admin.db.execute(sql`delete from rate_limits where kind like 'cp\_%'`);
+      f.t.admin.db.execute(sql`delete from rate_limits where kind like 'cp\\_%'`);
 
     /** Подписка организации А: «Оплачено до» (null — подписки нет), без чеков. */
     const setSubscription = async (paidUntil: string | null) => {
@@ -336,10 +344,15 @@ describe.skipIf(!databaseAvailable())(
       return SubscriptionPayDone.parse(await res.json());
     };
     const adminDecide = async (id: string, decision: 'confirm' | 'reject') => {
+      const [row] = await f.t.admin.db
+        .select({ version: schema.subscriptionPayments.version })
+        .from(schema.subscriptionPayments)
+        .where(eq(schema.subscriptionPayments.id, id));
+      const version = row!.version;
       const body =
         decision === 'confirm'
-          ? { months: 1, paidUntil: '2026-11-17', version: 1 }
-          : { reason: 'Сумма в чеке не совпадает', version: 1 };
+          ? { months: 1, paidUntil: '2026-11-17', version }
+          : { reason: 'Сумма в чеке не совпадает', version };
       const res = await call(
         admin,
         'POST',
@@ -391,7 +404,15 @@ describe.skipIf(!databaseAvailable())(
         messageId: which,
         data: botPressData(CP_TG_FILE_TO_ACTION, rows.find((r) => r.contractorId === cpA)!.id),
       };
-      const buttons = [...pay, ...feeButtons, ...debt, fileTo];
+      // «Прислать чек» в том же чате — просьба «Пришлите чек» с «Отменой» (после вопроса о файле: иначе
+      // файл стал бы чеком).
+      const receipt = feeButtons.find(
+        (b) => b.chatId === CLIENT_2 && b.data.startsWith('cpReceipt'),
+      )!;
+      await press(receipt.data, CLIENT_2, receipt.messageId);
+      expect(sentTo(CLIENT_2).at(-1)!.text).toBe(tpl('tgCpReceiptAsk'));
+      const cancel = buttonsOf('«Пришлите чек»', CLIENT_2);
+      const buttons = [...pay, ...feeButtons, ...debt, fileTo, ...cancel];
       // Все кнопки, которые проверяет задача, — на месте (имена — из шаблонов сообщений).
       expect(buttons.map((b) => b.name)).toEqual([
         `«К оплате»: ${tpl('tgBtnCpPaid')}`,
@@ -403,9 +424,13 @@ describe.skipIf(!databaseAvailable())(
         `«Напоминание об оплате»: ${tpl('tgBtnCpShowReq')}`,
         `«Напоминание об оплате»: ${tpl('tgBtnCpNoDebt')}`,
         fileTo.name,
+        `«Пришлите чек»: ${tpl('tgBtnCancel')}`,
       ]);
       const paid = await paidBegin();
-      return { buttons, paid };
+      // Ввод кода браузеру без кода при открытом доступе: при закрытом ответ должен быть тем же.
+      const gate = await pageRaw();
+      expect(gate).toMatchObject({ state: 'code' });
+      return { buttons, paid, gate };
     }
 
     /**
@@ -426,15 +451,20 @@ describe.skipIf(!databaseAvailable())(
       }
       expect(tg.sent.slice(sent)).toEqual([]);
       await toBot('/code', CLIENT_1);
-      const code = sentTo(CLIENT_1)
-        .slice(-2)
-        .map((m) => m.text);
-      expect(tg.sent.slice(sent).map((m) => m.chatId)).toEqual([CLIENT_1, CLIENT_1]);
-      expect(code).toContain(closedCode(CP_A));
-      expect(code.some((t) => t.includes(pageCodeText(codeB)))).toBe(true);
-      expect(code.some((t) => t.includes(pageCodeText(codeA)))).toBe(false);
-      expect(await pageState(grantA)).toEqual({ state: 'org_closed' });
-      expect((await pageState()).state).toBe('code');
+      const answers = tg.sent.slice(sent);
+      expect(answers.map((m) => m.chatId)).toEqual([CLIENT_1, CLIENT_1]);
+      // Ровно два ответа: по странице А — «доступ закрыт» без кода ни в тексте, ни в кнопках; по странице
+      // Б — её код. Кода страницы А нет нигде: второе сообщение — о странице Б.
+      const closedAnswer = answers.find((m) => m.text === closedCode(CP_A));
+      expect(closedAnswer).toBeDefined();
+      expect(JSON.stringify(closedAnswer!.options)).not.toContain(codeA);
+      const codeAnswer = answers.find((m) => m !== closedAnswer)!;
+      expect(codeAnswer.text).toContain(pageCodeText(codeB));
+      expect(codeAnswer.text).not.toContain(CP_A);
+      expect(await pageRaw(grantA)).toEqual({ state: 'org_closed' });
+      // Без запомненного кода — тот же ответ, что при открытом доступе: по ссылке не видно, что подписка
+      // не оплачена.
+      expect(await pageRaw()).toEqual(old.gate);
       expect(await forgot()).toEqual({ outcome: 'none', limit: PAGE_CODE_TG_MAX });
       for (const res of [
         await pagePost(`/api/page/org-a/${INN_A}/paid`, grantA, {
@@ -456,7 +486,13 @@ describe.skipIf(!databaseAvailable())(
       const req = old.buttons.find((b) => b.data.startsWith('cpReq'))!;
       const sent = sentTo(CLIENT_1).length;
       expect((await press(req.data, req.chatId, req.messageId))?.text).not.toBe(CLOSED);
-      expect(sentTo(CLIENT_1).length).toBeGreaterThan(sent);
+      // Реквизиты для налогов (ответственного) и для обслуживания (организации).
+      const requisites = sentTo(CLIENT_1)
+        .slice(sent)
+        .map((m) => m.text)
+        .join('\n');
+      expect(requisites).toContain(TAX_REQUISITE_PART);
+      expect(requisites).toContain(FEE_REQUISITE_PART);
       const page = await pageState(grantA);
       expect(page.state === 'open' && page.page.contractor.name).toBe(CP_A);
       const before = sentTo(CLIENT_1).length;
@@ -595,7 +631,8 @@ describe.skipIf(!databaseAvailable())(
         const [payPaid, payAsk] = by('«К оплате»');
         const [feePaid1, , , feeReceipt2] = by('«Оплата за обслуживание»');
         const [, noDebt] = by('«Напоминание об оплате»');
-        const fileTo = old.buttons.at(-1)!;
+        const [fileTo] = by('«От какой компании?»');
+        const [cancel] = by('«Пришлите чек»');
         expect((await press(payPaid!.data, CLIENT_1, payPaid!.messageId))?.text).toBe(
           tpl('tgCpPaidOk'),
         );
@@ -607,9 +644,13 @@ describe.skipIf(!databaseAvailable())(
         expect((await press(noDebt!.data, CLIENT_1, noDebt!.messageId))?.text).toBe(
           tpl('tgCpNoDebtOk'),
         );
+        // «Отмена» просьбы, присланной до закрытия, закрывает её; «Прислать чек» — новая просьба.
+        expect((await press(cancel!.data, CLIENT_2, cancel!.messageId))?.text).toBe(
+          tpl('tgActCancelled'),
+        );
         await press(feeReceipt2!.data, CLIENT_2, feeReceipt2!.messageId);
         expect(sentTo(CLIENT_2).at(-1)!.text).toBe(tpl('tgCpReceiptAsk'));
-        await press(fileTo.data, CLIENT_2, fileTo.messageId);
+        await press(fileTo!.data, CLIENT_2, fileTo!.messageId);
         expect(sentTo(CLIENT_2).at(-1)!.text).toBe(tpl('tgCpFileOk'));
         const after = await snapshot();
         expect(after.claims).toEqual([
@@ -617,9 +658,10 @@ describe.skipIf(!databaseAvailable())(
           { source: 'telegram', purpose: 'tax', status: 'wait' },
           { source: 'telegram', purpose: 'fee', status: 'wait' },
         ]);
+        // «Акт.pdf» — у выбранной в «От какой компании?» «Ала-Тоо Трейд», «Чек.pdf» — «Я оплатил» её страницы.
         expect(after.sentFiles).toEqual([
-          { name: 'Акт.pdf', state: 'ready' },
-          { name: 'Чек.pdf', state: 'ready' },
+          { name: 'Акт.pdf', state: 'ready', contractorId: cpA },
+          { name: 'Чек.pdf', state: 'ready', contractorId: cpA },
         ]);
         const [link] = await f.t.admin.db
           .select({ noDebt: schema.contractorTelegramLinks.noDebt })
@@ -636,14 +678,84 @@ describe.skipIf(!databaseAvailable())(
       }
     });
 
-    it('«Нет подписки» закрывает старые кнопки и ссылки так же, как прошедший срок; подписку поставили — работают', async () => {
+    it('«Нет подписки» закрывает старые кнопки и ссылки так же, как прошедший срок; первый чек владельца открывает доступ сразу', async () => {
       const old = await oldMessages();
       try {
         await setSubscription(null);
         await expectClosed(old);
-        await setSubscription('2026-12-31');
+        // Организация ещё ни разу не платила: первый чек открывает доступ до проверки (блок 4, пункты 5–6).
+        const first = await ownerReceipt();
+        expect(first.opensAccess).toBe(true);
         await expectOpen(old);
       } finally {
+        await setSubscription(TEST_SUBSCRIPTION.paidUntil);
+      }
+    });
+
+    it('исключения п. К-24: «Напоминать» и «Отключить» клиент может и при закрытом доступе; «Код от страницы» без показанного раздела «Telegram» — как при открытом доступе', async () => {
+      // Свой чат теста: только «Ош Строй» (организация А), его «Отключить» другим тестам не мешает.
+      const CLIENT_3 = 9503;
+      await linkClient(owner, cpA2, INN_A2, 'org-a', CLIENT_3);
+      const linkOf = async (chatId: number, contractorId: string) =>
+        (
+          await f.t.admin.db
+            .select({
+              status: schema.contractorTelegramLinks.status,
+              noDebt: schema.contractorTelegramLinks.noDebt,
+            })
+            .from(schema.contractorTelegramLinks)
+            .where(
+              and(
+                eq(schema.contractorTelegramLinks.chatId, chatId),
+                eq(schema.contractorTelegramLinks.contractorId, contractorId),
+              ),
+            )
+        )[0]!;
+      const hideTelegram = (hidden: string[]) =>
+        f.t.admin.db
+          .update(schema.contractorPages)
+          .set({ hiddenSections: hidden })
+          .where(eq(schema.contractorPages.contractorId, cpA));
+      await f.t.admin.db
+        .update(schema.contractorTelegramLinks)
+        .set({ noDebt: true })
+        .where(
+          and(
+            eq(schema.contractorTelegramLinks.chatId, CLIENT_1),
+            eq(schema.contractorTelegramLinks.contractorId, cpA),
+          ),
+        );
+      try {
+        await setSubscription('2026-10-17');
+        // «Напоминать» — согласие клиента на сообщения: включается и при закрытом доступе.
+        await toBot('Напоминать', CLIENT_1);
+        expect(sentTo(CLIENT_1).at(-1)!.text).toBe(
+          formatText(UI_TEXTS['cppage.tg.debt_on'].ru, { contractor: CP_A }),
+        );
+        expect((await linkOf(CLIENT_1, cpA)).noDebt).toBe(false);
+        // «Отключить» — тоже: чат больше не подключён.
+        await toBot('Отключить', CLIENT_3);
+        expect(sentTo(CLIENT_3).at(-1)!.text).toBe(
+          tpl('tgCpOff', { контрагент: 'ОсОО «Ош Строй»' }),
+        );
+        expect((await linkOf(CLIENT_3, cpA2)).status).toBe('off');
+        // Раздел «Telegram» страницы А скрыт: на «/code» — только код открытой организации Б, без
+        // «доступ закрыт» по А — так же, как ответил бы бот при открытом доступе.
+        await hideTelegram(['tg']);
+        await resetLimits();
+        const before = tg.sent.length;
+        await toBot('/code', CLIENT_1);
+        const answers = tg.sent.slice(before);
+        expect(answers.map((m) => m.chatId)).toEqual([CLIENT_1]);
+        expect(answers[0]!.text).toContain(pageCodeText(codeB));
+        expect(JSON.stringify(answers)).not.toContain(closedCode(CP_A));
+        await setSubscription('2026-12-31');
+        await resetLimits();
+        const open = tg.sent.length;
+        await toBot('/code', CLIENT_1);
+        expect(tg.sent.slice(open).map((m) => m.text)).toEqual([answers[0]!.text]);
+      } finally {
+        await hideTelegram([]);
         await setSubscription(TEST_SUBSCRIPTION.paidUntil);
       }
     });

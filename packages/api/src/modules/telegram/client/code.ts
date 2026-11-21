@@ -89,7 +89,8 @@ export type PageCodeSendOutcome = PageForgotOutcome | 'unavailable' | 'org_close
  * только в этот чат (команда бота), иначе во все подключённые. Чтение страницы и запись в историю —
  * транзакциями организации без пользователя, отправка — между ними (п. О-48). Страница выключена,
  * контрагент в архиве, организация заблокирована или функция выключена — `unavailable`; доступ
- * организации закрыт по подписке — `org_closed`, код не уходит (прототип v152 `pubForgot`).
+ * организации закрыт по подписке — `org_closed`, код не уходит (прототип v152 `pubForgot`), но только
+ * подключённому чату с показанным разделом «Telegram»: остальным — `none`, как при открытом доступе.
  */
 export async function sendPageCode(
   deps: ApiDeps,
@@ -104,9 +105,11 @@ export async function sendPageCode(
   const { target } = found;
   if (!target) return { outcome: 'unavailable', contractor: null };
   const { contractor } = target;
-  if (found.closed) return { outcome: 'org_closed', contractor };
   const chats = target.chats.filter((x) => o.chatId === undefined || x.chatId === o.chatId);
   if (!botOn(deps) || !target.tgShown || !chats.length) return { outcome: 'none', contractor };
+  // Закрытие — после подключения: чат, которому раздел «Telegram» не показан, получает тот же ответ,
+  // что и при открытом доступе, и не узнаёт, что подписка не оплачена (п. К-24).
+  if (found.closed) return { outcome: 'org_closed', contractor };
   if (target.closed) return { outcome: 'closed', contractor };
   const slot = await takeRateLimit(deps.db, PAGE_CODE_TG_RATE_LIMIT, o.contractorId);
   if (!slot.ok) return { outcome: 'limit', contractor };
