@@ -56,7 +56,9 @@ const SUMMARY = 'cursor-pointer text-[13px] text-muted';
 const LABEL = 'text-[12px] text-muted';
 const STEPS = 'mt-1 mb-2 list-decimal pl-5 text-[13px] leading-[1.6] [&>li]:my-1';
 const CHIPS = 'my-1 flex flex-wrap gap-1.5';
-const H4 = 'mt-2.5 mb-0.5 text-[13px] font-semibold';
+const H4 = 'mt-2.5 mb-0.5 text-[13px] font-bold';
+/** Отступы прототипа поверх шага блока в 10 px: `.dm-how>.hint`, `.dm-how .note`. */
+const HINT_GAP = '-mt-1 mb-2';
 
 /** Копирует значение и говорит об этом: `code` — «Код скопирован», иначе «Скопировано». */
 type Copy = (value: string, code?: boolean) => void;
@@ -97,15 +99,18 @@ function CodeBlock({
   tip,
   label,
   copy,
+  next = false,
 }: {
   text: string;
   mark: string;
   tip: string;
   label: string;
   copy: Copy;
+  /** Второй код подряд (прототип `.dm-code+.dm-code`). */
+  next?: boolean;
 }) {
   return (
-    <div className="relative mt-1.5">
+    <div className={`relative ${next ? 'mt-2' : 'mt-1.5'}`}>
       {/* Нажатие на код — удобство для мыши; с клавиатуры код копирует кнопка рядом. */}
       <pre
         className={`${PRE} cursor-copy`}
@@ -228,10 +233,11 @@ export function HowBox({ how, token }: { how: DmTokenHow; token: string | null }
   const chip = (value: string, mark?: string) => (
     <CopyChip value={value} mark={mark} tip={tip} copy={copy} />
   );
-  const code = (text: string, mark: string) => (
+  const code = (text: string, mark: string, next = false) => (
     <CodeBlock
       text={text}
       mark={mark}
+      next={next}
       tip={t('dm.how.copy_code_tip')}
       label={t('dm.how.copy_code')}
       copy={copy}
@@ -283,11 +289,17 @@ export function HowBox({ how, token }: { how: DmTokenHow; token: string | null }
   return (
     <div data-dm-how="">
       <Box title={t('dm.how.title')}>
-        <Hint>{t('dm.how.tap')}</Hint>
+        <div className={HINT_GAP}>
+          <Hint>{t('dm.how.tap')}</Hint>
+        </div>
         {token === null ? (
-          <Note tone="warn" icon="alert">
-            <span data-dm-how-part="">{stepText(t('dm.how.part'), { token: chip(x.token) })}</span>
-          </Note>
+          <div className="mb-2">
+            <Note tone="warn" icon="alert">
+              <span data-dm-how-part="">
+                {stepText(t('dm.how.part'), { token: chip(x.token) })}
+              </span>
+            </Note>
+          </div>
         ) : null}
         <div className="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-3 gap-y-1">
           <span className={LABEL}>{t('dm.how.csv')}</span>
@@ -295,13 +307,16 @@ export function HowBox({ how, token }: { how: DmTokenHow; token: string | null }
           <span className={LABEL}>{t('dm.how.url')}</span>
           <span>{chip(how.base, 'url')}</span>
           <span className={LABEL}>{t('dm.how.header')}</span>
-          <span className="flex flex-wrap gap-1.5">
+          <span className={CHIPS}>
             {chip('Authorization', 'header')}
             {chip(x.bearer, 'bearer')}
           </span>
         </div>
         {how.params.length ? (
-          <div data-dm-how-params="">
+          <div
+            data-dm-how-params=""
+            className="mt-2.5 [&_td]:!px-1.5 [&_td]:!py-1 [&_td]:align-middle"
+          >
             <MiniTable
               label={t('dm.how.col.param')}
               empty="—"
@@ -315,7 +330,7 @@ export function HowBox({ how, token }: { how: DmTokenHow; token: string | null }
             />
           </div>
         ) : null}
-        <div className="flex flex-col gap-2">
+        <div className="my-3 flex flex-col gap-2">
           <AppBlock id="pq" icon="table" title={t('dm.how.pq.title')} sub={t('dm.how.pq.sub')} open>
             <h4 className={H4}>{t('dm.how.pq.h1')}</h4>
             <ol className={STEPS}>
@@ -411,19 +426,21 @@ export function HowBox({ how, token }: { how: DmTokenHow; token: string | null }
               </li>
             </ol>
             {code(x.curl, 'curl')}
-            {code(x.python, 'py')}
+            {code(x.python, 'py', true)}
           </AppBlock>
         </div>
-        <details>
+        <details className="my-1.5">
           <summary className={SUMMARY}>{t('dm.how.answer')}</summary>
           <pre className={`${PRE} mt-1.5`} data-dm-how-sample="">
             {x.sample}
           </pre>
         </details>
-        <ul className="my-1 list-disc pl-[18px] text-[13px] leading-[1.6]">
+        <ul className="my-1.5 list-disc pl-[18px] text-[13px] leading-[1.6]">
           <li>{t('dm.how.limits')}</li>
         </ul>
-        <Hint>{t('dm.how.note')}</Hint>
+        <div className={HINT_GAP}>
+          <Hint>{t('dm.how.note')}</Hint>
+        </div>
       </Box>
       {copier.node}
     </div>

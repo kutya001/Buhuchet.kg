@@ -198,6 +198,70 @@ describe('dmExtHow', () => {
     expect(x.python).toContain(`PARAMS = {"q": "а&б \\"в\\" 'г' \\\\ д"}`);
   });
 
+  it('макрос VBA сам разбирает CSV и пишет ячейки по одной: данные не становятся формулами (п. О-100)', () => {
+    const x = how();
+    // «Текст по столбцам» и запись целой строки в ячейку вводили бы значение заново — как формулу.
+    expect(x.vba).not.toContain('TextToColumns');
+    expect(x.vba).not.toContain('Split(');
+    // Перевод строки внутри кавычек — часть значения: новая строка листа только вне кавычек.
+    expect(x.vba).toContain('        ElseIf ch = "," Or ch = vbLf Then');
+    expect(x.vba).toContain('            ElseIf Mid$(txt, i + 1, 1) = """" Then');
+    // Текст, похожий на формулу, — с апострофом впереди; число с минусом остаётся числом.
+    expect(x.vba).toContain(
+      `            If v Like "[=+@-]*" And Not IsNumeric(v) Then v = "'" & v\n` +
+        '            If Len(v) > 0 Then ws.Cells(r, c).Value = v',
+    );
+    expect(x.vba.endsWith('    Next\nEnd Sub')).toBe(true);
+  });
+
+  it('слова словаря с переводом строки своих строк в код не дописывают', () => {
+    const plain = how();
+    const words = Object.fromEntries(
+      Object.entries(WORDS).map(([k, v]) => [k, `${v}\r\nShell "calc.exe"\u0085x\u2028y`]),
+    ) as unknown as DmHowWords;
+    const x = how({ words, token: null });
+    for (const k of ['powerQuery', 'vba', 'sheets', 'code1c', 'python', 'curl'] as const) {
+      expect(x[k].split(/\r\n|[\n\r\u0085\u2028\u2029]/), k).toHaveLength(
+        plain[k].split('\n').length,
+      );
+    }
+    expect(x.vba).toContain(`    ' ${WORDS.token} Shell "calc.exe" x y\n    Const TOKEN`);
+  });
+
+  it('заглушка токена в curl из кавычек оболочки не выходит', () => {
+    const x = how({ token: null, words: { ...WORDS, placeholder: 'bk_$(id)"; echo `x` \\ "' } });
+    expect(x.curl).toBe(
+      'curl -H "Authorization: Bearer bk_\\$(id)\\"; echo \\`x\\` \\\\ \\"" \\\n' +
+        `  "${BASE}?format=csv&date_from=2026-11-01&date_to=2026-11-30"`,
+    );
+  });
+
+  it('Power Query: «#(» в подписи — буквально; подпись, совпавшая с шагом запроса или с другой, — с кодом', () => {
+    const x = how({
+      params: [
+        { code: 'a', name: 'Счёт #(основной)', type: 'text', value: '#(lf)' },
+        { code: 'b', name: 'Token', type: 'text', value: '1' },
+        { code: 'c', name: 'Период', type: 'text', value: '2' },
+        { code: 'd', name: 'Период', type: 'text', value: '3' },
+      ],
+    });
+    expect(x.powerQuery).toContain('    #"Счёт #(#)(основной)" = "#(#)(lf)",   // a');
+    expect(x.powerQuery).toContain('    #"Token (b)" = "1",   // b');
+    expect(x.powerQuery).toContain('    #"Период" = "2",   // c');
+    expect(x.powerQuery).toContain('    #"Период (d)" = "3",   // d');
+    expect(x.powerQuery).toContain(
+      'Query = [format = "csv", a = #"Счёт #(#)(основной)", b = #"Token (b)", c = #"Период", d = #"Период (d)"],',
+    );
+  });
+
+  it('комментарий VBA не кончается переносом строки « _»', () => {
+    const x = how({
+      words: { ...WORDS, token: 'Токен _', fmtDate: 'ГГГГ-ММ-ДД _ ' },
+    });
+    expect(x.vba).toContain("    ' Токен\n    Const TOKEN");
+    expect(x.vba).toContain(`p1 = "2026-11-01"   ' Срок с, date_from, ГГГГ-ММ-ДД\n`);
+  });
+
   it('пример ответа: две строки по видам столбцов, без «Контрагента» для области (п. Т-27)', () => {
     expect(JSON.parse(how().sample)).toEqual({
       columns: COLS,

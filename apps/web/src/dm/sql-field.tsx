@@ -123,7 +123,7 @@ export function SqlField({
       <textarea
         {...control}
         ref={area}
-        className={`${inputClass({ multiline: true, mono: true })} relative z-[1] block !min-h-[240px] resize-y overflow-auto !bg-transparent !pl-[46px] !text-[12.5px] leading-[1.5] whitespace-pre text-transparent caret-ink [-webkit-text-fill-color:transparent] [tab-size:2] selection:bg-info-bg max-md:!min-h-[180px]`}
+        className={`${inputClass({ multiline: true, mono: true })} relative z-[1] block !min-h-[240px] resize-y overflow-auto !bg-transparent !pl-[46px] !text-[12.5px] leading-[1.5] whitespace-pre text-transparent caret-ink [-webkit-text-fill-color:transparent] [tab-size:2] selection:bg-info-bg selection:[-webkit-text-fill-color:transparent] max-md:!min-h-[180px]`}
         value={value}
         maxLength={maxLength}
         spellCheck={false}

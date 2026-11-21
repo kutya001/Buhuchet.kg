@@ -124,12 +124,31 @@ export function dmHowFormat(type: string, w: Pick<DmHowWords, 'fmtDate' | 'fmtMo
 }
 
 /**
- * Подпись и значение параметра задаёт администратор платформы, а код вставляют в чужую программу: в
- * одну строку и в кавычках языка — подпись с кавычкой или переводом строки не должна ломать код.
+ * Подпись и значение параметра и слова словаря задаёт администратор платформы, а код вставляют в чужую
+ * программу: в одну строку и в кавычках языка — текст с кавычкой или переводом строки не должен ломать
+ * код и дописывать в него свои строки. Управляющие знаки (переводы строки всех видов, табуляция,
+ * U+0085, U+2028, U+2029) — в один пробел.
  */
-const oneLine = (s: string) => s.replace(/[\r\n\u2028\u2029]+/g, ' ');
-/** Строка Power Query, VBA и 1С: кавычка удваивается. */
+function oneLine(s: string): string {
+  let out = '';
+  let gap = false;
+  for (const ch of s) {
+    const c = ch.codePointAt(0) ?? 0;
+    const control = c < 0x20 || (c >= 0x7f && c <= 0x9f) || c === 0x2028 || c === 0x2029;
+    if (!control) out += ch;
+    else if (!gap) out += ' ';
+    gap = control;
+  }
+  return out;
+}
+/** Строка VBA и 1С: кавычка удваивается. */
 const dq = (s: string) => `"${oneLine(s).replace(/"/g, '""')}"`;
+/** Строка и имя в кавычках Power Query: ещё и `#(` — начало управляющей записи языка M. */
+const mq = (s: string) => dq(s).replaceAll('#(', '#(#)(');
+/** Комментарий VBA: ` _` в конце строки втянул бы в комментарий следующую строку кода. */
+const vbaNote = (s: string) => oneLine(s).replace(/[ _]+$/, '');
+/** Строка оболочки в двойных кавычках: `\`, `"`, `$` и обратная кавычка — с обратной чертой. */
+const shq = (s: string) => `"${oneLine(s).replace(/[\\"$`]/g, '\\$&')}"`;
 /** Строка JavaScript в одинарных кавычках. */
 const jsq = (s: string) => `'${oneLine(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
 /** Строка Python в двойных кавычках. */
@@ -182,7 +201,10 @@ export function dmExtHow(o: {
   today: IsoDate;
   words: DmHowWords;
 }): DmExtHow {
-  const w = o.words;
+  // Слова словаря стоят в комментариях кода: каждое — в одну строку.
+  const w = Object.fromEntries(
+    Object.entries(o.words).map(([k, v]) => [k, oneLine(String(v))]),
+  ) as unknown as DmHowWords;
   const token = o.token ?? w.placeholder;
   const bearer = `Bearer ${token}`;
   const ps = o.params.filter(
@@ -213,19 +235,28 @@ export function dmExtHow(o: {
   );
 
   // Power Query (Excel и Power BI): параметры — отдельными строками в начале, адрес без параметров.
-  const pqName = (p: DmHowParamIn) => `#${dq(p.name)}`;
+  // Имя шага — подпись параметра; совпала с шагом запроса или с подписью выше — к ней код параметра.
+  const steps = new Set(['Token', 'Source', 'Csv', 'Result']);
+  const pqNames = new Map<string, string>();
+  for (const p of ps) {
+    let name = oneLine(p.name);
+    while (steps.has(name)) name = `${name} (${p.code})`;
+    steps.add(name);
+    pqNames.set(p.code, `#${mq(name)}`);
+  }
+  const pqName = (p: DmHowParamIn) => pqNames.get(p.code) ?? `#${mq(p.name)}`;
   const powerQuery = [
     'let',
     `    // ${w.token}`,
-    `    Token = ${dq(token)},`,
+    `    Token = ${mq(token)},`,
     ...(ps.length
       ? [
           `    // ${w.paramsRefresh}`,
-          ...ps.map((p) => `    ${pqName(p)} = ${dq(p.value)},   // ${tail(p.code, fmt(p))}`),
+          ...ps.map((p) => `    ${pqName(p)} = ${mq(p.value)},   // ${tail(p.code, fmt(p))}`),
         ]
       : []),
     `    // ${w.query}`,
-    `    Source = Web.Contents(${dq(o.base)}, [`,
+    `    Source = Web.Contents(${mq(o.base)}, [`,
     `        Query = [format = "csv"${ps.map((p) => `, ${p.code} = ${pqName(p)}`).join('')}],`,
     '        Headers = [Authorization = "Bearer " & Token]',
     '    ]),',
@@ -235,20 +266,23 @@ export function dmExtHow(o: {
     '    Result',
   ].join('\n');
 
+  // Макрос сам разбирает CSV по кавычкам и пишет каждую ячейку отдельно: перевод строки внутри значения
+  // остаётся в своей ячейке, а текст, похожий на формулу, — текстом (с апострофом впереди).
+  // ОТКЛОНЕНИЕ: docs/deviations.md#О-100
   const vba = [
     'Sub LoadBuhuchet()',
-    `    ' ${w.token}`,
+    `    ' ${vbaNote(w.token)}`,
     `    Const TOKEN As String = ${dq(token)}`,
     ...(ps.length
       ? [
-          `    ' ${w.paramsCells}`,
+          `    ' ${vbaNote(w.paramsCells)}`,
           ...ps.map(
             (p, i) =>
-              `    Dim p${i + 1} As String: p${i + 1} = ${dq(p.value)}   ' ${tail(p.name, p.code, fmt(p))}`,
+              `    Dim p${i + 1} As String: p${i + 1} = ${dq(p.value)}   ' ${vbaNote(tail(p.name, p.code, fmt(p)))}`,
           ),
         ]
       : []),
-    `    ' ${w.query}`,
+    `    ' ${vbaNote(w.query)}`,
     '    Dim url As String',
     `    url = ${dq(`${o.base}?format=csv`)}${ps.map((p, i) => ` & "&${p.code}=" & p${i + 1}`).join('')}`,
     '    Dim http As Object: Set http = CreateObject("MSXML2.XMLHTTP.6.0")',
@@ -261,13 +295,36 @@ export function dmExtHow(o: {
     '        .Type = 1: .Open: .Write http.responseBody',
     '        .Position = 0: .Type = 2: .Charset = "utf-8": txt = .ReadText',
     '    End With',
-    '    Dim lines, i As Long, ws As Worksheet: Set ws = ActiveSheet',
+    '    Dim ws As Worksheet: Set ws = ActiveSheet',
     '    ws.Cells.Clear',
-    '    lines = Split(Replace(txt, vbCr, ""), vbLf)',
-    '    For i = 0 To UBound(lines)',
-    '        If Len(lines(i)) > 0 Then ws.Cells(i + 1, 1).Value = lines(i)',
+    '    Dim r As Long, c As Long, i As Long, q As Boolean, ch As String, v As String',
+    '    r = 1: c = 1',
+    '    If Right$(txt, 1) <> vbLf Then txt = txt & vbLf',
+    '    For i = 1 To Len(txt)',
+    '        ch = Mid$(txt, i, 1)',
+    '        If q Then',
+    '            If ch <> """" Then',
+    '                v = v & ch',
+    '            ElseIf Mid$(txt, i + 1, 1) = """" Then',
+    '                v = v & ch: i = i + 1',
+    '            Else',
+    '                q = False',
+    '            End If',
+    '        ElseIf ch = """" Then',
+    '            q = True',
+    '        ElseIf ch = "," Or ch = vbLf Then',
+    '            If v Like "[=+@-]*" And Not IsNumeric(v) Then v = "\'" & v',
+    '            If Len(v) > 0 Then ws.Cells(r, c).Value = v',
+    '            v = ""',
+    '            If ch = "," Then',
+    '                c = c + 1',
+    '            Else',
+    '                r = r + 1: c = 1',
+    '            End If',
+    '        ElseIf ch <> vbCr Then',
+    '            v = v & ch',
+    '        End If',
     '    Next',
-    '    ws.Columns(1).TextToColumns DataType:=xlDelimited, TextQualifier:=xlDoubleQuote, Comma:=True',
     'End Sub',
   ].join('\n');
 
@@ -350,7 +407,7 @@ export function dmExtHow(o: {
     vba,
     sheets,
     code1c,
-    curl: `curl -H "Authorization: ${bearer}" \\\n  "${csv}"`,
+    curl: `curl -H ${shq(`Authorization: ${bearer}`)} \\\n  ${shq(csv)}`,
     python,
     sample,
   };
