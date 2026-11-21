@@ -3,9 +3,9 @@ import {
   adminUsers,
   exportVideoViews,
   kbMembers,
+  kbOrgSettings,
   listVideoViewsPage,
   listVideoViewsValues,
-  orgMenuSettings,
   roleRightsMap,
   videoGuests,
   videoRecords,
@@ -87,8 +87,8 @@ function byUser(views: readonly VideoViewRecord[]) {
 async function orgViewRows(tx: Tx, orgId: string, t: T): Promise<VideoViewListRow[]> {
   const members = (await kbMembers(tx)).filter((m) => m.active);
   if (!members.length) return [];
-  const [{ features, reportConfirm }, rights, records, views] = await Promise.all([
-    orgMenuSettings(tx, orgId),
+  const [{ features, policy }, rights, records, views] = await Promise.all([
+    kbOrgSettings(tx, orgId),
     roleRightsMap(
       tx,
       members.map((m) => m.roleId),
@@ -108,7 +108,7 @@ async function orgViewRows(tx: Tx, orgId: string, t: T): Promise<VideoViewListRo
         scopes: r?.scopes ?? {},
       },
       features,
-      { reportConfirm },
+      policy,
     );
     const own = viewsOf.get(m.userId) ?? new Map<string, VideoViewRecord>();
     const subject = (video: VideoRecord): VideoViewSubject => ({

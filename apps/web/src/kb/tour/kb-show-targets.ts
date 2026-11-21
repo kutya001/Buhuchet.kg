@@ -88,6 +88,19 @@ export const KB_SHOW_TARGETS: Readonly<Record<string, string>> = {
   '#mbody [data-ck-go]': 'main [data-ck-go]',
   '#mbody [data-ck-how]': 'main [data-ck-how]',
   '#mbody [data-ck-scr]': 'main [data-ck-scr]',
+  // Витрина данных (доработки 20.11.2026, этап 3, П3): «Вывод», каталог «Шаблонов», «API Токены».
+  '#dm-t': 'main [data-dm-out-tpl]',
+  '#mbody .dm-pars': 'main [data-dm-pars]',
+  '#dm-go': 'main [data-dm-out-show]',
+  '#mbody .dm-meta': 'main [data-dm-out-meta]',
+  '#dm-g .gscroll': 'main [data-dm-out-result] [data-grid-scroll]',
+  '#dm-st': 'main [data-dm-out-result] [data-ex-stat]',
+  '#mbody .gt thead .th-f': 'main [data-dm-out-result] thead [data-filter-button]',
+  '#dm-ask': 'main [data-dm-ask-open]',
+  '#mbody .dm-card': 'main [data-dm-tpl-card]',
+  '#mbody [data-dm-show]': 'main [data-dm-show]',
+  '#mbody [data-dm-tok]': 'main [data-dm-tok]',
+  '#mbody .note.red': 'main [data-dm-api-off]',
 };
 
 /** Обозначения прототипа, которые переводятся по образцу. */
@@ -146,6 +159,8 @@ export function productUp(proto: string): string | null {
 const KB_FIELD_SCREENS: Readonly<Record<string, string>> = {
   'org.main': 'og',
   'org.settings': 'st|tgn',
+  // «Вывод» витрины: шаблон и «Глазами организации» — `dm-…`, параметры шаблона — `dmp-…`.
+  'dm.out': 'dm|dmp',
 };
 
 const KB_FIELD_WINDOWS: Readonly<Partial<Record<UiTextKey, string>>> = {
@@ -164,6 +179,10 @@ const KB_FIELD_WINDOWS: Readonly<Partial<Record<UiTextKey, string>>> = {
   'roles.new.title': 'nr',
   // Мой профиль
   'profile.title': 'pf',
+  // Витрина данных
+  'dm.tok.new.title': 'dk',
+  'dm.ask.title': 'dq',
+  'dm.ed.new': 'de',
 };
 
 /** Заголовок окна формы без названия записи в кавычках: «Показатель «Выручка»» → «Показатель «…»». */

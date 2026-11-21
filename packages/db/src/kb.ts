@@ -16,6 +16,7 @@ import {
   type KbHow,
   type KbLevelDef,
   type KbMark,
+  type KbPolicySetting,
   type KbProgramGroup,
   type KbScreenUi,
   type KbStats,
@@ -42,6 +43,7 @@ import {
   kbKnown,
   kbLevels,
   kbProgress,
+  organizations,
   platformReference,
   roles,
   statusHistory,
@@ -622,6 +624,24 @@ export interface KbMemberProgress {
 }
 
 /**
+ * Функции учётной политики и настройки организации, от которых зависят шаги программы её
+ * сотрудников (`kbBusinessAccess`): «Сдача отчётов требует подтверждения» и «не демо» — в демо токены
+ * «Витрины данных» не выпускаются, шага выпуска нет (прототип `feat: () => !dmDemo()`). В
+ * `withOrgContext` этой организации.
+ */
+export async function kbOrgSettings(
+  tx: Tx,
+  orgId: string,
+): Promise<{ features: Record<Feature, boolean>; policy: Record<KbPolicySetting, boolean> }> {
+  const { features, reportConfirm } = await orgMenuSettings(tx, orgId);
+  const [org] = await tx
+    .select({ demo: organizations.isDemo })
+    .from(organizations)
+    .where(eq(organizations.id, orgId));
+  return { features, policy: { reportConfirm, notDemo: !(org?.demo ?? false) } };
+}
+
+/**
  * Уровни сотрудников организации из контекста (прототип kbFor): программа каждого — из прав его роли
  * и функций учётной политики, засчитанные шаги — сохранённые отметки (ТЗ «Как считается»: шаг
  * засчитывается тому, кто сам сделал действие; свои прошлые действия засчитываются при входе в
@@ -635,7 +655,7 @@ export async function kbTeam(
   const members = await kbMembers(tx, employeeIds);
   if (!members.length) return [];
   const catalog = await kbCatalog(tx);
-  const { features, reportConfirm } = await orgMenuSettings(tx, orgId);
+  const { features, policy } = await kbOrgSettings(tx, orgId);
   const rights = await roleRightsMap(
     tx,
     members.map((m) => m.roleId),
@@ -654,7 +674,7 @@ export async function kbTeam(
         permissions: new Set(r?.permissions ?? []),
         scopes: r?.scopes ?? {},
       };
-      program = kbProgram(catalog, kbBusinessAccess(subject, features, { reportConfirm }));
+      program = kbProgram(catalog, kbBusinessAccess(subject, features, policy));
       programs.set(member.roleId, program);
     }
     const got = reached.get(member.userId) ?? [];

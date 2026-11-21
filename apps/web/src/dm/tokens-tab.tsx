@@ -6,6 +6,7 @@ import { buttonClass, DataGrid, EmptyState, MONO_CLASS, Note, type GridColumn } 
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useEffectEvent, useMemo } from 'react';
+import { flashTarget, KB_TOKEN_VARIANT } from '../kb/kb-go';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { useListExport } from '../lists/export';
@@ -158,14 +159,19 @@ export function TokensTab({ side }: { side: DmSide }) {
   );
   const exporter = useListExport(sendExport);
 
-  // «+ Добавить» → «Токен» (прототип `dmAdd`).
+  // «+ Добавить» → «Токен» (прототип `dmAdd`); «Перейти» шага урока «Выпустить API-токен» при
+  // выключенном API подсвечивает красную плашку, а не показывает уведомление (прототип kb-lessons).
   const request = addRequest?.moduleId === 'dm' ? addRequest : null;
-  const start = useEffectEvent((actionId: string) => {
-    if (actionId === 'tok') void tokens.issue();
+  const start = useEffectEvent((actionId: string, variant?: string) => {
+    if (actionId !== 'tok') return;
+    void tokens.issue(
+      undefined,
+      variant === KB_TOKEN_VARIANT ? () => flashTarget('[data-dm-api-off]') : undefined,
+    );
   });
   useEffect(() => {
     if (!request) return;
-    start(request.actionId);
+    start(request.actionId, request.variant);
     clearAddRequest();
   }, [request, clearAddRequest]);
 
@@ -177,21 +183,23 @@ export function TokensTab({ side }: { side: DmSide }) {
   return (
     <div data-dm-tokens={side} className="flex flex-col gap-3.5">
       {side === 'org' && f?.apiOff ? (
-        <Note tone="bad" icon="lock">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="min-w-0 grow">{t('dm.tok.api_off')}</span>
-            {f.owner ? (
-              <button
-                type="button"
-                className={buttonClass('default', 'sm')}
-                data-dm-api-on=""
-                onClick={() => router.push(tabHref('org', 'settings'))}
-              >
-                {t('dm.tok.api_off_open')}
-              </button>
-            ) : null}
-          </div>
-        </Note>
+        <div data-dm-api-off="">
+          <Note tone="bad" icon="lock">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="min-w-0 grow">{t('dm.tok.api_off')}</span>
+              {f.owner ? (
+                <button
+                  type="button"
+                  className={buttonClass('default', 'sm')}
+                  data-dm-api-on=""
+                  onClick={() => router.push(tabHref('org', 'settings'))}
+                >
+                  {t('dm.tok.api_off_open')}
+                </button>
+              ) : null}
+            </div>
+          </Note>
+        </div>
       ) : null}
       <Note>
         {side === 'admin' ? t('dm.tok.note_admin') : t('dm.tok.note', { max: f?.max ?? '' })}

@@ -32,6 +32,12 @@ export interface KbTarget {
 /** Строки списка: таблица на ПК и карточки на телефоне. */
 const LIST = '[data-grid-scroll], [data-grid-cards]';
 
+/**
+ * Вариант «+ Добавить» → «Токен» от «Перейти» шага «Выпустить API-токен»: при выключенном «Внешнем
+ * доступе по API» вкладка подсвечивает красную плашку вместо уведомления (прототип kb-lessons `dmtok`).
+ */
+export const KB_TOKEN_VARIANT = 'kb';
+
 export const KB_GO: Readonly<Record<string, KbTarget>> = {
   profile: { module: 'org', tab: 'main', flash: 'main section' },
   accs: { module: 'org', tab: 'main', flash: '[data-org-account-add]', press: true },
@@ -122,6 +128,19 @@ export const KB_GO: Readonly<Record<string, KbTarget>> = {
   // «Файловый менеджер» (2.29): «Загрузить файл» сразу открывает окно загрузки.
   upload: { module: 'files', flash: LIST, open: { add: 'upload' } },
   ffind: { module: 'files', flash: LIST },
+  // «Витрина данных» (доработки 20.11.2026, этап 3, П3; прототип v157 kb-lessons): «Показать отчёт» —
+  // кнопка «Показать», «Как читать отчёт» — результат, «Каталог шаблонов» — карточки; «Выпустить
+  // API-токен» — сразу «Новый API-токен», при выключенном API — красная плашка вкладки.
+  dmshow: { module: 'dm', tab: 'out', flash: '[data-dm-out-show]' },
+  dmxl: { module: 'dm', tab: 'out', flash: '[data-dm-out-result]' },
+  dmcat: { module: 'dm', tab: 'tpl', flash: '[data-dm-catalog]' },
+  dmtok: {
+    module: 'dm',
+    tab: 'tok',
+    flash: '[data-add-button="button"]',
+    phoneFlash: '[data-add-button="fab"]',
+    open: { add: 'tok', variant: KB_TOKEN_VARIANT },
+  },
   // «Главная» (2.34): плашки «Сводки» (на телефоне скрыты — тогда экран) и экран «Аналитики».
   today: { module: 'home', tab: 'today', flash: '[data-plates], main' },
   anl: { module: 'home', tab: 'analytics', flash: 'main' },
@@ -141,6 +160,8 @@ export const KB_GO: Readonly<Record<string, KbTarget>> = {
   'a-tpl': { module: 'pdicts', tab: 'templates', flash: 'main' },
   'a-l10n': { module: 'l10n', flash: 'main' },
   'a-org': { module: 'orgs', flash: LIST, open: { add: 'org' } },
+  // «Шаблоны витрины» Админки (доработки 20.11.2026, этап 3, П3).
+  'a-dm': { module: 'dm', tab: 'tpl', flash: 'main' },
 };
 
 /** Сколько ждать, пока нужный элемент появится на экране после перехода, мс. */

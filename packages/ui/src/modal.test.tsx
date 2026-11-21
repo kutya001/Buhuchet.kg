@@ -71,6 +71,12 @@ describe('окно: шапка, «На весь экран», закрытие (
     expect(html).toContain('<p>Описание модуля</p>');
     // Нижней строки нет, если кнопок действий нет.
     expect(html).not.toContain('border-t');
+    expect(html).not.toContain('data-window-sticky');
+  });
+
+  it('окно, которое не закрывается нажатием мимо, помечено: окно «Готово» урока ждёт его закрытия', () => {
+    const html = renderToStaticMarkup(<WindowFrame {...frame({ sticky: true })} />);
+    expect(html).toContain('data-window-sticky=""');
   });
 
   it('в шапке рядом с «Закрыть» — «На весь экран»; на ПК в подсказке — двойной клик по заголовку', () => {
