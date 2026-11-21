@@ -21,6 +21,7 @@ import type { XlsxCell } from '../../lists/xlsx';
 import { requirePermission, requirePlatformAdmin } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
 import { adminOutput, orgOutput, outputFail, withRunSlot, type OutputRun } from './output';
+import { withDmPoolSlot } from './run';
 
 /*
  * «Витрина данных» → «Вывод» → «В Excel» (доработки 20.11.2026: Витрина данных, блок 4, пункт 5; общий
@@ -28,7 +29,9 @@ import { adminOutput, orgOutput, outputFail, withRunSlot, type OutputRun } from 
  * тем же путём, что «Показать» (`orgOutput`, `adminOutput`: права, область «Свои», журнал, у Админки —
  * открытие «глазами организации» в истории), строки — с фильтрами, поиском и сортировкой таблицы
  * (`dmOutList` домена — те же правила, что на экране), столбцы — видимые по порядку экрана. Выгрузка —
- * в очереди выгрузок (`withExportSlot`) и в очереди запусков человека (`withRunSlot`).
+ * в очереди запусков человека (`withRunSlot`), на месте пула запусков сайта (`withDmPoolSlot`, п. О-96)
+ * и в очереди выгрузок (`withExportSlot`) — в этом порядке: занятый запуск или пул выгрузку из 20 в час
+ * не тратят.
  */
 
 const error = { 'application/json': { schema: ApiError } };
@@ -154,10 +157,12 @@ export function outputExportHandlers(deps: ApiDeps) {
     const query = listQueryOf(list);
     const userId = c.get('session')!.userId;
     const t = await serverTexts(deps);
-    // Сначала очередь запуска: пока идёт «Показать», выгрузка не тратит одну из 20 в час.
+    // Сначала очередь запуска и пул: пока идёт «Показать» или пул занят, выгрузка не тратит одну из 20 в час.
     return withRunSlot(deps, userId, t, () =>
-      withExportSlot(deps, userId, async () =>
-        fileOf(c, deps, await orgOutput(deps, c, input), query, list.cols, t),
+      withDmPoolSlot(deps, t, () =>
+        withExportSlot(deps, userId, async () =>
+          fileOf(c, deps, await orgOutput(deps, c, input, { exported: true }), query, list.cols, t),
+        ),
       ),
     );
   };
@@ -168,8 +173,17 @@ export function outputExportHandlers(deps: ApiDeps) {
     const userId = c.get('session')!.userId;
     const t = await serverTexts(deps);
     return withRunSlot(deps, userId, t, () =>
-      withExportSlot(deps, userId, async () =>
-        fileOf(c, deps, await adminOutput(deps, c, input, undefined, true), query, list.cols, t),
+      withDmPoolSlot(deps, t, () =>
+        withExportSlot(deps, userId, async () =>
+          fileOf(
+            c,
+            deps,
+            await adminOutput(deps, c, input, { exported: true }),
+            query,
+            list.cols,
+            t,
+          ),
+        ),
       ),
     );
   };

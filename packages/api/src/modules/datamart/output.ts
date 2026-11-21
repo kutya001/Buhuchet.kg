@@ -327,6 +327,15 @@ export interface OutputRun {
   side: OutputSide;
 }
 
+/** Как запускает «В Excel» (этап 2, П6). */
+export interface OutputOpts {
+  /**
+   * Выгрузка: место пула запусков уже взято (`withDmPoolSlot` до места выгрузки), а в истории
+   * организации у Админки — «выгружен в Excel», а не «открыт».
+   */
+  exported?: boolean;
+}
+
 /**
  * Запуск шаблона организации от вошедшего сотрудника (право «Смотреть витрину данных» — у маршрута):
  * шаблон виден ему (иначе 404 `dm_template_not_found`), сломанный — 409 `dm_template_broken`, область
@@ -337,7 +346,7 @@ export async function orgOutput(
   deps: ApiDeps,
   c: Context<AppEnv>,
   input: DmRunInput,
-  maxRows: number = DM_ROWS_MAX,
+  opts: OutputOpts = {},
 ): Promise<OutputRun> {
   const ctx = orgContextOf(c);
   const userId = c.get('session')!.userId;
@@ -358,7 +367,8 @@ export async function orgOutput(
     via: 'screen',
     tokenId: null,
     ip: null,
-    maxRows,
+    maxRows: DM_ROWS_MAX,
+    poolHeld: opts.exported,
     today: todayOf(deps),
   });
   return { tpl: facts.tpl, out, side: { admin: false, orgName: null } };
@@ -374,10 +384,9 @@ export async function adminOutput(
   deps: ApiDeps,
   c: Context<AppEnv>,
   input: DmAdminRunInput,
-  maxRows: number = DM_ROWS_MAX,
-  /** «В Excel»: в истории организации — «выгружен в Excel», а не «открыт» (этап 2, П6). */
-  exported = false,
+  opts: OutputOpts = {},
 ): Promise<OutputRun> {
+  const exported = opts.exported ?? false;
   const adminId = c.get('session')!.userId;
   const t = await serverTexts(deps);
   const found = await withUserContext(deps.db, adminId, async (tx) => {
@@ -423,7 +432,8 @@ export async function adminOutput(
     via: 'screen',
     tokenId: null,
     ip: null,
-    maxRows,
+    maxRows: DM_ROWS_MAX,
+    poolHeld: opts.exported,
     today: todayOf(deps),
   });
   return { tpl, out, side: { admin: true, orgName: found.orgName } };

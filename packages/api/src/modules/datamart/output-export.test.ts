@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { readSheetRows } from '../../lists/xlsx-read';
 import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../testing';
 import { DM_RUN_RATE_LIMIT } from './output';
+import { DM_RUN_ALL_LIMIT, DM_RUN_SLOTS } from './run';
 
 /*
  * «Витрина данных» → «Вывод» → «В Excel» (доработки 20.11.2026: Витрина данных, блок 4, пункт 5; общий
@@ -266,6 +267,40 @@ describe.skipIf(!databaseAvailable())('Витрина данных: «Вывод
     }
     await sheet(await exportOrg('owner-a', { code: 'xl-cps' }));
     expect(await exportsOf()).toBe(before + 1);
+  });
+
+  it('пул запусков сайта занят — 429 `dm_busy_all`, выгрузка из 20 в час не тратится (п. О-96)', async () => {
+    const exportsOf = async () =>
+      (
+        await f.t.admin.db
+          .select({ n: sql<number>`count(*)::int` })
+          .from(rateLimits)
+          .where(and(eq(rateLimits.kind, 'export'), eq(rateLimits.subject, f.a.ownerUserId)))
+      )[0]!.n;
+    const before = await exportsOf();
+    const held: { subject: string; ticket: number }[] = [];
+    try {
+      for (let i = 0; i < DM_RUN_SLOTS; i += 1) {
+        const subject = `slot:${i}`;
+        const slot = await takeRateLimit(f.t.app.db, DM_RUN_ALL_LIMIT, subject);
+        if (!slot.ok) throw new Error(`место пула ${subject} свободно`);
+        held.push({ subject, ticket: slot.ticket });
+      }
+      expect((await fail(await exportOrg('owner-a', { code: 'xl-cps' }), 429)).code).toBe(
+        'dm_busy_all',
+      );
+      expect(await exportsOf()).toBe(before);
+    } finally {
+      for (const h of held) {
+        await releaseRateLimit(f.t.app.db, DM_RUN_ALL_LIMIT, h.subject, h.ticket);
+      }
+    }
+    // Место пула отпущено — выгрузка проходит и тратит одну из 20, место пула после неё свободно.
+    await sheet(await exportOrg('owner-a', { code: 'xl-cps' }));
+    expect(await exportsOf()).toBe(before + 1);
+    const again = await takeRateLimit(f.t.app.db, DM_RUN_ALL_LIMIT, 'slot:0');
+    expect(again.ok).toBe(true);
+    if (again.ok) await releaseRateLimit(f.t.app.db, DM_RUN_ALL_LIMIT, 'slot:0', again.ticket);
   });
 
   it('Админка: шаблон организаций — только «глазами организации», открытие — в её историю', async () => {

@@ -64,6 +64,11 @@ export interface DmRunRequest {
   /** Контрагенты области «Свои» (`dmOwnContractorIds`); null — все строки организации. */
   ownContractorIds: readonly string[] | null;
   via: 'screen' | 'api';
+  /**
+   * Место пула запусков уже взято вызывающим (`withDmPoolSlot`): «В Excel» берёт его до места выгрузки,
+   * чтобы занятый пул не тратил одну из 20 выгрузок в час.
+   */
+  poolHeld?: boolean;
   tokenId: string | null;
   ip: string | null;
   /** Сколько строк отдать (1…50 000): «Вывод» — 50 000, внешний адрес — страница. */
@@ -246,7 +251,7 @@ export async function runDmTemplate(deps: ApiDeps, r: DmRunRequest): Promise<DmR
       who.kind === 'org'
         ? runDmOrg(deps.db, { orgId: who.orgId, userId: who.userId }, q)
         : runDmAdmin(deps.db, who.adminId, q);
-    res = r.via === 'api' ? await exec() : await withDmPoolSlot(deps, t, exec);
+    res = r.via === 'api' || r.poolHeld ? await exec() : await withDmPoolSlot(deps, t, exec);
   } catch (err) {
     const pg = dmErrorOf(err);
     if (!pg) throw err;
