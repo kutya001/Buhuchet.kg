@@ -457,7 +457,7 @@ describe.skipIf(!databaseAvailable())('Витрина данных: внешни
   it(`запуски по токенам платформы заняты (${DM_EXT_RUNS_PLATFORM}) — запрос ждёт, потом «Слишком часто»; освободились — работает`, async () => {
     const a = await issue('owner-a', 'ext-proj', 'Очередь');
     const db = f.t.admin.db;
-    // Три чужих запуска идут (строки запусков платформы, как их ставит app.dm_ext_take).
+    // Все места запусков по токенам платформы заняты чужими (строки, как их ставит app.dm_ext_take).
     const busy = await db
       .insert(rateLimits)
       .values(
