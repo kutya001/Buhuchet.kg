@@ -65,9 +65,14 @@ describe('dmTemplateSeen', () => {
     expect(dmTemplateSeen(totals, subject(['repView'], { reports: 'all' }), ALL_ON)).toBe(true);
     expect(dmTemplateSeen(totals, subject(['repView', 'viewAll']), ALL_ON)).toBe(true);
     expect(dmTemplateSeen(totals, subject([], {}, true), ALL_ON)).toBe(true);
-    // Модуль без области («Сотрудники») — области не нужно.
+    // Модуль без области («Сотрудники»): итоги без «Контрагента» — по области группы «Контрагенты»
+    // (ТЗ, блок 2, пункт 6; блок 8, пункт 8; п. О-95), со столбцом «Контрагент» — всем с правом.
     const staff = tpl({ module: 'staff', columns: [] });
-    expect(dmTemplateSeen(staff, subject(['staffView']), ALL_ON)).toBe(true);
+    expect(dmTemplateSeen(staff, subject(['staffView']), ALL_ON)).toBe(false);
+    expect(dmTemplateSeen(staff, subject(['staffView'], { reports: 'all' }), ALL_ON)).toBe(false);
+    expect(dmTemplateSeen(staff, subject(['staffView'], { cps: 'all' }), ALL_ON)).toBe(true);
+    expect(dmTemplateSeen(staff, subject([], {}, true), ALL_ON)).toBe(true);
+    expect(dmTemplateSeen(tpl({ module: 'staff' }), subject(['staffView']), ALL_ON)).toBe(true);
   });
 
   it('столбец «Контрагент» — вид cp или отметка contractor', () => {

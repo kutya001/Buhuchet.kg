@@ -60,8 +60,8 @@ const isPermission = (id: string, subject: AccessSubject): boolean =>
  * Виден ли шаблон сотруднику (прототип `dmSee`): «Для организаций», не черновик и не выключен; функция
  * модуля шаблона включена (у «Видеть плату за обслуживание» — ещё функция «Плата за обслуживание»);
  * есть просмотр модуля и дополнительное право шаблона; шаблон без столбца «Контрагент» (итоги по всей
- * организации) у модуля с областью — только при «Все контрагенты» в группе прав модуля (владельцу —
- * всегда).
+ * организации) — только при «Все контрагенты» в группе прав модуля (владельцу — всегда), у модуля без
+ * области («Сотрудники») — в группе «Контрагенты», как его отбор «Свои» (`dmOwnScope`).
  */
 export function dmTemplateSeen(
   t: DmTemplateSight,
@@ -74,10 +74,10 @@ export function dmTemplateSeen(
   if (t.needPermission === 'fee' && features.fee !== true) return false;
   if (group?.view && !hasPermission(subject, group.view)) return false;
   if (t.needPermission && !isPermission(t.needPermission, subject)) return false;
+  // ОТКЛОНЕНИЕ: docs/deviations.md#О-95 — модуль без области без «Контрагента» — по «Контрагентам».
   return (
     dmHasContractorColumn(t.columns) ||
-    !isScopeGroup(t.module) ||
-    scopeOf(subject, t.module) === 'all'
+    scopeOf(subject, isScopeGroup(t.module) ? t.module : 'cps') === 'all'
   );
 }
 
