@@ -511,7 +511,10 @@ function RemindDays({
 function PolicyHistory() {
   const t = useT();
   const history = useQuery(policyHistoryQuery);
-  if (!history.data) return null;
+  // Пока история грузится — заглушка `aria-busy`: показ ждёт блок (docs/typical-mistakes.md № 81).
+  // При ошибке блока нет, как и раньше.
+  if (history.isError) return null;
+  if (!history.data) return <div className="min-h-10" aria-busy="true" data-org-loading="" />;
   const items = history.data.items
     .slice(0, HISTORY_SHOWN)
     .map((h, i) => policyHistoryItem(h, i, t));

@@ -15,7 +15,10 @@ import { fileSizeText, fileUsageQuery } from './files-data';
 export function FilesStorageBox() {
   const t = useT();
   const usage = useQuery(fileUsageQuery);
-  if (!usage.data) return null;
+  // Пока объём грузится — заглушка `aria-busy`: «Показать как» и «Обзор экрана» ждут блок, а не
+  // нумеруют блоки без него (docs/typical-mistakes.md № 81). При ошибке блока нет, как и раньше.
+  if (usage.isError) return null;
+  if (!usage.data) return <div className="min-h-10" aria-busy="true" data-org-loading="" />;
   return (
     <div data-org-storage="">
       <Box title={t('files.storage.title')}>
