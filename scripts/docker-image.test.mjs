@@ -68,3 +68,33 @@ test('compose не переопределяет KEEP_ALIVE_TIMEOUT образа'
     assert.doesNotMatch(read(file), /KEEP_ALIVE_TIMEOUT/, file);
   }
 });
+
+// Версия Node.js: строгая проверка `engines` живёт в сборке образа, а не в .npmrc — с `engine-strict`
+// в .npmrc Dependabot (у него своя версия Node.js) не мог обновить ни одного пакета и молчал об этом
+// (docs/decisions.md п. О-67, docs/typical-mistakes.md № 82).
+
+test('.npmrc не включает engine-strict: с ним Dependabot не открывает PR с пакетами', () => {
+  const settings = read('.npmrc')
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l && !/^[#;]/.test(l));
+  assert.ok(!settings.some((l) => /^engine[-_]strict\s*=/i.test(l)), settings.join('\n'));
+});
+
+test('образ ставит пакеты со строгой проверкой версии Node.js, и она — из .nvmrc', () => {
+  const base = stage(read('Dockerfile'), 'base');
+  assert.equal(env(base, 'npm_config_engine_strict'), 'true');
+  const image = /^FROM\s+node:(\d+)[.\-\s]/i.exec(base[0]);
+  assert.ok(image, `образ стадии base — не node:<версия>: ${base[0]}`);
+  assert.equal(image[1], read('.nvmrc').trim().replace(/^v/, '').split('.')[0]);
+});
+
+test('engines корня и сайта одинаковы и включают Node.js из .nvmrc', () => {
+  const root = JSON.parse(read('package.json')).engines.node;
+  const site = JSON.parse(read('apps/web/package.json')).engines.node;
+  assert.equal(site, root);
+  const range = /^>=(\d+)(?:\.\d+)* <(\d+)$/.exec(root);
+  assert.ok(range, `engines.node — не «>=A.B <C»: ${root}`);
+  const major = Number(read('.nvmrc').trim().replace(/^v/, '').split('.')[0]);
+  assert.ok(major >= Number(range[1]) && major < Number(range[2]), `${major} вне ${root}`);
+});

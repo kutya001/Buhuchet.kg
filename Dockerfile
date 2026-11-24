@@ -3,7 +3,9 @@
 # Одни и те же образы — для проверок в CI и для VPS.
 
 FROM node:22-alpine AS base
-ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+# npm_config_engine_strict: установка пакетов в образе останавливается, если версия Node.js не та, что в
+# engines. В .npmrc этой настройки нет — с ней не работает Dependabot (docs/decisions.md п. О-67).
+ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH COREPACK_ENABLE_DOWNLOAD_PROMPT=0 npm_config_engine_strict=true
 RUN corepack enable
 WORKDIR /repo
 
