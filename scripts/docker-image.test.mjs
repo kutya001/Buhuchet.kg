@@ -83,7 +83,8 @@ const settings = (file) =>
 test('.npmrc и pnpm-workspace.yaml не включают engine-strict: с ним Dependabot не открывает PR с пакетами', () => {
   // pnpm читает настройку из обоих файлов, Dependabot — тоже; значение не важно: строки быть не должно.
   assert.deepEqual(
-    settings('.npmrc').filter((l) => /^engine[-_]?strict\s*=/i.test(l)),
+    // Строка без «=» для pnpm тоже значит true.
+    settings('.npmrc').filter((l) => /^["']?engine[-_]?strict["']?\s*(=|$)/i.test(l)),
     [],
   );
   assert.deepEqual(
@@ -92,9 +93,34 @@ test('.npmrc и pnpm-workspace.yaml не включают engine-strict: с ни
   );
 });
 
+/** Значение переменной в стадии с учётом стадий, от которых она взята (`FROM base AS deps`). */
+function inheritedEnv(dockerfile, name, key) {
+  const lines = stage(dockerfile, name);
+  const own = env(lines, key);
+  if (own !== undefined) return own;
+  const parent = /^FROM\s+(\S+)\s+AS\s/i.exec(lines[0])[1];
+  const isStage = new RegExp(`^FROM\\s+\\S+\\s+AS\\s+${parent}\\s*$`, 'im').test(dockerfile);
+  return isStage ? inheritedEnv(dockerfile, parent, key) : undefined;
+}
+
 test('образ ставит пакеты со строгой проверкой версии Node.js, и она — из .nvmrc', () => {
-  const base = stage(read('Dockerfile'), 'base');
+  const dockerfile = read('Dockerfile');
+  const base = stage(dockerfile, 'base');
   assert.equal(env(base, 'npm_config_engine_strict'), 'true');
+  // Каждая стадия, где pnpm ставит или скачивает пакеты, получает настройку и не выключает её.
+  const installs = [...dockerfile.matchAll(/^FROM\s+\S+\s+AS\s+(\S+)\s*$/gim)]
+    .map((m) => m[1])
+    .filter((name) => stage(dockerfile, name).some((l) => /\bpnpm\s+(install|fetch)\b/.test(l)));
+  assert.ok(installs.length > 0, 'в Dockerfile нет стадии с pnpm install');
+  for (const name of installs) {
+    assert.equal(inheritedEnv(dockerfile, name, 'npm_config_engine_strict'), 'true', name);
+    assert.ok(
+      !stage(dockerfile, name).some(
+        (l) => /engine[-_]strict/i.test(l) && !/^(ENV|#)/i.test(l.trim()),
+      ),
+      `стадия ${name}: engine-strict задан в команде`,
+    );
+  }
   const image = /^FROM\s+node:(\d+)[.\-\s]/i.exec(base[0]);
   assert.ok(image, `образ стадии base — не node:<версия>: ${base[0]}`);
   assert.equal(image[1], read('.nvmrc').trim().replace(/^v/, '').split('.')[0]);
