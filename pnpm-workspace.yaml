@@ -5,9 +5,9 @@ packages:
 # Общие версии зависимостей: в package.json пакетов пишется "catalog:"
 catalog:
   zod: ^4.6.7
-  hono: ^4.13.14
+  hono: ^4.13.16
   '@hono/zod-openapi': ^1.6.3
-  '@hono/node-server': ^2.1.5
+  '@hono/node-server': ^2.1.6
   drizzle-orm: ^0.45.4
   drizzle-kit: ^0.31.11
   postgres: ^3.4.9
