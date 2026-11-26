@@ -73,12 +73,23 @@ test('compose не переопределяет KEEP_ALIVE_TIMEOUT образа'
 // в .npmrc Dependabot (у него своя версия Node.js) не мог обновить ни одного пакета и молчал об этом
 // (docs/decisions.md п. О-67, docs/typical-mistakes.md № 82).
 
-test('.npmrc не включает engine-strict: с ним Dependabot не открывает PR с пакетами', () => {
-  const settings = read('.npmrc')
+/** Строки настроек без пустых и без комментариев (`#`, в .npmrc ещё `;`). */
+const settings = (file) =>
+  read(file)
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter((l) => l && !/^[#;]/.test(l));
-  assert.ok(!settings.some((l) => /^engine[-_]strict\s*=/i.test(l)), settings.join('\n'));
+
+test('.npmrc и pnpm-workspace.yaml не включают engine-strict: с ним Dependabot не открывает PR с пакетами', () => {
+  // pnpm читает настройку из обоих файлов, Dependabot — тоже; значение не важно: строки быть не должно.
+  assert.deepEqual(
+    settings('.npmrc').filter((l) => /^engine[-_]?strict\s*=/i.test(l)),
+    [],
+  );
+  assert.deepEqual(
+    settings('pnpm-workspace.yaml').filter((l) => /^["']?engine[-_]?strict["']?\s*:/i.test(l)),
+    [],
+  );
 });
 
 test('образ ставит пакеты со строгой проверкой версии Node.js, и она — из .nvmrc', () => {
