@@ -332,6 +332,23 @@ function systemTable(rv: Node): string | null {
 }
 
 /**
+ * Запасная проверка без разборщика (worker на VPS собирается одним файлом без wasm): имя перед «(»,
+ * которое консоли нельзя, — отказ; `FOR UPDATE` и подобные — отказ. Строже разборщика (слово в строке или
+ * комментарии тоже отказ), зато ожидание и блокировки не пройдут и там, где разборщика нет.
+ */
+export function dmSqlDeniedWord(text: string): DmSqlRuleProblem | null {
+  const call = /((?:"[^"]+"|[a-z_][a-z0-9_$]*)\s*\.\s*)?("[^"]+"|[a-z_][a-z0-9_$]*)\s*\(/gi;
+  for (let m = call.exec(text); m; m = call.exec(text)) {
+    const unq = (w: string) => (w.startsWith('"') ? w.slice(1, -1) : w.toLowerCase());
+    const parts = m[1] ? [unq(m[1].replace(/\s*\.\s*$/, '').trim()), unq(m[2]!)] : [unq(m[2]!)];
+    const name = consoleDenied(parts);
+    if (name) return { code: 'function', name, position: m.index };
+  }
+  const lock = /\bfor\s+(?:no\s+key\s+)?(?:update|share|key\s+share)\b/i.exec(text);
+  return lock ? { code: 'lock', position: lock.index } : null;
+}
+
+/**
  * Первая причина отказа по дереву разбора (`parsePgSql(...).tree`); null — годится. Ошибку разбора
  * (`syntax`) отдаёт вызывающий: дерева у неё нет.
  */

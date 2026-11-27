@@ -3,6 +3,7 @@ import {
   dmQueryParseText,
   dmQueryProblem,
   dmRuleQueryProblem,
+  dmSqlDeniedWord,
   dmSqlRules,
   type DmQueryProblem,
   type DmSqlMode,
@@ -55,7 +56,8 @@ export async function dmTemplateSqlProblem(query: string): Promise<DmQueryProble
  * (`console`: ожидание, блокировки, запрос из строки, запись) — отказ, как прежде отказывали слова
  * `FORBIDDEN`; функции не из списка шаблонов — пока только `onMiss` (строка журнала сервера): список
  * сверяется со всеми опубликованными шаблонами стенда и рабочего сайта, и шаблон не ломается (блок 2,
- * пункт 7; docs/decisions.md п. О-68). Разборщика нет (worker) — проверки нет: держат роли базы.
+ * пункт 7; docs/decisions.md п. О-68). Разборщика нет (worker) — запасная проверка по словам
+ * `dmSqlDeniedWord`: ожидание, блокировки и запрос из строки не пройдут и там.
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#О-102
 export async function dmPublishedSqlProblem(
@@ -66,7 +68,8 @@ export async function dmPublishedSqlProblem(
   if (!parsed.ok) {
     if (parsed.unavailable) {
       onMiss('unavailable');
-      return null;
+      const word = dmSqlDeniedWord(text);
+      return word ? dmRuleQueryProblem(word) : null;
     }
     return { code: 'syntax', error: parsed.message };
   }

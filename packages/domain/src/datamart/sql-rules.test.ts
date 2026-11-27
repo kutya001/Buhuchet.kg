@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DM_TEMPLATE_FUNCTIONS, dmSqlRules } from './sql-rules';
+import { DM_TEMPLATE_FUNCTIONS, dmSqlDeniedWord, dmSqlRules } from './sql-rules';
 
 /*
  * Деревья — в том виде, в каком их отдаёт разборщик PostgreSQL (libpg_query 17, `parsePgSql`), только
@@ -159,5 +159,38 @@ describe('шаблоны и токены: только функции из сп�
     expect(from(rel('pg_class', 'pg_catalog'))).toMatchObject({ code: 'system_table' });
     expect(from(rel('contractors'))).toBeNull();
     expect(from(rel('contractors', 'public'))).toBeNull();
+  });
+});
+
+describe('запасная проверка без разборщика (worker)', () => {
+  it('ожидание, блокировки, запрос из строки и функции схем app и dm — отказ; обычный запрос — нет', () => {
+    expect(dmSqlDeniedWord('select pg_sleep(1)')).toMatchObject({
+      code: 'function',
+      name: 'pg_sleep',
+    });
+    expect(dmSqlDeniedWord('select PG_CATALOG . Pg_Sleep (1)')).toMatchObject({
+      code: 'function',
+      name: 'pg_catalog.pg_sleep',
+    });
+    expect(dmSqlDeniedWord('select "pg_sleep"(1)')).toMatchObject({ code: 'function' });
+    expect(dmSqlDeniedWord('select pg_advisory_xact_lock(1)')).toMatchObject({ code: 'function' });
+    expect(dmSqlDeniedWord("select query_to_xml('select 1', true, true, '')")).toMatchObject({
+      code: 'function',
+    });
+    expect(dmSqlDeniedWord('select app.current_org_id()')).toMatchObject({
+      code: 'function',
+      name: 'app.current_org_id',
+    });
+    expect(dmSqlDeniedWord('select * from contractors for update')).toMatchObject({ code: 'lock' });
+    expect(dmSqlDeniedWord('select * from contractors for no key update')).toMatchObject({
+      code: 'lock',
+    });
+    expect(
+      dmSqlDeniedWord(
+        "select count(*), coalesce(sum(x), 0) from t where d >= date_trunc('month', now())",
+      ),
+    ).toBeNull();
+    // Строже разборщика: имя в строке тоже отказ — без разборщика не отличить.
+    expect(dmSqlDeniedWord("select 'pg_sleep(1)'")).toMatchObject({ code: 'function' });
   });
 });
