@@ -86,6 +86,18 @@ async function newOrg(
   return ((await created.json()) as { organization: { id: string; slug: string } }).organization;
 }
 
+// Поле запроса — редактор CodeMirror. На телефоне (сайт видит Android) редактор применяет ввод
+// с задержкой, и `fill` поверх прежнего текста иногда дописывает в конец (docs/typical-mistakes.md
+// № 85): выделяем всё клавишами редактора, набираем поверх и ждём ровно этот текст.
+async function setSql(page: Page, editor: Locator, sql: string) {
+  await expect(async () => {
+    await editor.click();
+    await page.keyboard.press('ControlOrMeta+a');
+    await page.keyboard.insertText(sql);
+    await expect(editor).toHaveText(sql, { timeout: 2_000 });
+  }).toPass();
+}
+
 test.describe('Витрина данных: «Шаблоны» и «Вывод» Админки', () => {
   test('(Витрина данных, блок 3; этап 2, П7) новый шаблон: «Опубликовать» недоступна до «Проверить», два оператора отклоняются с причиной под запросом; опубликованный — «Опубликован» в списке и с результатом в «Выводе»', async ({
     page,
@@ -117,7 +129,7 @@ test.describe('Витрина данных: «Шаблоны» и «Вывод»
       pressRun(page, dialog.locator('[data-dm-ed-check]'), '/api/admin/dm/templates/check');
 
     // Два оператора подряд: «Проверить» отклоняет с причиной, опубликовать по-прежнему нельзя.
-    await query.fill('SELECT 7 AS seven; SELECT 8 AS eight');
+    await setSql(page, query, 'SELECT 7 AS seven; SELECT 8 AS eight');
     // Подсветка SQL и номера строк (прототип v161; с 27.11.2026 — редактор консоли, этап 1, П5):
     // ключевые слова и числа — своим видом, номер строки — на поле слева; текст — как набран.
     const sql = dialog.locator('[data-dm-ed-sql]');
@@ -131,14 +143,14 @@ test.describe('Витрина данных: «Шаблоны» и «Вывод»
     await expect(dialog.locator('[data-dm-ed-result]')).toHaveCount(0);
     await expect(publish).toBeDisabled();
     // UPDATE — тоже отказ с причиной; закрытая таблица сеансов не читается: ошибка базы под запросом.
-    await query.fill('UPDATE organizations SET name = name');
+    await setSql(page, query, 'UPDATE organizations SET name = name');
     await check();
     // Причина — ответом «Проверить» под полем, а не строкой проверки по ходу набора.
     await expect(dialog.locator('[id$="-query-err"]')).toContainText(
       texts['err.dm_sql_not_select']!,
     );
     await expect(publish).toBeDisabled();
-    await query.fill('SELECT token_hash FROM sessions');
+    await setSql(page, query, 'SELECT token_hash FROM sessions');
     await check();
     // У поля запроса текст совпадает с запросом, поэтому «sessions» ищем после причины отказа.
     await expect(dialog).toContainText(
@@ -148,7 +160,7 @@ test.describe('Витрина данных: «Шаблоны» и «Вывод»
     await expect(publish).toBeDisabled();
 
     // Один оператор: «Запрос выполнен: строк 1», столбец прочитан, «Опубликовать» доступна.
-    await query.fill('SELECT 7 AS seven');
+    await setSql(page, query, 'SELECT 7 AS seven');
     await check();
     await expect(dialog.locator('[data-dm-ed-result]')).toContainText(
       textPattern(texts['dm.ed.check_ok_adm']!, { n: '1' }),
