@@ -569,17 +569,48 @@
       },
       {
         "code": "socip",
-        "shortName": "Взносы ИП",
+        "shortName": "Взносы ИП (полис)",
         "active": true,
         "kind": "cross",
         "payer": "ip",
         "regimes": [],
-        "notForRegimes": [],
+        "notForRegimes": [
+          "РЕЖ-01",
+          "РЕЖ-02",
+          "РЕЖ-04",
+          "РЕЖ-05",
+          "РЕЖ-06",
+          "РЕЖ-07",
+          "РЕЖ-08",
+          "РЕЖ-09",
+          "РЕЖ-10",
+          "РЕЖ-11",
+          "РЕЖ-12"
+        ],
         "pickGroup": "all",
         "preselect": true,
         "choiceNote": "",
         "bizSizes": [],
-        "notForEnRates": [],
+        "notForEnRates": [
+          "ЕНС-02",
+          "ЕНС-03",
+          "ЕНС-04",
+          "ЕНС-05",
+          "ЕНС-06",
+          "ЕНС-07",
+          "ЕНС-08",
+          "ЕНС-09",
+          "ЕНС-10",
+          "ЕНС-11",
+          "ЕНС-12",
+          "ЕНС-13",
+          "ЕНС-14",
+          "ЕНС-16",
+          "ЕНС-17",
+          "ЕНС-18",
+          "ЕНС-19",
+          "ЕНС-20"
+        ],
         "bases": [],
         "oneOff": false
       },
@@ -4054,7 +4085,7 @@
           "bal": "Для ИП назначается «ЕНД для ИП»",
           "cap": "Для ИП назначается «ЕНД для ИП»"
         },
-        "hidden": ["roy", "bon", "socip", "imp", "imh", "imi", "eco", "utlq", "utli"],
+        "hidden": ["roy", "bon", "imp", "imh", "imi", "eco", "utlq", "utli"],
         "stat": [
           "pipm",
           "pipy",
@@ -5584,7 +5615,7 @@
           "bal": "Для ИП назначается «ЕНД для ИП»",
           "cap": "Для ИП назначается «ЕНД для ИП»"
         },
-        "hidden": ["roy", "bon", "socip", "imp", "imh", "imi", "eco", "utlq", "utli"],
+        "hidden": ["roy", "bon", "imp", "imh", "imi", "eco", "utlq", "utli"],
         "stat": [
           "pipm",
           "pipy",
@@ -7046,7 +7077,7 @@
           "bal": "Для ИП назначается «ЕНД для ИП»",
           "cap": "Для ИП назначается «ЕНД для ИП»"
         },
-        "hidden": ["roy", "bon", "socip", "imp", "imh", "imi", "eco", "utlq", "utli"],
+        "hidden": ["roy", "bon", "imp", "imh", "imi", "eco", "utlq", "utli"],
         "stat": [
           "pipm",
           "pipy",
@@ -8564,7 +8595,7 @@
           "bal": "Для ИП назначается «ЕНД для ИП»",
           "cap": "Для ИП назначается «ЕНД для ИП»"
         },
-        "hidden": ["roy", "bon", "socip", "imp", "imh", "imi", "eco", "utlq", "utli"],
+        "hidden": ["roy", "bon", "imp", "imh", "imi", "eco", "utlq", "utli"],
         "stat": [
           "pipm",
           "pipy",
@@ -11011,7 +11042,7 @@
           "bal": "Для ИП назначается «ЕНД для ИП»",
           "cap": "Для ИП назначается «ЕНД для ИП»"
         },
-        "hidden": ["roy", "bon", "socip", "imp", "imh", "imi", "eco", "utlq", "utli"],
+        "hidden": ["roy", "bon", "imp", "imh", "imi", "eco", "utlq", "utli"],
         "stat": [
           "pipm",
           "pipy",
@@ -19220,13 +19251,6 @@
             "must": ""
           },
           {
-            "code": "socip",
-            "grp": "all",
-            "pre": true,
-            "why": "Для всех",
-            "must": "обязателен для всех"
-          },
-          {
             "code": "pni",
             "grp": "basis",
             "pre": false,
@@ -19724,13 +19748,6 @@
             "pre": true,
             "why": "Основание: наёмные сотрудники",
             "must": "обязателен по основанию (наёмные сотрудники)"
-          },
-          {
-            "code": "socip",
-            "grp": "all",
-            "pre": true,
-            "why": "Для всех",
-            "must": "обязателен для всех"
           },
           {
             "code": "pni",
@@ -22237,13 +22254,6 @@
             "pre": false,
             "why": "Если есть: наёмные сотрудники",
             "must": ""
-          },
-          {
-            "code": "socip",
-            "grp": "all",
-            "pre": true,
-            "why": "Для всех",
-            "must": "обязателен для всех"
           },
           {
             "code": "pni",
