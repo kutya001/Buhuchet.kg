@@ -35,6 +35,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api } from '../api-client';
 import { ContractorCardHost } from '../contractors/contractor-actions';
+import { forgetConsoleTabs } from '../dm/console-store';
 import { ProjectCardHost } from '../projects/project-actions';
 import { kbStateQuery } from '../kb/kb-data';
 import { KbContext, useKb, useKbRuntime, type KbControls } from '../kb/kb-provider';
@@ -468,6 +469,7 @@ function ShellPage({
     try {
       await api.api.auth.logout.$post();
     } finally {
+      forgetConsoleTabs();
       // Выход — сразу страница входа, без заставки (прототип v78: заставка — при входе, не при выходе).
       skipNextIntro();
       if (replace) window.location.replace('/login');

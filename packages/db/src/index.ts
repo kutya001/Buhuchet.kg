@@ -27,6 +27,7 @@ export * from './datamart-output';
 export * from './datamart-requests';
 export * from './datamart-admin';
 export * from './datamart-check';
+export * from './datamart-console';
 export * from './auth';
 export * from './telegram';
 export * from './telegram-bot';

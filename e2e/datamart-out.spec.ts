@@ -118,18 +118,13 @@ test.describe('Витрина данных: «Шаблоны» и «Вывод»
 
     // Два оператора подряд: «Проверить» отклоняет с причиной, опубликовать по-прежнему нельзя.
     await query.fill('SELECT 7 AS seven; SELECT 8 AS eight');
-    // Подсветка SQL и номера строк (прототип v161): ключевые слова и числа — своим видом под
-    // прозрачным текстом поля; само поле прежнее — значение то же.
+    // Подсветка SQL и номера строк (прототип v161; с 27.11.2026 — редактор консоли, этап 1, П5):
+    // ключевые слова и числа — своим видом, номер строки — на поле слева; текст — как набран.
     const sql = dialog.locator('[data-dm-ed-sql]');
-    await expect(sql.locator('[data-dm-ed-hl] [data-sql="keyword"]')).toHaveText([
-      'SELECT',
-      'AS',
-      'SELECT',
-      'AS',
-    ]);
-    await expect(sql.locator('[data-dm-ed-hl] [data-sql="number"]')).toHaveText(['7', '8']);
-    await expect(sql.locator('[data-dm-ed-lines]')).toHaveText('1');
-    await expect(query).toHaveValue('SELECT 7 AS seven; SELECT 8 AS eight');
+    await expect(sql.locator('[data-sql="keyword"]')).toHaveText(['SELECT', 'AS', 'SELECT', 'AS']);
+    await expect(sql.locator('[data-sql="number"]')).toHaveText(['7', '8']);
+    await expect(sql.locator('.cm-lineNumbers .cm-gutterElement').last()).toHaveText('1');
+    await expect(query).toHaveText('SELECT 7 AS seven; SELECT 8 AS eight');
     await expect(publish).toBeDisabled();
     await check();
     await expect(dialog).toContainText(texts['err.dm_sql_two_statements']!);
@@ -138,7 +133,10 @@ test.describe('Витрина данных: «Шаблоны» и «Вывод»
     // UPDATE — тоже отказ с причиной; закрытая таблица сеансов не читается: ошибка базы под запросом.
     await query.fill('UPDATE organizations SET name = name');
     await check();
-    await expect(dialog).toContainText(texts['err.dm_sql_not_select']!);
+    // Причина — ответом «Проверить» под полем, а не строкой проверки по ходу набора.
+    await expect(dialog.locator('[id$="-query-err"]')).toContainText(
+      texts['err.dm_sql_not_select']!,
+    );
     await expect(publish).toBeDisabled();
     await query.fill('SELECT token_hash FROM sessions');
     await check();
@@ -174,7 +172,7 @@ test.describe('Витрина данных: «Шаблоны» и «Вывод»
     const id = await own.getAttribute('data-id');
     await page.goto(`/app/dm/tpl?tpl=${id}`);
     const card = page.getByRole('dialog', { name });
-    await expect(card.locator('[data-dm-ed-query]')).toHaveValue('SELECT 7 AS seven');
+    await expect(card.locator('[data-dm-ed-query]')).toHaveText('SELECT 7 AS seven');
     await expect(page).not.toHaveURL(/[?&]tpl=/);
     await page.keyboard.press('Escape');
     await expect(card).toHaveCount(0);

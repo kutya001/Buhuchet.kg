@@ -705,6 +705,10 @@ export const ADMIN_TECHDOCS_TEXTS = {
   'tdocs.card.acc.employee': { ru: 'Нужен вход сотрудника организации', section: T },
   'tdocs.card.acc.session': { ru: 'Нужен вход', section: T },
   'tdocs.card.readonly': { ru: 'Только просмотр: из Админки метод не вызывается', section: T },
+  'tdocs.card.readonly_con': {
+    ru: 'Только просмотр: из Админки метод не вызывается; кнопки передают запрос в «Витрину данных»',
+    section: T,
+  },
   'tdocs.card.load_error': { ru: 'Не удалось загрузить описание метода', section: T },
   'tdocs.card.none': { ru: 'Метод не найден в описании API', section: T },
   'tdocs.req.none': { ru: 'У метода нет параметров и тела запроса.', section: T },

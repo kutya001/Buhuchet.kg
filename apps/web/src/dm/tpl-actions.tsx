@@ -1,6 +1,6 @@
 'use client';
 
-import { DM_REASON_MAX } from '@buhuchet/domain';
+import { bishkekDate, DM_REASON_MAX, dmParamDefault } from '@buhuchet/domain';
 import type { DmAdminTemplateCard, DmAdminTemplateRow } from '@buhuchet/shared';
 import {
   buttonClass,
@@ -12,12 +12,18 @@ import {
   type ActionEntry,
 } from '@buhuchet/ui';
 import { useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import { useCallback, useId, useState, type ReactNode } from 'react';
 import { ApiFailure } from '../api-client';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { useErrorText, useT } from '../l10n/provider';
+import { useShell } from '../shell/context';
+import { tabHref } from '../shell/modules';
+import { consoleTemplatePrefill } from './console-model';
+import { consoleOpen, consoleStore } from './console-store';
+import type { ConsoleToTemplate } from './console-tab';
 import { TemplateEditor } from './tpl-editor';
-import { tplOffText } from './tpl-admin-model';
+import { tplOffText, type TplDraft } from './tpl-admin-model';
 import {
   copyTemplate,
   DM_TPL_GRID,
@@ -27,15 +33,31 @@ import {
   templateFormQuery,
 } from './tpl-admin-data';
 
+/** Окно шаблона: шаблон (нет — новый) и, из консоли, уже вписанные запрос, параметры и столбцы. */
+interface EditorData {
+  card: DmAdminTemplateCard | null;
+  prefill?: Partial<TplDraft>;
+}
+
+/** Значения параметров шаблона для консоли (прототип `dmTplToCon`: значение по умолчанию на сегодня). */
+function consoleParams(params: TplDraft['params']): Record<string, string> {
+  const today = bishkekDate(new Date());
+  return Object.fromEntries(params.map((p) => [p.code, dmParamDefault(p.default, today) ?? '']));
+}
+
 /**
  * Действия списка «Шаблоны» Админки и их окна (прототип v155 `renderDmTplAdm` → `actions`, `dmEdit`,
- * `dmCopy`, `dmStateDlg`): «Открыть» — окно шаблона по свежим данным, «Копировать» — копия черновиком
- * и сразу её окно, «Отключить» и «Включить» — окно с причиной. `node` — в разметку экрана.
+ * `dmCopy`, `dmStateDlg`; v166 `dmTplToCon`, `dmcToTpl`): «Открыть» — окно шаблона по свежим данным,
+ * «Открыть в консоли» — запрос и параметры во вкладке консоли с именем шаблона, «Копировать» — копия
+ * черновиком и сразу её окно, «Отключить» и «Включить» — окно с причиной. `fromConsole` — «Сохранить в
+ * шаблон» консоли: обычное окно шаблона, в нём уже запрос, параметры и столбцы последнего запуска; у
+ * запроса шаблона — этот шаблон, готовый шаблон платформы — сначала копией. `node` — в разметку экрана.
  */
 export function useTemplateActions(): {
   open: (id: string) => Promise<void>;
   create: () => Promise<void>;
   copy: (id: string) => Promise<void>;
+  fromConsole: ConsoleToTemplate;
   actions: (row: DmAdminTemplateRow) => ActionEntry[];
   node: ReactNode;
 } {
@@ -43,7 +65,9 @@ export function useTemplateActions(): {
   const toast = useToast();
   const errorText = useErrorText();
   const client = useQueryClient();
-  const [editor, setEditor] = useState<DialogSlot<DmAdminTemplateCard | null> | null>(null);
+  const router = useRouter();
+  const { userId } = useShell();
+  const [editor, setEditor] = useState<DialogSlot<EditorData> | null>(null);
   const [state, setState] = useState<DialogSlot<{
     card: DmAdminTemplateCard;
     to: 'off' | 'published';
@@ -85,14 +109,14 @@ export function useTemplateActions(): {
   const open = useCallback(
     async (id: string) => {
       const got = await load(id);
-      if (got) setEditor(openSlot<DmAdminTemplateCard | null>(got.card));
+      if (got) setEditor(openSlot<EditorData>({ card: got.card }));
     },
     [load],
   );
 
   const create = useCallback(async () => {
     const got = await load(null);
-    if (got) setEditor(openSlot<DmAdminTemplateCard | null>(null));
+    if (got) setEditor(openSlot<EditorData>({ card: null }));
   }, [load]);
 
   const copy = useCallback(
@@ -108,9 +132,83 @@ export function useTemplateActions(): {
       toast(t('dm.tpl.copied'), { icon: 'copy' });
       client.setQueryData(templateCardQuery(card.data.id).queryKey, card.data);
       const got = await load(null);
-      if (got) setEditor(openSlot<DmAdminTemplateCard | null>(card.data));
+      if (got) setEditor(openSlot<EditorData>({ card: card.data }));
     },
     [busy, fail, refresh, toast, t, client, load],
+  );
+
+  /** Запрос шаблона → вкладка консоли этого шаблона; из окна — переход с заменой записи истории. */
+  const toConsole = useCallback(
+    (card: DmAdminTemplateCard, query: string, params: TplDraft['params'], replace: boolean) => {
+      consoleOpen(userId ?? '', {
+        sql: query,
+        params: consoleParams(params),
+        types: Object.fromEntries(params.map((p) => [p.code, p.type])),
+        name: card.name,
+        tpl: { id: card.id, name: card.name, builtin: card.builtin },
+      });
+      const href = tabHref('dm', 'con');
+      if (replace) router.replace(href);
+      else router.push(href);
+    },
+    [userId, router],
+  );
+
+  const openInConsole = useCallback(
+    async (id: string) => {
+      try {
+        const card = await client.fetchQuery(templateCardQuery(id));
+        toConsole(card, card.query, card.params, false);
+      } catch (err) {
+        fail(err);
+      }
+    },
+    [client, toConsole, fail],
+  );
+
+  const fromConsole: ConsoleToTemplate = useCallback(
+    ({ tab, last }) => {
+      void (async () => {
+        const got = await load(tab.tpl?.id ?? null);
+        if (!got) return;
+        const had = got.card;
+        if (had?.builtin) {
+          // Готовый шаблон платформы — только копией (прототип `dmcToTpl`): копия и её окно с запросом.
+          const res = await copyTemplate(had.id);
+          if (!res.ok) return fail(new ApiFailure(res.status, res.error));
+          const copied = templateCardOf(res.data);
+          refresh();
+          if (!copied.success) return fail(null);
+          client.setQueryData(templateCardQuery(copied.data.id).queryKey, copied.data);
+          consoleStore.patch(tab.id, {
+            tpl: { id: copied.data.id, name: copied.data.name, builtin: false },
+          });
+          toast(t('dm.con.tpl_copy'), { icon: 'copy' });
+          const pre = consoleTemplatePrefill(tab.sql, last, copied.data);
+          return setEditor(
+            openSlot<EditorData>({
+              card: copied.data,
+              prefill: { query: pre.query, params: pre.params },
+            }),
+          );
+        }
+        const pre = consoleTemplatePrefill(tab.sql, last, had);
+        const prefill: Partial<TplDraft> = had
+          ? {
+              query: pre.query,
+              params: pre.params,
+              ...(had.state === 'draft' && pre.columns.length ? { columns: pre.columns } : {}),
+            }
+          : {
+              query: pre.query,
+              params: pre.params,
+              ...(pre.columns.length ? { columns: pre.columns } : {}),
+              ...(tab.notes ? { name: tab.name } : {}),
+            };
+        setEditor(openSlot<EditorData>({ card: had, prefill }));
+      })();
+    },
+    [load, fail, refresh, client, toast, t],
   );
 
   /** «Отключить» и «Включить» — по свежему шаблону: версия записи и токены по организациям. */
@@ -128,6 +226,12 @@ export function useTemplateActions(): {
 
   const actions = (row: DmAdminTemplateRow): ActionEntry[] => [
     { id: 'open', label: t('dm.tpl.act.open'), icon: 'edit', run: () => void open(row.id) },
+    {
+      id: 'console',
+      label: t('dm.tpl.act.console'),
+      icon: 'code',
+      run: () => void openInConsole(row.id),
+    },
     { id: 'copy', label: t('dm.tpl.act.copy'), icon: 'copy', run: () => void copy(row.id) },
     ...(row.canOn
       ? [
@@ -155,10 +259,15 @@ export function useTemplateActions(): {
       {editor ? (
         <TemplateEditor
           key={`dm-tpl-${editor.n}`}
-          card={editor.data}
+          card={editor.data.card}
+          prefill={editor.data.prefill}
           open={editor.open}
           onClose={() => setEditor((x) => closeSlot(x))}
           onSaved={refresh}
+          onConsole={(card, draft) => {
+            setEditor((x) => closeSlot(x));
+            toConsole(card, draft.query, draft.params, true);
+          }}
           onCopy={(id) => {
             setEditor((x) => closeSlot(x));
             void copy(id);
@@ -181,7 +290,7 @@ export function useTemplateActions(): {
     </>
   );
 
-  return { open, create, copy, actions, node };
+  return { open, create, copy, fromConsole, actions, node };
 }
 
 /** «Отключить шаблон?» и «Включить шаблон?» с причиной (прототип `dmStateDlg`). */

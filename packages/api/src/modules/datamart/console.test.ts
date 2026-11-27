@@ -242,6 +242,43 @@ describe.skipIf(!databaseAvailable())('Витрина данных: консол
       );
     });
 
+    it('готовые шаблоны выполняются в консоли: тип параметра — по имени (:date_from, :year, :month)', async () => {
+      // «Открыть в консоли» (блок 1, пункт 4): параметр без типа шаблона уходит по имени — датой, годом.
+      for (const [code, query] of Object.entries(DM_BUILTIN_SQL)) {
+        const res = await run(query);
+        expect(res.status, `${code}: ${await res.clone().text()}`).toBe(200);
+      }
+      const due = await run(DM_BUILTIN_SQL['service-fee']!, { year: '2026' });
+      expect(due.status, await due.clone().text()).toBe(200);
+    });
+
+    it('типы параметров шаблона уходят с запросом: контрагент — номером', async () => {
+      const query = 'select c.name from contractors c where c.id = :contractor';
+      const id = '00000000-0000-4000-8000-000000000001';
+      const typed = await call('platform-admin', 'POST', '/run', {
+        query,
+        params: { contractor: id },
+        types: { contractor: 'list:cp' },
+      });
+      expect(typed.status, await typed.clone().text()).toBe(200);
+      // Без типа — текстом: база отвечает своей ошибкой.
+      expect((await fail(await run(query, { contractor: id }), 400)).code).toBe('dm_console_error');
+      // Неизвестный тип — 400 до базы.
+      const bad = await call('platform-admin', 'POST', '/run', {
+        query,
+        params: { contractor: id },
+        types: { contractor: 'uuid' },
+      });
+      expect((await fail(bad, 400)).code).toBe('validation_failed');
+      // Значение не по типу — отказ «неверный параметр».
+      const wrong = await call('platform-admin', 'POST', '/run', {
+        query,
+        params: { contractor: 'не номер' },
+        types: { contractor: 'list:cp' },
+      });
+      expect((await fail(wrong, 400)).code).toBe('dm_bad_param');
+    });
+
     it('ошибка базы — её текстом', async () => {
       const e = await fail(await run('select * from no_such_table'), 400);
       expect(e.code).toBe('dm_console_error');

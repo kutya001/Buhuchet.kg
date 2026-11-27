@@ -1,0 +1,183 @@
+/*
+ * Редактор запроса «Витрины данных» (доработки 27.11.2026: консоль запросов, блок 3; прототип v166
+ * `.dm-sqlb`, `.dmc-pop`, `.dmc-card`, `.sq-err`): поле, номера строк, цвета подсветки — те же, что у
+ * прежнего поля шаблона (`text-info`, `text-violet`…), список подсказок, карточка при наведении и
+ * подчёркивание ошибок. Цвета — переменные темы (`--bu-*`): светлая и тёмная.
+ */
+.dmsql .cm-editor {
+  min-height: 240px;
+  max-height: 520px;
+  border: 1px solid var(--bu-border);
+  border-radius: 8px;
+  background: var(--bu-field);
+  color: var(--bu-text);
+  font:
+    12.5px/1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Consolas,
+    monospace;
+}
+.dmsql.dmsql-tall .cm-editor {
+  min-height: 300px;
+  max-height: 60vh;
+}
+@media (max-width: 767.98px) {
+  .dmsql .cm-editor {
+    min-height: 180px;
+  }
+}
+.dmsql .cm-editor.cm-focused {
+  outline: 2px solid var(--bu-blue);
+  outline-offset: -1px;
+}
+.dmsql .cm-scroller {
+  font: inherit;
+  overflow: auto;
+}
+.dmsql .cm-content {
+  padding: 8px 0;
+  caret-color: var(--bu-text);
+  tab-size: 2;
+}
+.dmsql .cm-cursor {
+  border-left-color: var(--bu-text);
+}
+.dmsql .cm-gutters {
+  background: var(--bu-field);
+  border-right: 1px solid var(--bu-border);
+  color: var(--bu-faint);
+  border-radius: 8px 0 0 8px;
+}
+.dmsql .cm-lineNumbers .cm-gutterElement {
+  min-width: 30px;
+  padding: 0 6px 0 4px;
+}
+.dmsql .cm-activeLine,
+.dmsql .cm-activeLineGutter {
+  background: transparent;
+}
+.dmsql .cm-selectionBackground,
+.dmsql .cm-focused .cm-selectionBackground,
+.dmsql .cm-content ::selection {
+  background: var(--bu-blue-bg) !important;
+}
+.dmsql .cm-matchingBracket {
+  background: var(--bu-label-bg);
+  outline: 1px solid var(--bu-border);
+}
+.dmsql.dmsql-ro .cm-editor {
+  background: var(--bu-pane-alt);
+}
+
+/* Подсветка (прототип `.sq-k`, `.sq-t`, `.sq-p`, `.sq-s`, `.sq-n`, `.sq-c`) */
+.dmsql-keyword {
+  color: var(--bu-blue);
+}
+.dmsql-table {
+  color: var(--bu-purple);
+}
+.dmsql-param {
+  color: var(--bu-orange);
+}
+.dmsql-string {
+  color: var(--bu-green);
+}
+.dmsql-number {
+  color: var(--bu-red);
+}
+.dmsql-comment {
+  color: var(--bu-muted);
+}
+
+/* Ошибки по ходу набора: волнистое подчёркивание без значков на полях */
+.dmsql .cm-lintRange-error {
+  background: none;
+  text-decoration: underline wavy var(--bu-red);
+  text-decoration-skip-ink: none;
+  text-underline-offset: 3px;
+}
+.dmsql .cm-tooltip-lint {
+  font:
+    12px/1.4 system-ui,
+    sans-serif;
+}
+
+/* Подсказки и карточка */
+.dmsql .cm-tooltip {
+  border: 1px solid var(--bu-border);
+  border-radius: 8px;
+  background: var(--bu-raised);
+  color: var(--bu-text);
+  box-shadow: var(--bu-shadow-l);
+}
+.dmsql .cm-tooltip-autocomplete > ul {
+  font:
+    12px/1.35 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Consolas,
+    monospace;
+  max-height: 260px;
+  min-width: 280px;
+  max-width: 520px;
+}
+.dmsql .cm-tooltip-autocomplete > ul > li {
+  padding: 3px 8px;
+  display: flex;
+  gap: 8px;
+}
+.dmsql .cm-tooltip-autocomplete > ul > li[aria-selected] {
+  background: var(--bu-blue-bg);
+  color: var(--bu-text);
+}
+.dmsql .cm-completionDetail {
+  margin-left: auto;
+  font-style: normal;
+  color: var(--bu-faint);
+  font-family: system-ui, sans-serif;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dmsql-card {
+  max-width: 340px;
+  padding: 8px 10px;
+  font:
+    12px/1.45 system-ui,
+    sans-serif;
+}
+.dmsql-card p {
+  margin: 4px 0;
+  color: var(--bu-muted);
+}
+.dmsql-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.dmsql-faint,
+.dmsql-card p.dmsql-faint {
+  color: var(--bu-faint);
+}
+.dmsql-tag {
+  display: inline-block;
+  border-radius: 5px;
+  padding: 0 5px;
+  background: var(--bu-label-bg);
+  font-size: 11px;
+}
+.dmsql-rel {
+  margin: 4px 0;
+  font-size: 11.5px;
+  color: var(--bu-muted);
+}
+.dmsql-link {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  color: var(--bu-blue);
+  font: inherit;
+}
+.dmsql-link:hover {
+  text-decoration: underline;
+}
