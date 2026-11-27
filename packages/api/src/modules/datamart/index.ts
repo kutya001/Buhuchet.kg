@@ -1,5 +1,6 @@
 import type { ApiDeps } from '../../deps';
 import { createModuleApp } from '../../module';
+import { CONSOLE_ROUTES, consoleHandlers } from './console';
 import { EXT_ROUTE, extHandler } from './ext';
 import { OUTPUT_ROUTES, outputHandlers } from './output';
 import { REQUEST_ROUTES, requestHandlers } from './requests';
@@ -27,6 +28,7 @@ export function datamartModule(deps: ApiDeps) {
   const outXlsx = outputExportHandlers(deps);
   const tpl = templateAdminHandlers(deps);
   const T = TEMPLATE_ADMIN_ROUTES;
+  const con = consoleHandlers(deps);
   return (
     createModuleApp()
       .openapi(OUTPUT_ROUTES.catalog, out.catalog)
@@ -67,5 +69,11 @@ export function datamartModule(deps: ApiDeps) {
       .openapi(REQUEST_ROUTES.export, log.exportList)
       .openapi(REQUEST_ROUTES.summary, log.summary)
       .openapi(EXT_ROUTE, extHandler(deps))
+      // Консоль запросов Админки (доработки 27.11.2026: консоль запросов, этап 0, П2–П3).
+      .openapi(CONSOLE_ROUTES.run, con.run)
+      .openapi(CONSOLE_ROUTES.explain, con.explain)
+      .openapi(CONSOLE_ROUTES.stop, con.stop)
+      .openapi(CONSOLE_ROUTES.export, con.exportFile)
+      .openapi(CONSOLE_ROUTES.schema, con.schema)
   );
 }

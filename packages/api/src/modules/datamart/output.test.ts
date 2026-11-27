@@ -441,7 +441,9 @@ describe.skipIf(!databaseAvailable())('Витрина данных: «Вывод
         params: [],
         columns: [{ code: 'n', name: 'n', type: 'text', total: false, contractor: false }],
       },
-      query: 'select pg_sleep(2)::text as n',
+      // Ожидание (pg_sleep) исполнитель шаблонов не пустит (разборщик, доработки 27.11.2026, П2):
+      // долгий запрос — подсчётом.
+      query: 'select count(*)::text as n from generate_series(1, 200000000) g',
       input: {},
       who: { kind: 'org', orgId: f.b.orgId, userId: f.b.ownerUserId },
       ownContractorIds: null,
