@@ -19,6 +19,8 @@ const WORDS: DmHowWords = {
   parse: T['dm.how.code.parse']!,
   guard: T['dm.how.code.guard']!,
   error: T['dm.how.code.error']!,
+  askClear: T['dm.how.code.ask_clear']!,
+  askClearNote: T['dm.how.code.ask_clear_note']!,
   data1c: T['dm.how.code.data_1c']!,
   row1c: T['dm.how.code.row_1c']!,
   rows: T['dm.how.code.rows']!,
@@ -235,6 +237,32 @@ describe('dmExtHow', () => {
       'текст',
       '',
     ]);
+  });
+
+  it('макрос и скрипт спрашивают перед очисткой листа, только если на листе есть данные (прототип v165, 9Б)', () => {
+    const x = how();
+    expect(x.vba).toContain(
+      '    If WorksheetFunction.CountA(ws.Cells) > 0 Then\n' +
+        `        If MsgBox("${WORDS.askClear}", vbYesNo + vbQuestion) <> vbYes Then Exit Sub\n` +
+        '    End If\n' +
+        '    ws.Cells.Clear',
+    );
+    expect(x.sheets).toContain(
+      '  if (sh.getLastRow() > 0 && !askClear()) return;\n  sh.clearContents();',
+    );
+    // По триггеру спросить некого: `getUi` бросает — лист обновляется сам.
+    expect(x.sheets).toContain(
+      `// ${WORDS.askClearNote}\n` +
+        'function askClear() {\n' +
+        '  try {\n' +
+        '    const ui = SpreadsheetApp.getUi();\n' +
+        `    return ui.alert('${WORDS.askClear}', ui.ButtonSet.YES_NO) === ui.Button.YES;\n` +
+        '  } catch (e) {\n' +
+        '    return true;\n' +
+        '  }\n' +
+        '}',
+    );
+    expect(WORDS.askClear).toBe('Лист будет очищен и заполнен заново. Продолжить?');
   });
 
   it('слова словаря с переводом строки своих строк в код не дописывают', () => {
