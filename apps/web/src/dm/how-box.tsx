@@ -204,6 +204,8 @@ export function HowBox({ how, token }: { how: DmTokenHow; token: string | null }
       parse: t('dm.how.code.parse'),
       guard: t('dm.how.code.guard'),
       error: t('dm.how.code.error'),
+      askClear: t('dm.how.code.ask_clear'),
+      askClearNote: t('dm.how.code.ask_clear_note'),
       data1c: t('dm.how.code.data_1c'),
       row1c: t('dm.how.code.row_1c'),
       rows: t('dm.how.code.rows'),

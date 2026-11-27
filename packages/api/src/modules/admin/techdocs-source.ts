@@ -99,8 +99,25 @@ const DbSchemaDoc = z
     meta: z
       .object({ schemaVersion: z.number().nullish(), updated: z.string().default('') })
       .loose(),
+    groups: z.array(z.object({ id: z.string(), ru: z.string().default('') }).loose()).default([]),
     tables: z.array(
-      z.object({ name: z.string(), ru: z.string().default(''), rls: z.string().nullish() }).loose(),
+      z
+        .object({
+          name: z.string(),
+          ru: z.string().default(''),
+          rls: z.string().nullish(),
+          // Группа, описание и поля — для карты базы консоли «Витрины данных» (этап 0, П3).
+          group: z.string().nullish(),
+          desc: z.string().nullish(),
+          columns: z
+            .array(
+              z
+                .object({ name: z.string(), ru: z.string().nullish(), desc: z.string().nullish() })
+                .loose(),
+            )
+            .default([]),
+        })
+        .loose(),
     ),
   })
   .loose();

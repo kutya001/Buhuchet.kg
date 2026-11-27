@@ -3,7 +3,9 @@ import {
   dmColumnsProblem,
   dmCopyCode,
   dmQueryParamNames,
+  dmQueryParseText,
   dmQueryProblem,
+  dmRuleQueryProblem,
   dmResultColumnsProblem,
   dmStateChangeAllowed,
   dmSyncColumns,
@@ -20,15 +22,14 @@ const col = (code: string, type: DmEditorColumn['type'] = 'text'): DmEditorColum
 });
 
 describe('текст запроса (прототип dmSqlErr)', () => {
-  it('пусто, не SELECT, второй оператор, лишнее слово', () => {
+  it('пусто, не SELECT, второй оператор; функции и запись — дело разборщика', () => {
     expect(dmQueryProblem('  -- только комментарий\n ')).toEqual({ code: 'empty' });
     expect(dmQueryProblem('update contractors set name = 1')).toEqual({ code: 'not_select' });
     expect(dmQueryProblem('select 1; select 2')).toEqual({ code: 'two_statements' });
-    expect(dmQueryProblem('select pg_sleep(10)')).toEqual({ code: 'forbidden', word: 'pg_sleep' });
-    expect(dmQueryProblem('WITH x AS (select 1) DELETE FROM x')).toEqual({
-      code: 'forbidden',
-      word: 'delete',
-    });
+    // Поиска слов больше нет (доработки 27.11.2026: консоль запросов, П2): pg_sleep и DELETE внутри WITH
+    // отклоняет `dmSqlRules` по дереву разбора (sql-rules.test.ts и тесты API).
+    expect(dmQueryProblem('select pg_sleep(10)')).toBeNull();
+    expect(dmQueryProblem('WITH x AS (select 1) DELETE FROM x')).toBeNull();
     expect(dmQueryProblem("select 'не закрыта")).toEqual({ code: 'unclosed' });
     expect(dmQueryProblem('select 1) x union all select (2')).toEqual({ code: 'parens' });
     expect(dmQueryProblem('select $1')).toEqual({ code: 'positional' });
@@ -40,6 +41,34 @@ describe('текст запроса (прототип dmSqlErr)', () => {
         '/* шапка */ select c.created_at, c.updated_at, u.login_lock_reason, d.copied_from\nfrom contractors c;',
       ),
     ).toBeNull();
+  });
+
+  it('текст для разборщика: параметры — ($n::text), без последней «;»; ошибка — null', () => {
+    expect(dmQueryParseText('select :month, :month, :y;')).toBe(
+      'select ($1::text), ($1::text), ($2::text)',
+    );
+    expect(dmQueryParseText("select 'x")).toBeNull();
+  });
+
+  it('ответ разборщика — причиной окна шаблона', () => {
+    expect(dmRuleQueryProblem({ code: 'syntax', message: 'ошибка', position: 3 })).toEqual({
+      code: 'syntax',
+      error: 'ошибка',
+    });
+    expect(dmRuleQueryProblem({ code: 'two_statements', position: 9 })).toEqual({
+      code: 'two_statements',
+    });
+    expect(dmRuleQueryProblem({ code: 'write', position: 0 })).toEqual({ code: 'not_select' });
+    expect(dmRuleQueryProblem({ code: 'not_select', position: 0 })).toEqual({ code: 'not_select' });
+    expect(dmRuleQueryProblem({ code: 'lock', position: 0 })).toEqual({ code: 'lock' });
+    expect(dmRuleQueryProblem({ code: 'function', name: 'pg_sleep', position: 7 })).toEqual({
+      code: 'forbidden',
+      word: 'pg_sleep',
+    });
+    expect(dmRuleQueryProblem({ code: 'system_table', name: 'pg_roles', position: 14 })).toEqual({
+      code: 'forbidden',
+      word: 'pg_roles',
+    });
   });
 
   it('параметры по порядку, без строк, комментариев и приведения типа', () => {

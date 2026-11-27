@@ -43,7 +43,6 @@ import {
   dmColumnsProblem,
   dmCopyCode,
   dmQueryParamNames,
-  dmQueryProblem,
   dmResultColumnsProblem,
   dmStateChangeAllowed,
   dmSyncColumns,
@@ -89,6 +88,7 @@ import { guardCardRead } from '../admin/card-guard';
 import { serverTexts } from '../l10n/texts';
 import { withRunSlot } from './output';
 import { DM_ROWS_MAX, dmSqlProblemText, withDmPoolSlot } from './run';
+import { dmTemplateSqlProblem } from './sql-check';
 
 /*
  * Админка → «Витрина данных» → «Шаблоны» (доработки 20.11.2026: Витрина данных, блок 2, пункты 2–7;
@@ -556,7 +556,7 @@ async function runCheck(
   tr: Tr,
 ): Promise<CheckOutcome> {
   const adminId = c.get('session')!.userId;
-  const problem = dmQueryProblem(r.query);
+  const problem = await dmTemplateSqlProblem(r.query);
   const names = dmQueryParamNames(r.query);
   const params = Array.isArray(names) ? dmSyncParams(names, r.params) : [...r.params];
   if (problem) {
@@ -652,7 +652,7 @@ async function runCheck(
 type FormInput = DmTemplateCreate & { version?: number };
 
 /** Поля шаблона из окна, приведённые к правилам вида: у шаблона Админки нет модуля, права и доступа. */
-function valuesOf(f: FormInput, tr: Tr): DmTemplateValues {
+async function valuesOf(f: FormInput, tr: Tr): Promise<DmTemplateValues> {
   const org = f.audience === 'org';
   if (org && !f.module) apiFail(400, 'dm_module_required', tr('err.dm_module_required'));
   const access = org ? f.access : 'all';
@@ -660,7 +660,7 @@ function valuesOf(f: FormInput, tr: Tr): DmTemplateValues {
   if (access === 'selected' && orgIds.length === 0) {
     apiFail(400, 'dm_orgs_required', tr('err.dm_orgs_required'));
   }
-  const problem = dmQueryProblem(f.query);
+  const problem = await dmTemplateSqlProblem(f.query);
   if (problem) apiFail(400, `dm_sql_${problem.code}`, sqlMessage(tr, problem), { field: 'query' });
   const names = dmQueryParamNames(f.query) as string[];
   const missing = names.find((n) => !f.params.some((p) => p.code === n));
@@ -909,7 +909,7 @@ export function templateAdminHandlers(deps: ApiDeps) {
     const adminId = admin(c);
     const t = await serverTexts(deps);
     const tr = trOf(t);
-    const v = valuesOf(f, tr);
+    const v = await valuesOf(f, tr);
     const before = id ? (await publishedOf(adminId, id)).tpl : null;
     if (before?.builtin) apiFail(409, 'dm_builtin', tr('err.dm_builtin'));
     const locked = !!before && dmTemplatePublished(before.state);

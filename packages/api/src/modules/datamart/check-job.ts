@@ -11,6 +11,7 @@ import {
 import {
   bishkekDate,
   dmBind,
+  dmQueryParseText,
   dmQueryProblem,
   dmResultColumnsProblem,
   formatText,
@@ -19,6 +20,7 @@ import type { Job, JobContext } from '../../deps';
 import { alertTexts, sendPlatformAlert, type AlertTexts } from '../../jobs/alerts';
 import { putBell } from '../telegram/bell';
 import { DM_ROWS_MAX, dmSqlProblemText } from './run';
+import { dmPublishedSqlProblem } from './sql-check';
 
 /*
  * «Витрина: проверка шаблонов» (доработки 20.11.2026: Витрина данных, блок 8, пункт 7; общий план 20.11,
@@ -66,6 +68,17 @@ async function checkOne(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const problem = dmQueryProblem(it.query);
   if (problem) return { ok: false, error: dmSqlProblemText(t, problem) };
+  const text = dmQueryParseText(it.query);
+  const denied =
+    text === null
+      ? null
+      : await dmPublishedSqlProblem(text, (miss) =>
+          ctx.logger.warn(
+            { template: it.code, rule: miss },
+            'витрина: опубликованный шаблон не проходит список разрешённых функций',
+          ),
+        );
+  if (denied) return { ok: false, error: dmSqlProblemText(t, denied) };
   const bound = dmBind(
     it.query,
     it.params.map((p) => ({ k: p.code, type: p.type, req: false, def: p.default })),

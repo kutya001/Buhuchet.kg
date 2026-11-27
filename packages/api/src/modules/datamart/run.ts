@@ -27,6 +27,7 @@ import {
 import type { ApiDeps } from '../../deps';
 import { apiFail } from '../../errors';
 import { serverTexts } from '../l10n/texts';
+import { dmPublishedSqlProblem } from './sql-check';
 
 /*
  * Общий путь одного запроса шаблона «Витрины данных» (доработки 20.11.2026: Витрина данных, блок 8,
@@ -108,9 +109,9 @@ export type DmTr = (key: string, params?: Record<string, string | number>) => st
  */
 export function dmSqlProblemText(tr: DmTr, p: DmQueryProblem | DmSqlProblem): string {
   if ('code' in p) {
-    return p.code === 'forbidden'
-      ? tr('err.dm_sql_forbidden', { word: p.word })
-      : tr(`err.dm_sql_${p.code}`);
+    if (p.code === 'forbidden') return tr('err.dm_sql_forbidden', { word: p.word });
+    if (p.code === 'syntax') return tr('err.dm_sql_syntax', { error: p.error });
+    return tr(`err.dm_sql_${p.code}`);
   }
   return p.problem === 'unknown_param'
     ? tr('err.dm_param_missing', { param: p.name })
@@ -154,6 +155,9 @@ export async function withDmPoolSlot<T>(
   }
   return apiFail(429, 'dm_busy_all', t('err.dm_busy_all'));
 }
+
+/** Шаблоны, о которых журнал уже сказал «не из списка разрешённых функций» (`dmPublishedSqlProblem`). */
+const missLogged = new Set<string>();
 
 /** Код ошибки PostgreSQL «запрос прерван по пределу времени». */
 const QUERY_CANCELED = '57014';
@@ -234,6 +238,17 @@ export async function runDmTemplate(deps: ApiDeps, r: DmRunRequest): Promise<DmR
     );
     return { ok: false, outcome: 'bad_param', param: bound.param, why: bound.why };
   }
+
+  const denied = await dmPublishedSqlProblem(bound.text, (miss) => {
+    // Строка журнала — раз на шаблон и процесс: шаблон по токену зовут тысячи раз в день.
+    if (missLogged.has(r.template.id)) return;
+    missLogged.add(r.template.id);
+    deps.logger.warn(
+      { template: r.template.code, rule: miss },
+      'витрина: опубликованный шаблон не проходит список разрешённых функций',
+    );
+  });
+  if (denied) return failed(dmSqlProblemText(tr, denied));
 
   let text = bound.text;
   if (r.ownContractorIds) {

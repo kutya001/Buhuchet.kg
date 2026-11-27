@@ -46,6 +46,10 @@ export interface DmHowWords {
   guard: string;
   /** «Ошибка» — в сообщении макроса и 1С. */
   error: string;
+  /** «Лист будет очищен и заполнен заново. Продолжить?» — VBA и Google Таблицы, только если на листе есть данные. */
+  askClear: string;
+  /** Комментарий к вопросу в скрипте Google Таблиц: по триггеру спросить некого. */
+  askClearNote: string;
   /** «Данные.columns — столбцы, Данные.rows — строки…» — 1С. */
   data1c: string;
   /** «Строка.<код столбца>, например Строка.{key}» — 1С; `{key}` — код первого столбца. */
@@ -324,6 +328,9 @@ export function dmExtHow(o: {
     '    End With',
     `    ' ${vbaNote(w.parse)}`,
     '    Dim ws As Worksheet: Set ws = ActiveSheet',
+    '    If WorksheetFunction.CountA(ws.Cells) > 0 Then',
+    `        If MsgBox(${dq(w.askClear)}, vbYesNo + vbQuestion) <> vbYes Then Exit Sub`,
+    '    End If',
     '    ws.Cells.Clear',
     '    Dim r As Long, c As Long, i As Long, q As Boolean, ch As String, v As String',
     '    r = 1: c = 1',
@@ -377,8 +384,19 @@ export function dmExtHow(o: {
     `  // ${w.guard}`,
     `  const cells = rows.map(row => row.map(v => /^[=+@-]/.test(v) && isNaN(v) ? "'" + v : v));`,
     '  const sh = SpreadsheetApp.getActiveSheet();',
+    '  if (sh.getLastRow() > 0 && !askClear()) return;',
     '  sh.clearContents();',
     '  if (cells.length) sh.getRange(1, 1, cells.length, cells[0].length).setValues(cells);',
+    '}',
+    '',
+    `// ${w.askClearNote}`,
+    'function askClear() {',
+    '  try {',
+    '    const ui = SpreadsheetApp.getUi();',
+    `    return ui.alert(${jsq(w.askClear)}, ui.ButtonSet.YES_NO) === ui.Button.YES;`,
+    '  } catch (e) {',
+    '    return true;',
+    '  }',
     '}',
   ].join('\n');
 

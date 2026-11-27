@@ -51,6 +51,8 @@ const config: NextConfig = {
     'tesseract.js',
     '@tesseract.js-data/rus',
     '@tesseract.js-data/kir',
+    // Разборщик SQL консоли «Витрины данных» (доработки 27.11.2026, П2): грузит wasm по пути.
+    'libpg-query',
   ],
   // Распознаватель сканов запускает свой поток из файла и загружает wasm и языковые данные по пути —
   // сборка их сама не находит, а образ web содержит только найденное. Ключ — путь маршрута API
@@ -62,6 +64,7 @@ const config: NextConfig = {
       `${PNPM}/tesseract.js@*/node_modules/tesseract.js-core/{package.json,index.js,tesseract-core{,-simd,-relaxedsimd}{,-lstm}.{js,wasm}}`,
       `${PNPM}/@tesseract.js-data+{rus,kir}@*/node_modules/@tesseract.js-data/*/{package.json,index.js,4.0.0_best_int/*}`,
       `${PNPM}/pdfjs-dist@*/node_modules/pdfjs-dist/legacy/build/{pdf,pdf.worker}.mjs`,
+      `${PNPM}/libpg-query@*/node_modules/libpg-query/{package.json,wasm/index.cjs,wasm/libpg-query.{js,wasm}}`,
       // Данные «Технической документации» (scripts/build-techdocs.mjs): API читает их с диска.
       './techdocs/*',
     ],

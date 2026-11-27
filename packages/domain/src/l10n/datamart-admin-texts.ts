@@ -71,6 +71,11 @@ export const DATAMART_ADMIN_TEXTS = {
     ru: '«{word}» нельзя: шаблон только читает таблицы организации',
     section: E,
   },
+  'err.dm_sql_lock': {
+    ru: 'FOR UPDATE и FOR SHARE нельзя: запрос только читает и строки не блокирует',
+    section: E,
+  },
+  'err.dm_sql_syntax': { ru: 'Ошибка в запросе: {error}', section: E },
   'err.dm_sql_unclosed': { ru: 'Не закрыта кавычка или комментарий', section: E },
   'err.dm_sql_parens': {
     ru: 'Скобки не парные: у каждой «(» должна быть своя «)»',
@@ -137,4 +142,21 @@ export const DATAMART_ADMIN_TEXTS = {
     section: SYS,
   },
   'bell.line.dm_broken': { ru: 'Шаблон витрины данных «{name}» сломан', section: BELL },
+  // Консоль запросов (доработки 27.11.2026: консоль запросов, блоки 1–2; этап 0, П2). Подписи экрана —
+  // этап 1 (П4).
+  'dm.console.title': { ru: 'Консоль', section: S },
+  'err.dm_console_forbidden': {
+    ru: '«{word}» в консоли нельзя: запрещены ожидание, блокировки, запрос из строки, запись в журнал, файлы сервера, другие базы, смена настроек и сигналы другим соединениям',
+    section: E,
+  },
+  'err.dm_console_error': { ru: 'Ошибка базы: {error}', section: E },
+  'err.dm_console_busy': {
+    ru: 'Сейчас выполняется запрос консоли другого администратора: повторите через минуту',
+    section: E,
+  },
+  'err.dm_console_timeout': {
+    ru: 'Запрос выполнялся дольше 60 секунд и остановлен',
+    section: E,
+  },
+  'err.dm_console_stopped': { ru: 'Запрос остановлен', section: E },
 } as const satisfies Record<string, UiTextDefault>;

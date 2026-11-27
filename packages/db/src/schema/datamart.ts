@@ -3,6 +3,7 @@ import {
   DM_AUDIENCES,
   DM_CODE_RE,
   DM_MODULES,
+  DM_NAME_MAX,
   DM_QUERY_MAX,
   DM_REQUEST_OUTCOMES,
   DM_REQUEST_VIA,
@@ -335,6 +336,45 @@ export const dmRequests = pgTable(
       for: 'select',
       to: appRole,
       using: adminOutsideOrg,
+    }),
+  ],
+).enableRLS();
+
+/**
+ * «Мои запросы» консоли (доработки 27.11.2026: консоль запросов, блок 4, пункт 2; этап 0, П1; миграция
+ * 0177): личные сохранённые запросы администратора платформы — название, текст, параметры
+ * (`{ код: значение }` полоски параметров). Видит и меняет только автор, пока он администратор
+ * платформы. Обеим ролям «Витрины данных» таблица закрыта (`DM_CLOSED_TABLES`), как тексты шаблонов:
+ * иначе любой администратор прочитал бы чужие запросы через консоль. Это не шаблон: токена на него нет.
+ */
+export const dmConsoleQueries = pgTable(
+  'dm_console_queries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    authorId: uuid('author_id')
+      .notNull()
+      .default(currentUserId)
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    query: text('query').notNull(),
+    params: jsonb('params')
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    ...timestamps(),
+    version: recordVersion(),
+  },
+  (t) => [
+    check(
+      'dm_console_queries_fields_check',
+      sql`char_length(btrim(${t.name})) between 1 and ${sql.raw(String(DM_NAME_MAX))} and char_length(${t.query}) between 1 and ${sql.raw(String(DM_QUERY_MAX))} and jsonb_typeof(${t.params}) = 'object'`,
+    ),
+    index('dm_console_queries_author_idx').on(t.authorId, t.updatedAt),
+    pgPolicy('dm_console_queries_own', {
+      as: 'permissive',
+      for: 'all',
+      to: appRole,
+      using: sql`${t.authorId} = ${currentUserId} and ${adminOutsideOrg}`,
+      withCheck: sql`${t.authorId} = ${currentUserId} and ${adminOutsideOrg}`,
     }),
   ],
 ).enableRLS();

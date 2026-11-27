@@ -1,6 +1,7 @@
 import type { AppConfig } from '@buhuchet/adapters';
 import {
   cleanupContractorPageGrants,
+  cleanupDmConsoleLog,
   cleanupDmRequests,
   cleanupContractorTelegramLinks,
   cleanupLoginAttempts,
@@ -45,7 +46,8 @@ const DAY_MS = 86_400_000;
 /**
  * Очистка журналов: запуски хранятся 30 дней, полученные ботом сообщения — 90 (Админка → «Запуски» и
  * «Телеграм» → «Журнал»; docs/decisions.md п. Т-15, Т-16), журнал запросов «Витрины данных» — 90
- * (доработки 20.11.2026: Витрина данных, блок 6, пункт 7; п. Т-20). Отвечает, сколько строк удалено.
+ * (доработки 20.11.2026: Витрина данных, блок 6, пункт 7; п. Т-20), журнал консоли «Витрины данных» — год
+ * (миграция 0177). Отвечает, сколько строк удалено.
  */
 export const cleanupSchedulerRuns: Job = {
   name: 'system.cleanup-scheduler-runs',
@@ -61,7 +63,9 @@ export const cleanupSchedulerRuns: Job = {
     // Журнал запросов «Витрины данных» — 90 дней, по часам базы (своей задачи у него нет).
     // ОТКЛОНЕНИЕ: docs/deviations.md#Т-29
     const requests = await cleanupDmRequests(ctx.db, DM_REQUEST_KEEP_DAYS);
-    return runs.length + inbox + requests;
+    // Журнал консоли «Витрины данных» — год (доработки 27.11.2026: консоль запросов, блок 2, пункт 9).
+    const consoleLog = await cleanupDmConsoleLog(ctx.db);
+    return runs.length + inbox + requests + consoleLog;
   },
 };
 
