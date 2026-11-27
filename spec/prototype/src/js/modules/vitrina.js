@@ -361,6 +361,9 @@ ${ps.map((x,i)=>`    Dim p${i + 1} As String: p${i + 1} = ${dq(p[x.k])}   ' ${ln
     End With
     ' 4. Разбор CSV по кавычкам, по одной ячейке; текст, похожий на формулу, — с апострофом
     Dim ws As Worksheet: Set ws = ActiveSheet
+    If WorksheetFunction.CountA(ws.Cells) > 0 Then
+        If MsgBox("Лист будет очищен и заполнен заново. Продолжить?", vbYesNo + vbQuestion) <> vbYes Then Exit Sub
+    End If
     ws.Cells.Clear
     Dim r As Long, c As Long, i As Long, q As Boolean, ch As String, v As String
     r = 1: c = 1
@@ -407,8 +410,19 @@ function load() {
   // текст, похожий на формулу, — с апострофом
   const cells = rows.map(row => row.map(v => /^[=+@-]/.test(v) && isNaN(v) ? "'" + v : v));
   const sh = SpreadsheetApp.getActiveSheet();
+  if (sh.getLastRow() > 0 && !askClear()) return;
   sh.clearContents();
   if (cells.length) sh.getRange(1, 1, cells.length, cells[0].length).setValues(cells);
+}
+
+// Вопрос перед очисткой листа с данными. При запуске по триггеру спросить некого — лист обновляется сам
+function askClear() {
+  try {
+    const ui = SpreadsheetApp.getUi();
+    return ui.alert('Лист будет очищен и заполнен заново. Продолжить?', ui.ButtonSet.YES_NO) === ui.Button.YES;
+  } catch (e) {
+    return true;
+  }
 }`;
   const c1=`// 1. Токен (полностью, вместе с bk_)
 Токен = "${T}";
