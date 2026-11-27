@@ -11,6 +11,8 @@ export const DM_CLOSED_TABLES = [
   'admin_login_codes',
   'contractor_page_grants',
   'contractor_telegram_tokens',
+  // «Мои запросы» консоли — личные запросы администратора (миграция 0177, блок 4, пункт 2).
+  'dm_console_queries',
   'dm_template_sql',
   'dm_tokens',
   'dues_recalcs',

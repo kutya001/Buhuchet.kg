@@ -56,11 +56,16 @@ class DmRolledBack extends Error {
   }
 }
 
-async function runInTx(tx: Tx, audience: 'org' | 'admin', q: DmQuery): Promise<never> {
+async function runInTx(
+  tx: Tx,
+  audience: 'org' | 'admin',
+  q: DmQuery,
+  maxTimeoutMs = DM_TIMEOUT_MS,
+): Promise<never> {
   if (!Number.isInteger(q.maxRows) || q.maxRows < 1 || q.maxRows > DM_ROWS_MAX) {
     throw new RangeError(`dm: предел строк от 1 до ${DM_ROWS_MAX}`);
   }
-  const timeout = Math.max(1, Math.min(q.timeoutMs ?? DM_TIMEOUT_MS, DM_TIMEOUT_MS));
+  const timeout = Math.max(1, Math.min(q.timeoutMs ?? maxTimeoutMs, maxTimeoutMs));
   await tx.execute(audience === 'org' ? sql`select dm.begin_org()` : sql`select dm.begin_admin()`);
   await tx.execute(
     sql`select set_config('transaction_read_only', 'on', true), set_config('statement_timeout', ${String(timeout)}, true)`,
@@ -111,6 +116,96 @@ export function runDmOrg(
 /** Запрос шаблона Админки: только администратор платформы (`dm.begin_admin` проверяет сам). */
 export function runDmAdmin(db: Db, adminUserId: string, q: DmQuery): Promise<DmResult> {
   return rolledBack(() => withUserContext(db, adminUserId, (tx) => runInTx(tx, 'admin', q)));
+}
+
+/**
+ * Консоль запросов администратора платформы (доработки 27.11.2026: консоль запросов, блок 2, пункты 3–4;
+ * этап 0, П2; миграция 0177): тот же путь, что у шаблона Админки (`dm.begin_admin`, «только чтение»,
+ * `dm.run_admin` — роль `buhuchet_dm_admin` без секретов), но предел времени — 60 с, и соединение до
+ * конца транзакции помечено меткой консоли этого администратора: по ней «Остановить»
+ * (`cancelDmConsole`) находит запрос. Запрещённое консоли (ожидание, блокировки, запрос из строки)
+ * отсекает разборщик до вызова.
+ */
+export const DM_CONSOLE_TIMEOUT_MS = QUERY_TIMEOUT_MS.export;
+
+/** Метка соединения запуска консоли (`application_name`): по ней ищет `app.dm_console_cancel()`. */
+export const dmConsoleTag = (adminUserId: string) => `buhuchet_dm_console:${adminUserId}`;
+
+async function tagConsole(tx: Tx, adminUserId: string): Promise<void> {
+  await tx.execute(sql`select set_config('application_name', ${dmConsoleTag(adminUserId)}, true)`);
+}
+
+/** Выполнить запрос консоли: до `maxRows` строк (на экран 1 000, в Excel 50 000), до 60 с. */
+export function runDmConsole(db: Db, adminUserId: string, q: DmQuery): Promise<DmResult> {
+  return rolledBack(() =>
+    withUserContext(
+      db,
+      adminUserId,
+      async (tx) => {
+        await tagConsole(tx, adminUserId);
+        return runInTx(tx, 'admin', q, DM_CONSOLE_TIMEOUT_MS);
+      },
+      'export',
+    ),
+  );
+}
+
+/** Ответ «Плана запроса» уносится из транзакции ошибкой — как ответ запуска. */
+class DmPlanRolledBack extends Error {
+  constructor(readonly plan: unknown) {
+    super('dm: откат плана');
+  }
+}
+
+/**
+ * «План запроса» (блок 1, пункт 3): оценка запроса базой без выполнения (`dm.explain_admin`, EXPLAIN
+ * без ANALYZE, формат JSON) — тем же подзапросом и ролью, что `runDmConsole`.
+ */
+export async function explainDmConsole(
+  db: Db,
+  adminUserId: string,
+  q: Pick<DmQuery, 'text' | 'params'>,
+): Promise<unknown> {
+  try {
+    await withUserContext(
+      db,
+      adminUserId,
+      async (tx) => {
+        await tagConsole(tx, adminUserId);
+        await tx.execute(sql`select dm.begin_admin()`);
+        await tx.execute(
+          sql`select set_config('transaction_read_only', 'on', true), set_config('statement_timeout', ${String(DM_TIMEOUT_MS)}, true)`,
+        );
+        const [row] = await tx.execute<{ plan: unknown }>(
+          sql`select dm.explain_admin(${q.text}, ${JSON.stringify(q.params)}::jsonb) as plan`,
+        );
+        throw new DmPlanRolledBack(row!.plan);
+      },
+      'export',
+    );
+  } catch (e) {
+    if (e instanceof DmPlanRolledBack) return e.plan;
+    throw e;
+  }
+  /* v8 ignore next */
+  throw new Error('dm: план без ответа');
+}
+
+/**
+ * «Остановить» (блок 2, пункт 3): отменить идущий запрос консоли этого администратора — только свой
+ * (`app.dm_console_cancel` ищет соединение по метке `dmConsoleTag`). Ответ — сколько запросов отменено.
+ */
+export async function cancelDmConsole(db: Db, adminUserId: string): Promise<number> {
+  const [row] = await withUserContext(db, adminUserId, (tx) =>
+    tx.execute<{ n: number }>(sql`select app.dm_console_cancel() as n`),
+  );
+  return Number(row?.n ?? 0);
+}
+
+/** Строки журнала консоли старше года (история платформы, `dm_console`): задача по расписанию. */
+export async function cleanupDmConsoleLog(db: Db): Promise<number> {
+  const [row] = await db.execute<{ n: number }>(sql`select app.dm_console_log_cleanup() as n`);
+  return Number(row?.n ?? 0);
 }
 
 /**
