@@ -138,8 +138,10 @@ function tdMethod(id,tab){const a=tdApi();const m=a&&a.methods.find(x=>x.id===id
     const b=st.tab==='req'?tdReqHtml(m):st.tab==='res'?tdResHtml(m):st.tab==='tbl'?tdTblHtml(m):st.tab==='sql'?tdSqlHtml(m):tdCodeHtml(m);
     return {title:`${tdMth(m.m)} <span class="mono td-tp">${esc(m.p)}</span>`,sub:esc(m.sum),
       body:`<div class="kv td-kv"><div><span class="k">Раздел</span><span class="v">${esc(tdSec(m))}</span></div><div><span class="k">Доступ</span><span class="v">${esc(acc)}</span></div>${m.rate?`<div><span class="k">Предел запросов</span><span class="v">${esc(m.rate)}</span></div>`:''}${m.desc?`<div class="full"><span class="k">Описание</span><span class="v">${esc(m.desc)}</span></div>`:''}</div>${cardTabs(tabs,st.tab,'tdt')}<div class="td-b">${b}</div>`,
-      foot:`<span class="hint" style="margin:0">Только просмотр: из Админки метод не вызывается</span><div class="grow"></div><button class="btn cta" data-close>Готово</button>`,
+      foot:`<span class="hint" style="margin:0">Только просмотр: из Админки метод не вызывается${dmcMethodSql(m)?'; кнопки передают запрос в «Витрину данных»':''}</span><div class="grow"></div>${dmcMethodSql(m)?`<button class="btn" id="td-con">${ic('code','sm')}Открыть в консоли</button><button class="btn" id="td-tpl">${ic('layers','sm')}Создать шаблон на основе</button>`:''}<button class="btn cta" data-close>Готово</button>`,
       mount(el){bindCardTabs(el,'tdt',k=>{st.tab=k;mm.draw();const x=el.querySelector('.mb');if(x)x.scrollTop=0});
+        // Методы API → консоль и шаблон (доработки 27.11.2026: консоль запросов, блок 5, пункт 1): только методы чтения с точным SQL
+        const tc=el.querySelector('#td-con'),tt=el.querySelector('#td-tpl');if(tc)tc.onclick=()=>dmcFromMethod(m,false);if(tt)tt.onclick=()=>dmcFromMethod(m,true);
         $$('[data-tdtb]',el).forEach(x=>x.onclick=()=>tdShowTable(x.dataset.tdtb));
         $$('[data-tdshow]',el).forEach(x=>x.onclick=()=>tdShowMethod(m.id));
         $$('[data-tdfn]',el).forEach(x=>x.onclick=()=>tdShowFn(x.dataset.tdfn));
