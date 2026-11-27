@@ -57,7 +57,10 @@ export interface DmConsoleQueryInput {
 }
 
 /** «Сохранить в Мои запросы»: автор — из контекста транзакции. */
-export async function createDmConsoleQuery(tx: Tx, v: DmConsoleQueryInput): Promise<DmConsoleQueryRow> {
+export async function createDmConsoleQuery(
+  tx: Tx,
+  v: DmConsoleQueryInput,
+): Promise<DmConsoleQueryRow> {
   const [row] = await tx
     .insert(dmConsoleQueries)
     .values({ name: v.name.trim(), query: v.query, params: v.params })
@@ -138,9 +141,11 @@ export async function dmConsoleHistory(tx: Tx, limit: number): Promise<DmConsole
     .orderBy(desc(platformAuditLog.at), desc(platformAuditLog.id))
     .limit(limit);
   return rows.map((r) => {
-    const get = (field: string) => (r.changes as HistoryChange[]).find((c) => c.field === field)?.to;
+    const get = (field: string) =>
+      (r.changes as HistoryChange[]).find((c) => c.field === field)?.to;
     const outcome = get('outcome');
-    const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : null);
+    const num = (v: unknown) =>
+      typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : null;
     const params = get('params');
     return {
       id: r.id,

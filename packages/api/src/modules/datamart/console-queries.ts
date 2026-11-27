@@ -67,7 +67,10 @@ export const CONSOLE_QUERY_ROUTES = {
     summary: 'Консоль → «Мои запросы»: свои сохранённые запросы',
     middleware: [requirePlatformAdmin] as const,
     responses: {
-      200: { description: 'Свои запросы, последние изменённые — сверху', content: json(DmConsoleQueryList) },
+      200: {
+        description: 'Свои запросы, последние изменённые — сверху',
+        content: json(DmConsoleQueryList),
+      },
       ...denied,
     },
   }),
@@ -127,7 +130,8 @@ export const CONSOLE_QUERY_ROUTES = {
     method: 'post',
     path: '/admin/dm/console/check',
     tags: ['admin'],
-    summary: 'Консоль → проверка по ходу набора: ошибки разборщика с местом в тексте, без выполнения',
+    summary:
+      'Консоль → проверка по ходу набора: ошибки разборщика с местом в тексте, без выполнения',
     middleware: [requirePlatformAdmin] as const,
     request: { body: { content: json(DmConsoleCheckInput), required: true } },
     responses: {
@@ -195,7 +199,12 @@ const quickProblem = (code: string): DmQueryProblem =>
 export async function dmConsoleProblems(sql: string, tr: Tr): Promise<DmConsoleProblem[]> {
   const out: DmConsoleProblem[] = [];
   const push = (from: number, to: number, p: DmQueryProblem) =>
-    out.push({ from, to: Math.max(to, from + 1), code: `dm_sql_${p.code}`, message: dmSqlProblemText(tr, p) });
+    out.push({
+      from,
+      to: Math.max(to, from + 1),
+      code: `dm_sql_${p.code}`,
+      message: dmSqlProblemText(tr, p),
+    });
   const quick = dmSqlQuickMarks(sql);
   for (const m of quick) push(m.from, m.to, quickProblem(m.code));
   if (quick.length) return out;
