@@ -7,6 +7,7 @@
  */
 import type { DM_COLUMN_TYPES, DM_TEMPLATE_STATES } from './datamart';
 import { DM_PARAMS_MAX, dmParseSql, type DmParamDef, type DmParamType } from './query';
+import type { DmSqlRuleProblem } from './sql-rules';
 
 /** Код параметра и столбца: латиница в нижнем регистре, цифры и «_» (как готовые шаблоны refDB). */
 export const DM_FIELD_RE = '^[a-z][a-z0-9_]{0,39}$';
@@ -32,8 +33,11 @@ export type DmColumnType = (typeof DM_COLUMN_TYPES)[number];
 
 /**
  * Почему текст запроса не годится (прототип `dmSqlErr`; ключ словаря `dm.tpl.sql.<код>`): пусто; не
- * SELECT и не WITH; второй оператор; слово, которое шаблону не нужно (`word`). Разбор строк и
- * параметров — `dmParseSql`, само «только чтение» держат роли базы и исполнитель (блок 8, пункты 2–3).
+ * SELECT и не WITH; второй оператор; кавычки, скобки и параметры (`dmParseSql`). Что можно внутри
+ * запроса — функции, таблицы, запись и блокировки — проверяет разборщик PostgreSQL по правилам
+ * `dmSqlRules` (доработки 27.11.2026: консоль запросов, блок 2, пункт 7; до 27.11 — поиск слов
+ * `FORBIDDEN`): его ответ переводит `dmRuleQueryProblem` (`forbidden` — функция или таблица, `syntax`,
+ * `lock`). Само «только чтение» держат и роли базы, и исполнитель (блок 8, пункты 2–3).
  */
 export type DmQueryProblem =
   | { code: 'empty' }
@@ -43,24 +47,53 @@ export type DmQueryProblem =
   | { code: 'parens' }
   | { code: 'positional' }
   | { code: 'too_many_params' }
-  | { code: 'forbidden'; word: string };
+  | { code: 'forbidden'; word: string }
+  | { code: 'lock' }
+  | { code: 'syntax'; error: string };
 
-const FORBIDDEN =
-  /\b(insert|update|delete|merge|drop|alter|create|truncate|grant|revoke|copy|call|vacuum|lock|set_config|pg_sleep|pg_read_file|pg_ls_dir|dblink|pg_catalog|information_schema)\b/i;
-
-/** Текст без комментариев `--` и `/* *\/` — для проверки начала и слов (строки не трогаются). */
+/** Текст без комментариев `--` и `/* *\/` — для проверки начала (строки не трогаются). */
 const withoutComments = (sql: string) =>
   sql.replace(/--[^\n]*/g, ' ').replace(/\/\*[\s\S]*?\*\//g, ' ');
 
-/** Что не так с текстом запроса; null — годится (прототип `dmSqlErr`). */
+/** Что не так с текстом запроса до разборщика; null — годится (прототип `dmSqlErr`). */
 export function dmQueryProblem(sql: string): DmQueryProblem | null {
   const s = withoutComments(sql).trim();
   if (!s) return { code: 'empty' };
   if (!/^(select|with)\b/i.test(s)) return { code: 'not_select' };
   const names = dmQueryParamNames(sql);
-  if (!Array.isArray(names)) return names;
-  const bad = FORBIDDEN.exec(s);
-  return bad ? { code: 'forbidden', word: bad[1]!.toLowerCase() } : null;
+  return Array.isArray(names) ? null : names;
+}
+
+/**
+ * Текст для разборщика PostgreSQL: `:имя` → `($n::text)`, без последней «;» (как у исполнителя,
+ * `dmParseSql`); текст с ошибкой кавычек, скобок или параметров — null (её отдаёт `dmQueryProblem`).
+ */
+export function dmQueryParseText(sql: string): string | null {
+  const names = dmQueryParamNames(sql);
+  if (!Array.isArray(names)) return null;
+  const parsed = dmParseSql(
+    sql,
+    names.map((k) => ({ k, type: 'text' as const, req: false, def: null })),
+  );
+  return 'problem' in parsed ? null : parsed.text;
+}
+
+/** Ответ правил разборщика (`dmSqlRules`) — причиной окна шаблона. */
+export function dmRuleQueryProblem(p: DmSqlRuleProblem): DmQueryProblem {
+  switch (p.code) {
+    case 'syntax':
+      return { code: 'syntax', error: p.message };
+    case 'two_statements':
+      return { code: 'two_statements' };
+    case 'not_select':
+    case 'write':
+      return { code: 'not_select' };
+    case 'lock':
+      return { code: 'lock' };
+    case 'function':
+    case 'system_table':
+      return { code: 'forbidden', word: p.name };
+  }
 }
 
 /**
@@ -70,7 +103,9 @@ export function dmQueryProblem(sql: string): DmQueryProblem | null {
  */
 export function dmQueryParamNames(
   sql: string,
-): string[] | Exclude<DmQueryProblem, { code: 'empty' | 'not_select' | 'forbidden' }> {
+):
+  | string[]
+  | Exclude<DmQueryProblem, { code: 'empty' | 'not_select' | 'forbidden' | 'lock' | 'syntax' }> {
   const defs: DmParamDef[] = [];
   for (;;) {
     const parsed = dmParseSql(sql, defs);

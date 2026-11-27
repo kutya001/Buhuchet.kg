@@ -14,7 +14,8 @@
     "./error-reporter": "./src/error-reporter.ts",
     "./password": "./src/password.ts",
     "./tokens": "./src/tokens.ts",
-    "./documents": "./src/documents.ts"
+    "./documents": "./src/documents.ts",
+    "./sql-parser": "./src/sql-parser.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
@@ -29,6 +30,7 @@
     "@node-rs/argon2": "^2.2.2",
     "@tesseract.js-data/kir": "1.0.0",
     "@tesseract.js-data/rus": "1.0.0",
+    "libpg-query": "17.8.2",
     "pdfjs-dist": "6.4.299",
     "pino": "catalog:",
     "tesseract.js": "7.0.0",

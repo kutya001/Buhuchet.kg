@@ -71,6 +71,11 @@ export const DATAMART_ADMIN_TEXTS = {
     ru: '«{word}» нельзя: шаблон только читает таблицы организации',
     section: E,
   },
+  'err.dm_sql_lock': {
+    ru: 'FOR UPDATE и FOR SHARE нельзя: запрос только читает и строки не блокирует',
+    section: E,
+  },
+  'err.dm_sql_syntax': { ru: 'Ошибка в запросе: {error}', section: E },
   'err.dm_sql_unclosed': { ru: 'Не закрыта кавычка или комментарий', section: E },
   'err.dm_sql_parens': {
     ru: 'Скобки не парные: у каждой «(» должна быть своя «)»',
