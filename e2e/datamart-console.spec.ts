@@ -23,7 +23,7 @@ async function run(api: APIRequestContext, origin: string, query: string) {
       data: { query, params: {} },
     });
     expect(res.status(), query).not.toBe(429);
-  }).toPass({ intervals: [300, 600, 1000], timeout: 30_000 });
+  }).toPass({ intervals: [300, 600, 1000], timeout: 15_000 });
   return res!;
 }
 
@@ -69,22 +69,31 @@ test.describe('Витрина данных: консоль запросов, э�
       );
     }
     // Запись, смена роли и настроек, ожидание, блокировка, запрос из строки, сигнал — отказ разборщика.
-    for (const query of [
-      "insert into news (id) values ('x')",
-      'update organizations set name = name',
-      'delete from organizations',
-      'with d as (delete from organizations returning id) select * from d',
-      'set role buhuchet_app',
-      "select set_config('role', 'buhuchet_app', true)",
-      'select pg_sleep(1)',
-      'select pg_advisory_lock(1)',
-      "select query_to_xml('select 1', true, true, '')",
-      'select pg_terminate_backend(1)',
-      'select pg_cancel_backend(1)',
-      'select 1; select 2',
-    ]) {
+    // Код отказа у каждого: без разборщика в образе сайта база отказала бы сама с `dm_console_error`.
+    const NOT_SELECT = 'dm_sql_not_select';
+    const FORBIDDEN = 'dm_console_forbidden';
+    for (const [query, code] of [
+      ["insert into news (id) values ('x')", NOT_SELECT],
+      ['update organizations set name = name', NOT_SELECT],
+      ['delete from organizations', NOT_SELECT],
+      ['with d as (delete from organizations returning id) select * from d', NOT_SELECT],
+      ['set role buhuchet_app', NOT_SELECT],
+      ["select set_config('role', 'buhuchet_app', true)", FORBIDDEN],
+      ['select pg_sleep(1)', FORBIDDEN],
+      ['select pg_advisory_lock(1)', FORBIDDEN],
+      ['select id from organizations for update', 'dm_sql_lock'],
+      ["select query_to_xml('select 1', true, true, '')", FORBIDDEN],
+      [
+        "select ts_rewrite('a'::tsquery, 'select ''a''::tsquery, ''b''::tsquery from pg_'||'sleep(2)')",
+        FORBIDDEN,
+      ],
+      ['select pg_terminate_backend(1)', FORBIDDEN],
+      ['select pg_cancel_backend(1)', FORBIDDEN],
+      ['select 1; select 2', 'dm_sql_two_statements'],
+    ] as const) {
       const res = await run(api, origin, query);
       expect(res.status(), query).toBe(400);
+      expect(((await res.json()) as { error: { code: string } }).error.code, query).toBe(code);
     }
 
     // «План запроса» — без выполнения.

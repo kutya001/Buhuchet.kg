@@ -171,14 +171,24 @@ describe.skipIf(!databaseAvailable())('витрина данных: консол
   });
 
   describe('«План запроса» (блок 1, пункт 3)', () => {
-    it('оценка без выполнения: pg_sleep(30) не ждёт', async () => {
-      const started = Date.now();
+    it('оценка без выполнения: pg_sleep(30) не ждёт, в плане нет замеров', async () => {
       const plan = (await explainDmConsole(db.app.db, adminId, {
         text: 'select pg_sleep(30), count(*) from organizations where id = $1::uuid',
         params: [a.orgId],
       })) as { Plan: { 'Node Type': string } }[];
-      expect(Date.now() - started).toBeLessThan(5000);
       expect(plan[0]!.Plan['Node Type']).toBeTruthy();
+      // Без ANALYZE: замеров выполнения в плане нет.
+      expect(JSON.stringify(plan)).not.toContain('Actual Total Time');
+    });
+
+    it('«;» второй оператор не выполнит: курсор принимает ровно один', async () => {
+      await expect(
+        explainDmConsole(db.app.db, adminId, {
+          text: "select 1) x; select set_config('application_name', 'buhuchet_dm_console:x', false); select * from (select 1",
+          params: [],
+        }),
+        // «cannot open multi-query plan as cursor»: без курсора EXECUTE выполнил бы все три.
+      ).rejects.toEqual(pgCode('42P11'));
     });
 
     it('секретное и не администратор — отказ', async () => {
@@ -196,21 +206,27 @@ describe.skipIf(!databaseAvailable())('витрина данных: консол
 
   describe('«Остановить» (блок 2, пункт 3)', () => {
     it('отменяет только свой запрос консоли', async () => {
-      const running = runDmConsole(db.app.db, adminId, q('select pg_sleep(20)'));
-      // Ждём, пока запрос появится в базе с меткой.
-      for (let i = 0; i < 50; i += 1) {
-        const [row] = await db.admin.db.execute<{ n: number }>(
-          sql`select count(*)::int as n from pg_stat_activity where application_name = ${dmConsoleTag(adminId)} and state = 'active'`,
-        );
-        if (row!.n > 0) break;
-        await new Promise((r) => setTimeout(r, 100));
-      }
+      // Отказ ловим сразу: иначе отмена, пришедшая раньше `await`, — «необработанный отказ» vitest.
+      const running = runDmConsole(db.app.db, adminId, q('select pg_sleep(20)')).then(
+        () => null,
+        (err: unknown) => err,
+      );
+      // Ждём, пока сам запрос (а не подготовка запуска) ждёт в базе с меткой.
+      await expect
+        .poll(
+          async () =>
+            (
+              await db.admin.db.execute<{ n: number }>(
+                sql`select count(*)::int as n from pg_stat_activity where application_name = ${dmConsoleTag(adminId)} and wait_event = 'PgSleep'`,
+              )
+            )[0]!.n,
+          { timeout: 15_000 },
+        )
+        .toBe(1);
       // Другой администратор чужой запрос не остановит.
       expect(await cancelDmConsole(db.app.db, admin2Id)).toBe(0);
-      const started = Date.now();
       expect(await cancelDmConsole(db.app.db, adminId)).toBe(1);
-      await expect(running).rejects.toEqual(pgCode('57014'));
-      expect(Date.now() - started).toBeLessThan(5000);
+      expect(await running).toEqual(pgCode('57014'));
       // Нечего останавливать — 0.
       expect(await cancelDmConsole(db.app.db, adminId)).toBe(0);
     });

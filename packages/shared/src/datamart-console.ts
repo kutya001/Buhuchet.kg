@@ -14,7 +14,11 @@ export const DM_CONSOLE_ROWS = 1000;
 /** Один оператор консоли и значения его параметров `:имя` (уходят в базу данными, не текстом). */
 export const DmConsoleInput = z.object({
   query: z.string().min(1).max(DM_QUERY_MAX),
-  params: z.record(z.string().max(60), z.string().max(DM_TEXT_PARAM_MAX).nullable()).default({}),
+  params: z
+    .record(z.string().max(60), z.string().max(DM_TEXT_PARAM_MAX).nullable())
+    // Исполнитель принимает до 20 значений (`dm.run_admin`), журнал пишет их целиком.
+    .refine((o) => Object.keys(o).length <= 20)
+    .default({}),
 });
 export type DmConsoleInput = z.infer<typeof DmConsoleInput>;
 

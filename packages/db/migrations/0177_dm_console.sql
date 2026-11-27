@@ -12,6 +12,8 @@
 --     своё соединение до конца транзакции (`application_name = 'buhuchet_dm_console:<пользователь>'`),
 --     а отмена ищет соединение по метке. Сама консоль метку не поставит: SET и set_config ей запрещены.
 -- Новая таблица — без строк, блокировок больших таблиц нет; ждём блокировку не дольше 3 с.
+-- Откат (новой миграцией): DROP FUNCTION dm.explain_admin(text, jsonb), app.dm_console_cancel(),
+-- app.dm_console_log_cleanup(); DROP TABLE dm_console_queries; — «Мои запросы» пропадут, журнал платформы цел.
 SET LOCAL lock_timeout = '3s';--> statement-breakpoint
 CREATE TABLE "dm_console_queries" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
@@ -79,6 +81,7 @@ CREATE FUNCTION dm.explain_admin(p_sql text, p_params jsonb)
   AS $$
   DECLARE
     plan json;
+    cur refcursor;
   BEGIN
     IF current_setting('transaction_read_only') <> 'on' THEN
       RAISE EXCEPTION 'dm.explain_admin: транзакция не только для чтения' USING ERRCODE = '25006';
@@ -91,8 +94,12 @@ CREATE FUNCTION dm.explain_admin(p_sql text, p_params jsonb)
       RAISE EXCEPTION 'dm.explain_admin: параметры — массив до 20 значений' USING ERRCODE = '22023';
     END IF;
     BEGIN
-      EXECUTE 'EXPLAIN (FORMAT JSON) SELECT * FROM (' || p_sql || E'\n) dm_q' INTO plan
+      -- Курсор, как у dm.run_admin: он принимает ровно один оператор («cannot open multi-query plan as
+      -- cursor»), и «;» внутри текста второй оператор не выполнит.
+      OPEN cur FOR EXECUTE 'EXPLAIN (FORMAT JSON) SELECT * FROM (' || p_sql || E'\n) dm_q'
         USING p_params->>0, p_params->>1, p_params->>2, p_params->>3, p_params->>4, p_params->>5, p_params->>6, p_params->>7, p_params->>8, p_params->>9, p_params->>10, p_params->>11, p_params->>12, p_params->>13, p_params->>14, p_params->>15, p_params->>16, p_params->>17, p_params->>18, p_params->>19;
+      FETCH cur INTO plan;
+      CLOSE cur;
     EXCEPTION WHEN query_canceled OR others THEN
       PERFORM pg_advisory_unlock_all();
       RAISE;

@@ -68,6 +68,7 @@ describe('консоль: любые функции, кроме запрещён
       'pg_try_advisory_xact_lock',
       'query_to_xml',
       'ts_stat',
+      'ts_rewrite',
       'pg_logical_emit_message',
       'pg_read_file',
       'pg_ls_dir',

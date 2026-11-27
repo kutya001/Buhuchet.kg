@@ -252,6 +252,24 @@ describe.skipIf(!databaseAvailable())('Витрина данных: шаблон
     expect(bad).toMatchObject({ ok: false, problem: 'sql' });
     if (!bad.ok)
       expect(bad.message).toBe(txt('err.dm_sql_forbidden').replace('{word}', 'pg_sleep'));
+    // Ошибка разбора — текстом самого PostgreSQL, «FOR UPDATE» — своей причиной (разборщик, этап 0, П2).
+    const syntax = await ok(
+      await admin('POST', '/check', { audience: 'admin', query: 'select 1 as n from' }),
+      200,
+      DmTemplateCheckResult,
+    );
+    expect(syntax).toMatchObject({ ok: false, problem: 'sql' });
+    if (!syntax.ok) {
+      expect(syntax.message.startsWith(txt('err.dm_sql_syntax').split('{error}')[0]!)).toBe(true);
+      expect(syntax.message).toContain('syntax error');
+    }
+    const lock = await ok(
+      await admin('POST', '/check', { audience: 'admin', query: 'select 1 as n for update' }),
+      200,
+      DmTemplateCheckResult,
+    );
+    if (!lock.ok) expect(lock.message).toBe(txt('err.dm_sql_lock'));
+    expect(lock.ok).toBe(false);
     const adm = await ok(
       await admin('POST', '/check', { audience: 'admin', query: 'select 7 as n' }),
       200,

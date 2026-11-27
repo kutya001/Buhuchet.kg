@@ -50,6 +50,8 @@ export const DM_CONSOLE_DENIED: readonly string[] = [
   'database_to_xmlschema',
   'database_to_xml_and_xmlschema',
   'ts_stat',
+  // `ts_rewrite(tsquery, text)` выполняет второй аргумент как запрос (замечание security-reviewer этапа 0).
+  'ts_rewrite',
   // Запись в журнал базы и уведомления.
   'pg_logical_emit_message',
   'pg_notify',

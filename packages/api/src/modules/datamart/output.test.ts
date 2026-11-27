@@ -4,10 +4,10 @@ import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/tes
 import { UI_TEXTS } from '@buhuchet/domain';
 import { DmCatalog, DmRunResult } from '@buhuchet/shared';
 import { and, eq, sql } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../testing';
 import { DM_RUN_RATE_LIMIT } from './output';
-import { DM_RUN_ALL_LIMIT, DM_RUN_SLOTS, runDmTemplate } from './run';
+import { DM_RUN_ALL_LIMIT, DM_RUN_SLOTS, runDmTemplate, type DmRunRequest } from './run';
 
 /*
  * «Витрина данных» → «Вывод» и каталог «Шаблоны» (доработки 20.11.2026: Витрина данных, блоки 3–4;
@@ -443,7 +443,8 @@ describe.skipIf(!databaseAvailable())('Витрина данных: «Вывод
       },
       // Ожидание (pg_sleep) исполнитель шаблонов не пустит (разборщик, доработки 27.11.2026, П2):
       // долгий запрос — подсчётом.
-      query: 'select count(*)::text as n from generate_series(1, 200000000) g',
+      // долгий запрос — подсчётом (функция в списке столбцов: без временного файла, как в load.test.ts).
+      query: 'select count(*)::text as n from (select generate_series(1, 2000000000000)) s',
       input: {},
       who: { kind: 'org', orgId: f.b.orgId, userId: f.b.ownerUserId },
       ownContractorIds: null,
@@ -460,5 +461,45 @@ describe.skipIf(!databaseAvailable())('Витрина данных: «Вывод
       .from(dmRequests)
       .where(and(eq(dmRequests.orgId, f.b.orgId), eq(dmRequests.outcome, 'timeout')));
     expect(row).toMatchObject({ error: txt('err.dm_timeout'), userId: f.b.ownerUserId });
+  });
+  it('опубликованный шаблон с функцией не из списка шаблонов работает, журнал — одна строка (п. О-102)', async () => {
+    const warn = vi.spyOn(f.deps.logger, 'warn');
+    try {
+      const input: DmRunRequest = {
+        template: {
+          id: tpl['out-total']!,
+          code: 'out-total',
+          name: 'x',
+          description: null,
+          audience: 'org',
+          module: 'cps',
+          needPermission: null,
+          state: 'published',
+          params: [],
+          columns: [{ code: 'n', name: 'n', type: 'text', total: false, contractor: false }],
+        },
+        // `pg_typeof` нет в списке функций шаблонов, но консоли он не запрещён.
+        query: 'select pg_typeof(1)::text as n',
+        input: {},
+        who: { kind: 'org', orgId: f.b.orgId, userId: f.b.ownerUserId },
+        ownContractorIds: null,
+        via: 'screen',
+        tokenId: null,
+        ip: null,
+        maxRows: 10,
+        today: '2026-11-21',
+      };
+      for (let i = 0; i < 2; i += 1) {
+        expect(await runDmTemplate(f.deps, input)).toMatchObject({ ok: true });
+      }
+      const lines = warn.mock.calls.filter(
+        ([, msg]) =>
+          msg === 'витрина: опубликованный шаблон не проходит список разрешённых функций',
+      );
+      expect(lines).toHaveLength(1);
+      expect(lines[0]![0]).toMatchObject({ template: 'out-total', rule: { code: 'function' } });
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

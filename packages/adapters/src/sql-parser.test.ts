@@ -29,6 +29,11 @@ describe('консоль: отказ на запрещённое (блок 2, п
     ['запрос из строки', "select query_to_xml('select 1', true, true, '')", 'query_to_xml'],
     ['запрос из строки (ts_stat)', "select * from ts_stat('select 1')", 'ts_stat'],
     [
+      'запрос из строки (ts_rewrite), имя собрано склейкой',
+      "select ts_rewrite('a'::tsquery, 'select ''a''::tsquery, ''b''::tsquery from pg_'||'sleep(2)')",
+      'ts_rewrite',
+    ],
+    [
       'запись в журнал',
       "select pg_logical_emit_message(true, 'x', 'y')",
       'pg_logical_emit_message',
