@@ -339,15 +339,50 @@ function systemTable(rv: Node): string | null {
  * комментарии тоже отказ), зато ожидание и блокировки не пройдут и там, где разборщика нет.
  */
 export function dmSqlDeniedWord(text: string): DmSqlRuleProblem | null {
-  const call = /((?:"[^"]+"|[a-z_][a-z0-9_$]*)\s*\.\s*)?("[^"]+"|[a-z_][a-z0-9_$]*)\s*\(/gi;
-  for (let m = call.exec(text); m; m = call.exec(text)) {
-    const unq = (w: string) => (w.startsWith('"') ? w.slice(1, -1) : w.toLowerCase());
-    const parts = m[1] ? [unq(m[1].replace(/\s*\.\s*$/, '').trim()), unq(m[2]!)] : [unq(m[2]!)];
-    const name = consoleDenied(parts);
-    if (name) return { code: 'function', name, position: m.index };
+  // Слова — одним проходом без возвратов (CodeQL: регулярное выражение с перебором на длинном вводе).
+  // Имя в кавычках («"pg_sleep"») — слово с кавычкой с обеих сторон; кавычки не склеивают текст между
+  // словами, иначе «'"', pg_sleep(1), '"'» спрятал бы вызов.
+  const tokens: { word: string; quoted: boolean; start: number; end: number }[] = [];
+  const word = /[a-z_][a-z0-9_$]*/gi;
+  for (let m = word.exec(text); m; m = word.exec(text)) {
+    const end = m.index + m[0].length;
+    const quoted = text[m.index - 1] === '"' && text[end] === '"';
+    tokens.push({
+      word: quoted ? m[0] : m[0].toLowerCase(),
+      quoted,
+      start: quoted ? m.index - 1 : m.index,
+      end: quoted ? end + 1 : end,
+    });
   }
-  const lock = /\bfor\s+(?:no\s+key\s+)?(?:update|share|key\s+share)\b/i.exec(text);
-  return lock ? { code: 'lock', position: lock.index } : null;
+  const skipSpace = (i: number) => {
+    let k = i;
+    while (k < text.length && /\s/.test(text[k]!)) k++;
+    return k;
+  };
+  /** Между словами только «.» и пробелы. */
+  const dotBetween = (a: number, b: number) => {
+    const k = skipSpace(a);
+    return text[k] === '.' && skipSpace(k + 1) === b;
+  };
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i]!;
+    if (text[skipSpace(t.end)] !== '(') continue;
+    const prev = tokens[i - 1];
+    const parts = prev && dotBetween(prev.end, t.start) ? [prev.word, t.word] : [t.word];
+    const name = consoleDenied(parts);
+    if (name) return { code: 'function', name, position: (parts.length > 1 ? prev! : t).start };
+  }
+  const bare = (i: number) => (tokens[i] && !tokens[i]!.quoted ? tokens[i]!.word : null);
+  for (let i = 0; i < tokens.length; i++) {
+    if (bare(i) !== 'for') continue;
+    let j = i + 1;
+    if (bare(j) === 'no' && bare(j + 1) === 'key') j += 2;
+    const w = bare(j);
+    const keyShare = j === i + 1 && w === 'key' && bare(j + 1) === 'share';
+    if (w === 'update' || w === 'share' || keyShare)
+      return { code: 'lock', position: tokens[i]!.start };
+  }
+  return null;
 }
 
 /**

@@ -193,5 +193,16 @@ describe('запасная проверка без разборщика (worker)
     ).toBeNull();
     // Строже разборщика: имя в строке тоже отказ — без разборщика не отличить.
     expect(dmSqlDeniedWord("select 'pg_sleep(1)'")).toMatchObject({ code: 'function' });
+    // Кавычки не склеивают текст: вызов между ними виден.
+    expect(dmSqlDeniedWord(`select '"', pg_sleep(1), '"'`)).toMatchObject({ code: 'function' });
+    expect(dmSqlDeniedWord('select "pg_catalog"."pg_sleep"(1)')).toMatchObject({
+      name: 'pg_catalog.pg_sleep',
+    });
+    expect(dmSqlDeniedWord('select * from t for key share')).toMatchObject({ code: 'lock' });
+    expect(dmSqlDeniedWord('select 1 as "for", 2 as update_count')).toBeNull();
+    // Длинный ввод без вызова: проход линейный, тест укладывается в обычный предел времени vitest.
+    expect(
+      dmSqlDeniedWord('_'.repeat(200_000) + '\t'.repeat(200_000) + 'for' + '\t'.repeat(200_000)),
+    ).toBeNull();
   });
 });
