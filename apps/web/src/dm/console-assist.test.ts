@@ -136,7 +136,7 @@ describe('sqlRefs', () => {
 
 describe('assistAt', () => {
   const at = (sql: string, opts?: { force?: boolean; org?: boolean }) =>
-    assistAt(sql.replace('|', ''), sql.indexOf('|'), index, texts, opts);
+    assistAt(sql.replaceAll('|', ''), sql.indexOf('|'), index, texts, opts);
 
   it('после «псевдоним.» — поля таблицы, и по-русски', () => {
     const r = at('SELECT c.| FROM contractors c');
