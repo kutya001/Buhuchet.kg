@@ -447,6 +447,8 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
       { id: 'tpl', icon: 'layers', label: 'tab.dm.tpl' },
       { id: 'tok', icon: 'key', label: 'tab.dm.tok', when: (a) => a.admin || a.can('dmTokens') },
       { id: 'log', icon: 'history', label: 'tab.dm.log', when: (a) => a.admin },
+      // Консоль запросов (доработки 27.11.2026: консоль запросов, этап 1, П4) — только Админка.
+      { id: 'con', icon: 'code', label: 'tab.dm.con', when: (a) => a.admin },
     ],
     add: [
       { id: 'tpl', icon: 'layers', label: 'add.dm.tpl', when: (a) => a.admin },

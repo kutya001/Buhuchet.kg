@@ -39,6 +39,7 @@ import {
   typeParts,
   type MethodCardTab,
 } from './techdocs-model';
+import { MethodConsoleButtons, methodHasConsole } from '../dm/method-console';
 import './techdocs.css';
 
 const H4 = 'm-0 mt-1.5 text-[13px] font-[650]';
@@ -623,8 +624,13 @@ function MethodCard({
         }}
         footer={
           <>
-            <Hint>{t('tdocs.card.readonly')}</Hint>
+            <Hint>
+              {t(
+                card && methodHasConsole(card) ? 'tdocs.card.readonly_con' : 'tdocs.card.readonly',
+              )}
+            </Hint>
             <div className="flex-1" />
+            {card ? <MethodConsoleButtons card={card} /> : null}
             <button type="button" className={buttonClass('cta')} onClick={onClose}>
               {t('btn.done')}
             </button>

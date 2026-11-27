@@ -15,6 +15,7 @@ import {
 import {
   bishkekDate,
   dmBind,
+  dmConsoleParamTypes,
   dmQueryParamNames,
   dmQueryParseText,
   dmQueryProblem,
@@ -199,7 +200,8 @@ async function prepare(
     return fail(dmRuleQueryProblem(rules.problem));
   }
   const names = dmQueryParamNames(input.query) as string[];
-  const defs = names.map((k) => ({ k, type: 'text' as const, req: false, def: null }));
+  const types = dmConsoleParamTypes(names, input.types);
+  const defs = names.map((k, i) => ({ k, type: types[i]!, req: false, def: null }));
   const bound = dmBind(input.query, defs, input.params, bishkekDate(deps.clock.now()));
   if (!bound.ok) {
     if (bound.error === 'sql') return fail({ code: bound.problem } as DmQueryProblem);

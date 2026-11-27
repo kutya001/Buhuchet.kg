@@ -33,11 +33,12 @@ import {
 } from '@buhuchet/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { useId, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useId, useMemo, useState, type ReactNode } from 'react';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { tabHref } from '../shell/modules';
-import { SqlField } from './sql-field';
+import { checkConsole, consoleSchemaQuery } from './console-data';
+import { SqlEditor } from './sql-editor';
 import {
   checkResultOf,
   checkTemplate,
@@ -95,12 +96,18 @@ export function TemplateEditor({
   onClose,
   onSaved,
   onCopy,
+  prefill,
+  onConsole,
 }: {
   card: DmAdminTemplateCard | null;
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
   onCopy: (id: string) => void;
+  /** «Сохранить в шаблон» из консоли: запрос, параметры и столбцы уже в окне (окно — с изменениями). */
+  prefill?: Partial<TplDraft>;
+  /** «Открыть в консоли» (блок 4, пункт 3): запрос и параметры окна — во вкладку консоли. */
+  onConsole?: (card: DmAdminTemplateCard, draft: TplDraft) => void;
 }) {
   const t = useT();
   const toast = useToast();
@@ -112,7 +119,8 @@ export function TemplateEditor({
 
   const [card, setCard] = useState(first);
   const [initial, setInitial] = useState(() => tplDraftOf(t, first));
-  const [draft, setDraft] = useState(initial);
+  const [draft, setDraft] = useState(() => (prefill ? { ...initial, ...prefill } : initial));
+  const schema = useQuery(consoleSchemaQuery);
   const [checked, setChecked] = useState(() => tplCheckedQuery(first));
   const [checkOrg, setCheckOrg] = useState<string | null>(null);
   const [result, setResult] = useState<CheckOk | null>(null);
@@ -125,6 +133,16 @@ export function TemplateEditor({
   const builtin = !!card?.builtin;
   const locked = tplLocked(card);
   const org = draft.audience === 'org';
+  // Шаблон «Для организаций»: запрещённое — словами шаблона (прототип `dmcIssues` с `org`).
+  const checkOrgSql = useCallback(
+    async (query: string) =>
+      (await checkConsole(query)).map((p) =>
+        p.code === 'dm_console_forbidden'
+          ? { ...p, message: t('err.dm_sql_forbidden', { word: query.slice(p.from, p.to) }) }
+          : p,
+      ),
+    [t],
+  );
   const orgId = checkOrg ?? orgs[0]?.id ?? null;
   const canPublish = tplQueryChecked(checked, draft.query);
   const fid = (f: string) => `${id}-${f}`;
@@ -245,7 +263,16 @@ export function TemplateEditor({
       <span className={MONO_CLASS}>{card.code}</span>
       {builtin ? <span>{`· ${t('dm.ed.builtin_sub')}`}</span> : null}
       {card.toks ? <span>{`· ${t('dm.ed.toks_sub', { n: card.toks })}`}</span> : null}
+      {/* Окно открыто из консоли с другим запросом (доработки 27.11.2026: консоль запросов, блок 4,
+          пункт 5; прототип v166 `dmEdit` — только при `sqlEd`). */}
+      {!builtin && prefill && card.query !== draft.query ? (
+        <span data-dm-ed-changed="">
+          <Pill tone="warn">{t('dm.ed.sql_changed')}</Pill>
+        </span>
+      ) : null}
     </span>
+  ) : prefill ? (
+    t('dm.ed.new_sub_con')
   ) : (
     t('dm.ed.new_sub')
   );
@@ -255,6 +282,9 @@ export function TemplateEditor({
       <button type="button" className={buttonClass('ghost')} onClick={onClose}>
         {t('btn.close')}
       </button>
+      {card && onConsole ? (
+        <ConsoleButton label={t('dm.tpl.act.console')} onGo={() => onConsole(card, draft)} />
+      ) : null}
       <button
         type="button"
         className={buttonClass('default')}
@@ -270,6 +300,9 @@ export function TemplateEditor({
       <button type="button" className={buttonClass('ghost')} onClick={onClose}>
         {t('btn.cancel')}
       </button>
+      {card && onConsole ? (
+        <ConsoleButton label={t('dm.tpl.act.console')} onGo={() => onConsole(card, draft)} />
+      ) : null}
       <button
         type="button"
         className={buttonClass('default')}
@@ -477,11 +510,15 @@ export function TemplateEditor({
               error={errors.query}
             >
               {(control) => (
-                <SqlField
+                <SqlEditor
                   control={control}
                   value={draft.query}
                   maxLength={DM_QUERY_MAX}
                   readOnly={builtin}
+                  schema={builtin ? null : (schema.data ?? null)}
+                  org={org}
+                  check={builtin ? undefined : org ? checkOrgSql : checkConsole}
+                  label={t('dm.ed.query')}
                   onChange={(query) => patch({ query }, 'query')}
                 />
               )}
@@ -784,6 +821,25 @@ function TablesHint({ t, audience }: { t: Translate; audience: TplDraft['audienc
       </ul>
       <TdocsLink label={t('dm.ed.tdocs')} />
     </details>
+  );
+}
+
+/** «Открыть в консоли» окна: уход из окна без возврата истории — переход вызывающего не отменится. */
+function ConsoleButton({ label, onGo }: { label: string; onGo: () => void }) {
+  const { leave } = useWindow();
+  return (
+    <button
+      type="button"
+      className={buttonClass('default')}
+      data-dm-ed-console=""
+      onClick={() => {
+        leave();
+        onGo();
+      }}
+    >
+      <Icon name="code" size="sm" />
+      {label}
+    </button>
   );
 }
 

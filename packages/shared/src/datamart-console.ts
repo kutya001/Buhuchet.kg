@@ -1,4 +1,4 @@
-import { DM_QUERY_MAX, DM_TEXT_PARAM_MAX } from '@buhuchet/domain';
+import { DM_PARAM_TYPES, DM_QUERY_MAX, DM_TEXT_PARAM_MAX } from '@buhuchet/domain';
 import { z } from 'zod';
 
 /*
@@ -19,6 +19,14 @@ export const DmConsoleInput = z.object({
     // Исполнитель принимает до 20 значений (`dm.run_admin`), журнал пишет их целиком.
     .refine((o) => Object.keys(o).length <= 20)
     .default({}),
+  /**
+   * Типы параметров шаблона, открытого в консоли («Открыть в консоли»): `:date_from` уходит датой,
+   * `:contractor` — номером. Нет типа — по имени (`dmConsoleParamType`).
+   */
+  types: z
+    .record(z.string().max(60), z.enum(DM_PARAM_TYPES))
+    .refine((o) => Object.keys(o).length <= 20)
+    .optional(),
 });
 export type DmConsoleInput = z.infer<typeof DmConsoleInput>;
 
@@ -77,3 +85,79 @@ export const DmSchemaMap = z.object({
   described: z.string().nullable(),
 });
 export type DmSchemaMap = z.infer<typeof DmSchemaMap>;
+
+/*
+ * Этап 1 (П4–П5; docs/decisions.md п. О-69): «Мои запросы» — личные запросы администратора
+ * (`/api/admin/dm/console/queries`), «История» — свои последние 100 запусков из журнала консоли,
+ * проверка по ходу набора — `POST …/console/check` (ошибки разборщика с местом в тексте).
+ */
+
+/** Сколько запусков показывает «История» (блок 4, пункт 2). */
+export const DM_CONSOLE_HISTORY_MAX = 100;
+/** Название запроса «Моих запросов» и предел текста (таблица `dm_console_queries`). */
+export const DM_CONSOLE_QUERY_NAME_MAX = 200;
+export const DM_CONSOLE_QUERY_TEXT_MAX = 20_000;
+
+const ConsoleParams = z
+  .record(z.string().max(60), z.string().max(DM_TEXT_PARAM_MAX).nullable())
+  .refine((o) => Object.keys(o).length <= 20);
+
+/** Запрос «Моих запросов». */
+export const DmConsoleQuery = z.object({
+  id: z.uuid(),
+  name: z.string(),
+  query: z.string(),
+  params: z.record(z.string(), z.string().nullable()),
+  updatedAt: z.string(),
+  version: z.number().int().positive(),
+});
+export type DmConsoleQuery = z.infer<typeof DmConsoleQuery>;
+
+/** «Сохранить в Мои запросы»: название, текст, значения параметров; изменить — ещё и версия. */
+export const DmConsoleQuerySave = z.object({
+  name: z.string().trim().min(1).max(DM_CONSOLE_QUERY_NAME_MAX),
+  query: z.string().min(1).max(DM_CONSOLE_QUERY_TEXT_MAX),
+  params: ConsoleParams.default({}),
+});
+export type DmConsoleQuerySave = z.infer<typeof DmConsoleQuerySave>;
+
+export const DmConsoleQueryUpdate = DmConsoleQuerySave.extend({
+  version: z.number().int().positive(),
+});
+export type DmConsoleQueryUpdate = z.infer<typeof DmConsoleQueryUpdate>;
+
+export const DmConsoleQueryList = z.object({ items: z.array(DmConsoleQuery) });
+export type DmConsoleQueryList = z.infer<typeof DmConsoleQueryList>;
+
+/** Строка «Истории»: запуск из журнала консоли. */
+export const DmConsoleRun = z.object({
+  id: z.number().int(),
+  at: z.string(),
+  action: z.enum(['dm_console_run', 'dm_console_export']),
+  query: z.string(),
+  params: z.record(z.string(), z.string().nullable()),
+  outcome: z.enum(['ok', 'error', 'timeout', 'stopped', 'refused']),
+  rows: z.number().int().nullable(),
+  ms: z.number().int().nullable(),
+  error: z.string().nullable(),
+});
+export type DmConsoleRun = z.infer<typeof DmConsoleRun>;
+
+export const DmConsoleHistory = z.object({ items: z.array(DmConsoleRun) });
+export type DmConsoleHistory = z.infer<typeof DmConsoleHistory>;
+
+/** Проверка по ходу набора: текст оператора (не выполняется и в журнал не пишется). */
+export const DmConsoleCheckInput = z.object({ query: z.string().max(DM_QUERY_MAX) });
+export type DmConsoleCheckInput = z.infer<typeof DmConsoleCheckInput>;
+
+/** Ошибка текста с местом (с нуля, `to` — не включая) и словами. */
+export const DmConsoleProblem = z.object({
+  from: z.number().int().nonnegative(),
+  to: z.number().int().nonnegative(),
+  code: z.string(),
+  message: z.string(),
+});
+export type DmConsoleProblem = z.infer<typeof DmConsoleProblem>;
+
+export const DmConsoleCheck = z.object({ problems: z.array(DmConsoleProblem) });
+export type DmConsoleCheck = z.infer<typeof DmConsoleCheck>;

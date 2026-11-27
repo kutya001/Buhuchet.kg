@@ -1,6 +1,7 @@
 import type { ApiDeps } from '../../deps';
 import { createModuleApp } from '../../module';
 import { CONSOLE_ROUTES, consoleHandlers } from './console';
+import { CONSOLE_QUERY_ROUTES, consoleQueryHandlers } from './console-queries';
 import { EXT_ROUTE, extHandler } from './ext';
 import { OUTPUT_ROUTES, outputHandlers } from './output';
 import { REQUEST_ROUTES, requestHandlers } from './requests';
@@ -29,6 +30,8 @@ export function datamartModule(deps: ApiDeps) {
   const tpl = templateAdminHandlers(deps);
   const T = TEMPLATE_ADMIN_ROUTES;
   const con = consoleHandlers(deps);
+  const conq = consoleQueryHandlers(deps);
+  const Q = CONSOLE_QUERY_ROUTES;
   return (
     createModuleApp()
       .openapi(OUTPUT_ROUTES.catalog, out.catalog)
@@ -75,5 +78,12 @@ export function datamartModule(deps: ApiDeps) {
       .openapi(CONSOLE_ROUTES.stop, con.stop)
       .openapi(CONSOLE_ROUTES.export, con.exportFile)
       .openapi(CONSOLE_ROUTES.schema, con.schema)
+      // Этап 1 (П4–П5): «Мои запросы», «История», проверка по ходу набора.
+      .openapi(Q.list, conq.list)
+      .openapi(Q.create, conq.create)
+      .openapi(Q.update, conq.update)
+      .openapi(Q.remove, conq.remove)
+      .openapi(Q.history, conq.history)
+      .openapi(Q.check, conq.check)
   );
 }

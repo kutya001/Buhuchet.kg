@@ -208,12 +208,13 @@ describe('вкладки и «+ Добавить» по правам и учёт
     expect(ids(addActions('dm', viewer))).toEqual(['ask']);
   });
 
-  it('«Витрина данных» → «Журнал запросов» — только у Админки: вкладки Админки ровно «Вывод», «Шаблоны», «API Токены», «Журнал запросов»', () => {
+  it('«Витрина данных» → «Журнал запросов» и «Консоль» — только у Админки: вкладки Админки ровно «Вывод», «Шаблоны», «API Токены», «Журнал запросов», «Консоль»', () => {
     expect(ids(visibleTabs('dm', shellAccess(me({ admin: true }))))).toEqual([
       'out',
       'tpl',
       'tok',
       'log',
+      'con',
     ]);
     expect(ids(visibleTabs('dm', shellAccess(me())))).toEqual(['out', 'tpl', 'tok']);
     const viewer = shellAccess(
