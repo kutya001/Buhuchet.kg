@@ -497,10 +497,10 @@
       "code": "socip",
       "rule": {
         "period": "M",
-        "dueDay": 20,
-        "dueAfter": 1,
+        "dueDay": 1,
+        "dueAfter": 0,
         "dueMonth": null,
-        "dueFrom": "end",
+        "dueFrom": "start",
         "oneOff": false,
         "act": "pay",
         "payDay": null,
@@ -511,7 +511,7 @@
       "authority": "Соцфонд",
       "payments": [{ "name": "Страховые взносы ИП за себя", "authority": "Соцфонд" }],
       "expected": {
-        "due": "до 20-го числа месяца после отчётного",
+        "due": "оплата до 1-го числа месяца, за который платится",
         "pay": "как срок сдачи",
         "pays": "Страховые взносы ИП за себя"
       }
