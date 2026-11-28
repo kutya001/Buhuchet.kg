@@ -12,14 +12,16 @@ import { useShell } from '../shell/context';
 import { tabHref } from '../shell/modules';
 import { consoleSchemaQuery } from './console-data';
 import { methodSqlOf, methodToConsole } from './console-model';
+import { buildStore } from './build-store';
 import { consoleOpen } from './console-store';
 
 /**
  * Запрос метода API → консоль (доработки 27.11.2026: консоль запросов, блок 5; этап 1, П6; прототип v166
  * `dmcFromMethod`): по свежей карточке метода — точный SQL (только GET), перестроенный в SELECT, в своей
  * вкладке консоли; «Создать шаблон на основе» — та же вкладка и сразу окно шаблона. Метод ничего не
- * выполняет: кнопки только передают текст. У списка методов признака SQL нет — без точного SQL нажатие
- * отвечает уведомлением (docs/deviations.md п. О-103).
+ * выполняет: кнопки только передают текст. Метод чтения без точного SQL (запрос написан кодом) — окно
+ * «Собрать запрос» с таблицами, которые метод читает (этап 2, П9; прототип v167 `dmcMethodBuild`); у
+ * списка методов признака SQL нет, поэтому так отвечают и его кнопки (docs/deviations.md п. О-103).
  */
 export function useMethodConsole() {
   const t = useT();
@@ -43,6 +45,7 @@ export function useMethodConsole() {
           });
         }
       }
+      if (card.method === 'GET' && !methodSqlOf(card)) return buildByMethod(card, t);
       const schema = await client.fetchQuery(consoleSchemaQuery).catch(() => null);
       const open = methodToConsole(
         card,
@@ -65,6 +68,24 @@ export function useMethodConsole() {
   );
 }
 
+/**
+ * «Собрать запрос по таблицам метода» (блок 5, пункт 3; прототип `dmcMethodBuild`): таблицы, которые
+ * метод читает, — в сборщик; вкладка получит пометку метода «Собрано по таблицам метода: …».
+ */
+export function buildByMethod(card: AdminApiMethodCard, t: ReturnType<typeof useT>) {
+  const names = card.reads.map((x) => x.name);
+  const from = `${card.method} ${card.path}`;
+  buildStore.open(names, {
+    method: from,
+    notes: {
+      from,
+      changed: [{ code: 'built', vars: { list: names.join(', ') || t('dm.b.none_list') } }],
+      replace: [],
+      money: [],
+    },
+  });
+}
+
 /** У метода есть кнопки консоли: метод чтения с точным SQL (прототип `dmcMethodSql`). */
 export const methodHasConsole = (card: AdminApiMethodCard) =>
   card.method === 'GET' && methodSqlOf(card) !== null;
@@ -77,6 +98,22 @@ export function MethodConsoleButtons({ card }: { card: AdminApiMethodCard }) {
   const t = useT();
   const { leave } = useWindow();
   const toConsole = useMethodConsole();
+  if (card.method === 'GET' && !methodSqlOf(card)) {
+    return (
+      <button
+        type="button"
+        className={buttonClass('default')}
+        data-td-bld=""
+        onClick={() => {
+          leave();
+          buildByMethod(card, t);
+        }}
+      >
+        <Icon name="layers" size="sm" />
+        {t('dm.b.method')}
+      </button>
+    );
+  }
   if (!methodHasConsole(card)) return null;
   const go = (toTemplate: boolean) => {
     leave();

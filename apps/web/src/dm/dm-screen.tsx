@@ -46,7 +46,13 @@ export function DmScreen({ tab }: { tab: string }) {
   let body;
   if (tab === 'tok') body = <TokensTab side={side} />;
   else if (tab === 'log' && access.admin) body = <RequestsTab />;
-  else if (tab === 'con' && access.admin) body = <ConsoleTab toTemplate={templates.fromConsole} />;
+  else if (tab === 'con' && access.admin)
+    body = (
+      <ConsoleTab
+        toTemplate={templates.fromConsole}
+        onTplConsole={(id) => void templates.toConsole(id)}
+      />
+    );
   else if (tab === 'tpl') {
     body = access.admin ? (
       <TemplatesAdminTab />

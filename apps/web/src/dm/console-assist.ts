@@ -293,7 +293,9 @@ export function assistAt(
     const alias = sql.slice(a, from - 1).toLowerCase();
     const table = index.tables.get(aliases.get(alias) ?? alias);
     if (!table) return null;
+    // Шаблон «Для организаций» и «Выполнять как организация» закрытого не предлагают (прототип v167).
     const items = table.fields
+      .filter((f) => !opts.org || f.orgVisible)
       .filter((f) => !pl || f.name.startsWith(pl) || (f.title ?? '').toLowerCase().includes(pl))
       .map<AssistItem>((f) => ({
         label: f.name,
@@ -319,12 +321,13 @@ export function assistAt(
               ? 2
               : 3;
     const items = [...index.tables.values()]
+      .filter((t) => !opts.org || t.orgVisible)
       .filter((t) => !pl || t.name.includes(pl) || (t.title ?? '').toLowerCase().includes(pl))
       .sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name))
       .slice(0, 40)
       .map<AssistItem>((t) => ({
         label: t.name,
-        detail: (t.title ?? '') + (opts.org && !t.orgVisible ? ` · ${texts.closed}` : ''),
+        detail: t.title ?? '',
         apply: t.name,
         type: 'table',
       }));

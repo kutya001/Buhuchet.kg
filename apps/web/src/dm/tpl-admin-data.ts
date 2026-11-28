@@ -82,3 +82,16 @@ export const setTemplateState = (id: string, body: DmTemplateStateInput) =>
 
 /** Ответ сохранения, копии и смены состояния — окно шаблона. */
 export const templateCardOf = (data: unknown) => DmAdminTemplateCard.safeParse(data);
+
+/**
+ * Готовые шаблоны платформы для «Заготовок» консоли (этап 2, П8; прототип `DM_TPL.filter(src ===
+ * 'system')`): весь список шаблонов одной страницей, по названию; на экране — только готовые.
+ */
+export const systemTemplatesQuery = queryOptions({
+  queryKey: ['dm', 'admin', 'tpl-system'],
+  queryFn: async () => {
+    const res = await tpl().$get({ query: { size: 'all', sort: 'name.asc' } });
+    if (!res.ok) throw await apiFailure(res);
+    return DmAdminTemplateList.parse(await res.json()).items.filter((x) => x.builtin);
+  },
+});

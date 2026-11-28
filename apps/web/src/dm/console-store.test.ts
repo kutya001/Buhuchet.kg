@@ -110,6 +110,20 @@ describe('consoleStore', () => {
     expect(consoleStore.get().tabs.some((x) => x.mine)).toBe(false);
   });
 
+  it('вкладка «Заготовок» и «Собрать запрос» помнит, откуда она; из браузера — только известное (этап 2, П8–П9)', async () => {
+    const { consoleOpen, consoleStore } = await load();
+    consoleOpen('u1', { sql: 'SELECT 1', name: 'Заготовка', src: 'pre' });
+    consoleOpen('u1', { sql: 'SELECT 2', name: 'Сборка: reports', src: 'build' });
+    expect(consoleStore.get().tabs.map((x) => x.src)).toEqual([null, 'pre', 'build']);
+    const saved = JSON.parse(storage.data.get('bh_dmcon_u1')!) as { tabs: { src: unknown }[] };
+    saved.tabs[1]!.src = 'evil';
+    storage.data.set('bh_dmcon_u1', JSON.stringify(saved));
+    vi.resetModules();
+    const again = await load();
+    again.consoleStore.ensure('u1');
+    expect(again.consoleStore.get().tabs.map((x) => x.src)).toEqual([null, null, 'build']);
+  });
+
   it('выход стирает вкладки всех входов; без входа в браузер ничего не пишется', async () => {
     const { consoleStore, consoleOpen, forgetConsoleTabs } = await load();
     consoleStore.ensure('u1');

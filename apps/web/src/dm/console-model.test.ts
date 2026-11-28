@@ -155,8 +155,15 @@ describe('methodToConsole', () => {
         description: null,
         orgVisible: true,
         fields: [
-          { name: 'name', type: 'text', title: null, description: null, ref: null },
-          { name: 'id', type: 'uuid', title: null, description: null, ref: null },
+          {
+            name: 'name',
+            type: 'text',
+            title: null,
+            description: null,
+            ref: null,
+            orgVisible: true,
+          },
+          { name: 'id', type: 'uuid', title: null, description: null, ref: null, orgVisible: true },
         ],
       },
     ],

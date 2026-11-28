@@ -458,7 +458,9 @@ export type DmRewriteCode =
   | 'svc'
   | 'cut'
   | 'closed_tables'
-  | 'closed_fields';
+  | 'closed_fields'
+  // Метод без точного SQL собран по своим таблицам (этап 2, П9; прототип `dmcMethodBuild`).
+  | 'built';
 export interface DmRewriteNote {
   code: DmRewriteCode;
   vars: Record<string, string>;

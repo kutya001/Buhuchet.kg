@@ -180,4 +180,19 @@ describe('сообщение страницы схемы', () => {
     expect(schemaPageMessage({ tdx: 1, full: true })).toEqual({ full: true });
     expect(schemaPageMessage({ tdx: 1, esc: 1 })).toEqual({ esc: true });
   });
+
+  it('«Собрать запрос»: от одной до пяти таблиц именами, мусор отбрасывается (этап 2, П9)', () => {
+    expect(schemaPageMessage({ tdx: 1, build: ['reports', 'contractors'] })).toEqual({
+      build: ['reports', 'contractors'],
+    });
+    expect(schemaPageMessage({ tdx: 1, build: [] })).toEqual({});
+    expect(schemaPageMessage({ tdx: 1, build: 'reports' })).toEqual({});
+    expect(schemaPageMessage({ tdx: 1, build: ['a', 'b', 'c', 'd', 'e', 'f'] })).toEqual({});
+    expect(schemaPageMessage({ tdx: 1, build: ['reports', 5] })).toEqual({});
+    expect(schemaPageMessage({ tdx: 1, build: ['Reports'] })).toEqual({});
+    expect(schemaPageMessage({ tdx: 1, build: ['reports; drop table x'] })).toEqual({});
+    expect(schemaPageMessage({ tdx: 1, build: ['public.reports'] })).toEqual({});
+    expect(schemaPageMessage({ tdx: 1, build: ['a'.repeat(64)] })).toEqual({});
+    expect(schemaPageMessage({ tdx: 1, build: [{ toString: () => 'reports' }] })).toEqual({});
+  });
 });

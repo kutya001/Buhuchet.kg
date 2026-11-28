@@ -7,6 +7,10 @@ import type { Db } from './client';
  * этап 0, П3): таблицы и поля — из самой базы, ровно то, что может прочитать роль шаблонов Админки
  * (`buhuchet_dm_admin`): закрытые таблицы и секретные поля (`DM_CLOSED_TABLES`, `DM_SECRET_COLUMNS`)
  * не попадают. Названия и описания добавляет API из схемы прототипа (`techdocs`).
+ *
+ * Связь поля — внешний ключ из одного столбца или составной «поле + `org_id`» (так связаны записи
+ * организации: `(contractor_id, org_id) → contractors(id, org_id)`); без второго вида «Собрать запрос»
+ * (этап 2, П9) не видел связей отчётов, денег и задач с контрагентом.
  */
 export interface DmSchemaColumnRow {
   table: string;
@@ -42,9 +46,15 @@ export async function dmSchemaColumns(db: Db, adminUserId: string): Promise<DmSc
         select rc.relname as ref_table, ra.attname as ref_column
         from pg_catalog.pg_constraint k
         join pg_catalog.pg_class rc on rc.oid = k.confrelid
-        join pg_catalog.pg_attribute ra on ra.attrelid = k.confrelid and ra.attnum = k.confkey[1]
-        where k.conrelid = c.oid and k.contype = 'f' and cardinality(k.conkey) = 1
-          and k.conkey[1] = a.attnum
+        cross join lateral unnest(k.conkey, k.confkey) as p(src, dst)
+        join pg_catalog.pg_attribute ra on ra.attrelid = k.confrelid and ra.attnum = p.dst
+        where k.conrelid = c.oid and k.contype = 'f' and p.src = a.attnum
+          and not exists (
+            select 1 from unnest(k.conkey) as o(n)
+            join pg_catalog.pg_attribute oa on oa.attrelid = c.oid and oa.attnum = o.n
+            where o.n <> a.attnum and oa.attname <> 'org_id'
+          )
+        order by cardinality(k.conkey), k.conname
         limit 1
       ) fk on true
       where c.relnamespace = 'public'::regnamespace and c.relkind in ('r', 'p', 'v')

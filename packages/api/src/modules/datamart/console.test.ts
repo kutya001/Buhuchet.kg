@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { releaseRateLimit, schema, takeRateLimit } from '@buhuchet/db';
 import { DM_BUILTIN_SQL } from '@buhuchet/db/seed';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
-import { UI_TEXTS } from '@buhuchet/domain';
+import { DM_CONSOLE_PRESETS, UI_TEXTS } from '@buhuchet/domain';
 import { DmConsolePlan, DmConsoleResult, DmConsoleStopped, DmSchemaMap } from '@buhuchet/shared';
 import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -566,6 +566,17 @@ describe.skipIf(!databaseAvailable())('Витрина данных: консол
       expect(map.tables.find((t) => t.name === 'platform_leads')?.orgVisible).toBe(false);
       // Поле — своей отметкой (этап 2, П7): открытая таблица — открытые поля.
       expect(cps.fields.find((x) => x.name === 'name')?.orgVisible).toBe(true);
+      // Составной ключ «поле + org_id» — тоже связь (сборщик запроса, этап 2, П9); сам `org_id`
+      // такого ключа — связь с организацией, а не с контрагентом.
+      const reports = map.tables.find((t) => t.name === 'reports')!;
+      expect(reports.fields.find((x) => x.name === 'contractor_id')?.ref).toEqual({
+        table: 'contractors',
+        field: 'id',
+      });
+      expect(reports.fields.find((x) => x.name === 'org_id')?.ref).toEqual({
+        table: 'organizations',
+        field: 'id',
+      });
     });
 
     it('названия, группы и описания — из схемы прототипа; поля без описания — пусто', async () => {
@@ -612,6 +623,22 @@ describe.skipIf(!databaseAvailable())('Витрина данных: консол
         group: null,
       });
     });
+  });
+
+  describe('«Заготовки» (этап 2, П8; прототип v167 DMC_PRE)', () => {
+    it.each(DM_CONSOLE_PRESETS.map((p) => [p.id, p.sql] as const))(
+      'заготовка %s проходит разборщик и выполняется',
+      async (_id, query) => {
+        const params = Object.fromEntries(
+          [...new Set([...query.matchAll(/(?<!:):([a-z_][a-z0-9_]*)/g)].map((m) => m[1]!))].map(
+            (k) => [k, k.includes('month') ? '2026-11' : '2026-11-01'],
+          ),
+        );
+        const res = await ok(await run(query, params), DmConsoleResult);
+        expect(res.columns.length).toBeGreaterThan(0);
+        expect(res.params.sort()).toEqual(Object.keys(params).sort());
+      },
+    );
   });
 
   describe('шаблоны и токены: разборщик (блок 2, пункты 7–8)', () => {

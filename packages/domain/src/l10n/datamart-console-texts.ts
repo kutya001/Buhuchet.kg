@@ -37,9 +37,64 @@ export const DATAMART_CONSOLE_TEXTS = {
     ru: 'Запрос метода не SELECT: шаблон из него не сделать',
     section: S,
   },
-  'dm.con.pre.title': { ru: 'Заготовки появятся в следующей версии', section: S },
   'dm.con.pre.text': {
-    ru: 'Частые запросы и образцы конструкций. Запрос готового шаблона открывается в консоли из вкладки «Шаблоны» — кнопкой «Открыть в консоли».',
+    ru: 'Частые запросы и образцы конструкций. Удалённые и заменённые записи уже исключены, деньги — в тыйынах.',
+    section: S,
+  },
+  'dm.con.pre.sys': { ru: 'Готовые шаблоны · {n}', section: S },
+  'dm.con.pre.rep-resp': { ru: 'Отчёты контрагентов с ответственным', section: S },
+  'dm.con.pre.rep-resp.d': {
+    ru: 'Отчёт, срок, статус и ответственный сотрудник; замененные отчёты исключены',
+    section: S,
+  },
+  'dm.con.pre.by-month': { ru: 'Итоги по месяцам: отчёты и налоги', section: S },
+  'dm.con.pre.by-month.d': {
+    ru: 'Группировка по месяцу срока: число отчётов и сумма налогов в сомах',
+    section: S,
+  },
+  'dm.con.pre.tax-debt': { ru: 'Долг по оплате налогов', section: S },
+  'dm.con.pre.tax-debt.d': {
+    ru: 'Начислено, оплачено и остаток по контрагенту — только где есть долг',
+    section: S,
+  },
+  'dm.con.pre.with': { ru: 'Подзапрос WITH: отчёты и оплаты без задвоения', section: S },
+  'dm.con.pre.with.d': {
+    ru: 'Каждая таблица считается своим подзапросом и соединяется с контрагентом — суммы не задваиваются',
+    section: S,
+  },
+  'dm.con.pre.som': { ru: 'Перевод тыйынов в сомы', section: S },
+  'dm.con.pre.som.d': {
+    ru: 'В базе деньги — целые тыйыны: делим на 100.0 и округляем до копеек (тыйынов)',
+    section: S,
+  },
+  'dm.con.pre.overdue': { ru: 'Просроченные отчёты на сегодня', section: S },
+  'dm.con.pre.overdue.d': {
+    ru: 'Срок прошёл, отчёт не сдан; сколько дней просрочки',
+    section: S,
+  },
+  'dm.con.pre.fee-period': { ru: 'Оплаты за обслуживание за период', section: S },
+  'dm.con.pre.fee-period.d': {
+    ru: 'Параметры :date_from и :date_to; удалённые оплаты исключены',
+    section: S,
+  },
+  'dm.con.pre.ops-month': { ru: 'Операции по деньгам за месяц', section: S },
+  'dm.con.pre.ops-month.d': {
+    ru: 'Параметр :month (ГГГГ-ММ); отменённые операции исключены',
+    section: S,
+  },
+  'dm.con.pre.filter': { ru: 'Задачи сотрудников: FILTER', section: S },
+  'dm.con.pre.filter.d': {
+    ru: 'Число задач по статусам в одной строке на сотрудника — агрегат с FILTER',
+    section: S,
+  },
+  'dm.con.pre.window': { ru: 'Нарастающий итог: оконная функция', section: S },
+  'dm.con.pre.window.d': {
+    ru: 'sum(…) OVER (PARTITION BY … ORDER BY …) — налоги контрагента нарастающим итогом',
+    section: S,
+  },
+  'dm.con.pre.no-resp': { ru: 'Контрагенты без ответственного', section: S },
+  'dm.con.pre.no-resp.d': {
+    ru: 'Обслуживаемые контрагенты, за которыми не закреплён сотрудник',
     section: S,
   },
   'dm.con.mine.tab': { ru: 'Мои запросы · {n}', section: S },
@@ -138,6 +193,21 @@ export const DATAMART_CONSOLE_TEXTS = {
     ru: 'Сохранённых запросов нет: сохраните запрос в консоли на ПК.',
     section: S,
   },
+  // «Выполнять как» (этап 2, П7; прототип v167 `#dmc-as`)
+  'dm.con.as': { ru: 'Выполнять как', section: S },
+  'dm.con.as.adm': { ru: 'Администратор', section: S },
+  'dm.con.as.org': { ru: 'Организация «{name}»', section: S },
+  'dm.con.as.org_demo': { ru: 'Организация «{name}» (демо)', section: S },
+  'dm.con.as.hint_adm': {
+    ru: 'Роль шаблонов администратора: все организации, без секретов; до 60 секунд',
+    section: S,
+  },
+  'dm.con.as.hint_org': {
+    ru: 'Запрос идёт ролью организаций от «{name}»: видно ровно то, что видит она, таблицы платформы закрыты. Пределы — как у «Показать»: 15 секунд, 50 000 строк',
+    section: S,
+  },
+  'dm.con.res_as': { ru: 'Выполнено как организация «{name}»', section: S },
+  'dm.con.hist.as': { ru: 'как «{name}»', section: S },
   // Подсказки и карточка редактора (блок 3)
   'dm.con.money': { ru: 'Деньги', section: S },
   'dm.con.money_tag': { ru: 'деньги в тыйынах', section: S },
@@ -224,4 +294,77 @@ export const DATAMART_CONSOLE_TEXTS = {
     ru: 'Дайте столбцу имя через AS: без него нет столбца вывода',
     section: S,
   },
+  // Консоль, этап 2, П7: автостолбец при «Сохранить в шаблон» (прототип `dmcToTpl`).
+  'dm.con.cp_auto': {
+    ru: 'Добавлен столбец contractor_id — «Контрагент (для области)»',
+    section: S,
+  },
+  'dm.con.cp_auto_mod': {
+    ru: 'Добавлен столбец contractor_id — «Контрагент (для области)». Модуль шаблона: «{module}»',
+    section: S,
+  },
+  // Консоль, этап 2, П9: «Собрать запрос» (прототип v167 vitrina-builder.js).
+  'dm.con.rw.built': { ru: 'Собрано по таблицам метода: {list}', section: S },
+  'dm.b.title': { ru: 'Собрать запрос', section: S },
+  'dm.b.sub': { ru: 'Отмечено {n} из {max} · путь связей — по внешним ключам базы', section: S },
+  'dm.b.sub_method': {
+    ru: 'Отмечено {n} из {max} · путь связей — по внешним ключам базы · таблицы метода {method}',
+    section: S,
+  },
+  'dm.b.cut': {
+    ru: 'У метода больше {max} таблиц: отмечены первые {max}. Лишние уберите, нужные добавьте ниже.',
+    section: S,
+  },
+  'dm.b.via': { ru: 'промежуточная', section: S },
+  'dm.b.del': { ru: 'Убрать таблицу', section: S },
+  'dm.b.via_hint': {
+    ru: 'Прямой связи нет: система добавила «{name}», чтобы соединить таблицы.',
+    section: S,
+  },
+  'dm.b.link': { ru: 'Связь: {link}', section: S },
+  'dm.b.link_many': { ru: 'Связь: {link} — много строк на одну «{parent}»', section: S },
+  'dm.b.first': { ru: 'Первая таблица: от неё идёт запрос', section: S },
+  'dm.b.path': { ru: 'Путь связей · {n}', section: S },
+  'dm.b.path_hint': { ru: 'Несколько путей: выберите, по какой связи соединять', section: S },
+  'dm.b.none': {
+    ru: '«{name}»: связи с остальными таблицами не нашлось за {depth} шага. Уберите её или добавьте таблицу, через которую они связаны.',
+    section: S,
+  },
+  'dm.b.none_del': { ru: 'Убрать', section: S },
+  'dm.b.add': { ru: 'Добавить таблицу', section: S },
+  'dm.b.rows': { ru: 'Какие строки', section: S },
+  'dm.b.left': { ru: 'Все строки первой таблицы, даже без пары', section: S },
+  'dm.b.inner': { ru: 'Только строки с парой', section: S },
+  'dm.b.alive': {
+    ru: 'Удалённые и заменённые записи исключены сразу: deleted_at IS NULL, NOT superseded — суммы совпадут с программой',
+    section: S,
+  },
+  'dm.b.dbl': { ru: 'Суммы задвоятся.', section: S },
+  'dm.b.dbl_text': {
+    ru: '{list} — много строк на одного: каждая строка одной таблицы повторится для каждой строки другой.',
+    section: S,
+  },
+  'dm.b.dbl_sep': {
+    ru: '«Считать итоги отдельно» — каждая из них считается своим подзапросом.',
+    section: S,
+  },
+  'dm.b.and': { ru: 'и', section: S },
+  'dm.b.sep': { ru: 'Считать итоги отдельно', section: S },
+  'dm.b.sep_on': { ru: 'Итоги считаются отдельно', section: S },
+  'dm.b.name': { ru: 'Сборка: {list}', section: S },
+  'dm.b.no_db': { ru: 'Нет описания базы: сборщик берёт связи из него', section: S },
+  'dm.b.no_method_tables': { ru: 'У метода нет таблиц базы, которые он читает', section: S },
+  'dm.b.no_tables': { ru: 'Отметьте хотя бы одну таблицу', section: S },
+  'dm.b.none_list': { ru: '—', section: S },
+  'dm.b.method': { ru: 'Собрать запрос по таблицам метода', section: S },
+  'dm.b.pick': { ru: 'Собрать запрос', section: S },
+  'dm.b.pick_hint': {
+    ru: 'Нажмите на таблицы, которые соединить: до {max}. Отмечено {n}.',
+    section: S,
+  },
+  'dm.b.pick_hint_list': {
+    ru: 'Нажмите на таблицы, которые соединить: до {max}. Отмечено {n}: {list}.',
+    section: S,
+  },
+  'dm.b.pick_go': { ru: 'Собрать · {n}', section: S },
 } as const satisfies Record<string, UiTextDefault>;
