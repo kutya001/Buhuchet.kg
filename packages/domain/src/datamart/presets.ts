@@ -13,15 +13,15 @@ export interface DmConsolePreset {
 
 export const DM_CONSOLE_PRESETS = [
   {
-    id: 'rep-resp',
+    id: 'rep_resp',
     sql: 'SELECT c.id AS contractor_id, c.name AS cp, t.short_name AS rep, r.period_start, r.due_date, r.status,\n       e.short_name AS resp\nFROM reports r\nJOIN contractors c ON c.id = r.contractor_id\nJOIN report_types t ON t.code = r.report_type_code\nLEFT JOIN employees e ON e.id = r.responsible_employee_id\nWHERE NOT r.superseded\nORDER BY r.due_date, c.name',
   },
   {
-    id: 'by-month',
+    id: 'by_month',
     sql: "SELECT to_char(r.due_date, 'YYYY-MM') AS month, count(*) AS reports,\n       round(sum(coalesce(r.amount, 0)) / 100.0, 2) AS amount_som\nFROM reports r\nWHERE NOT r.superseded\nGROUP BY to_char(r.due_date, 'YYYY-MM')\nORDER BY month",
   },
   {
-    id: 'tax-debt',
+    id: 'tax_debt',
     sql: 'SELECT c.id AS contractor_id, c.name AS cp, sum(r.amount) AS amount, sum(coalesce(r.paid, 0)) AS paid,\n       sum(r.amount - coalesce(r.paid, 0)) AS debt\nFROM reports r\nJOIN contractors c ON c.id = r.contractor_id\nWHERE NOT r.superseded AND r.amount > coalesce(r.paid, 0)\nGROUP BY c.id, c.name\nORDER BY debt DESC',
   },
   {
@@ -37,11 +37,11 @@ export const DM_CONSOLE_PRESETS = [
     sql: "SELECT c.id AS contractor_id, c.name AS cp, t.short_name AS rep, r.due_date,\n       current_date - r.due_date AS days\nFROM reports r\nJOIN contractors c ON c.id = r.contractor_id\nJOIN report_types t ON t.code = r.report_type_code\nWHERE NOT r.superseded AND r.status IN ('todo', 'in_progress', 'needs_fix') AND r.due_date < current_date\nORDER BY days DESC",
   },
   {
-    id: 'fee-period',
+    id: 'fee_period',
     sql: 'SELECT c.id AS contractor_id, c.name AS cp, count(*) AS payments, sum(f.amount) AS paid\nFROM fee_payments f\nJOIN contractors c ON c.id = f.contractor_id\nWHERE f.deleted_at IS NULL AND f.paid_on BETWEEN :date_from AND :date_to\nGROUP BY c.id, c.name\nORDER BY paid DESC',
   },
   {
-    id: 'ops-month',
+    id: 'ops_month',
     sql: "SELECT c.id AS contractor_id, c.name AS cp, m.op_date, m.kind, m.amount\nFROM money_operations m\nLEFT JOIN contractors c ON c.id = m.contractor_id\nWHERE m.cancelled_at IS NULL AND to_char(m.op_date, 'YYYY-MM') = :month\nORDER BY m.op_date, c.name",
   },
   {
@@ -53,7 +53,7 @@ export const DM_CONSOLE_PRESETS = [
     sql: 'SELECT c.id AS contractor_id, c.name AS cp, r.due_date, r.amount,\n       sum(coalesce(r.amount, 0)) OVER (PARTITION BY r.contractor_id ORDER BY r.due_date) AS running\nFROM reports r\nJOIN contractors c ON c.id = r.contractor_id\nWHERE NOT r.superseded\nORDER BY c.name, r.due_date',
   },
   {
-    id: 'no-resp',
+    id: 'no_resp',
     sql: "SELECT c.id AS contractor_id, c.name AS cp, c.inn, c.start_date\nFROM contractors c\nWHERE c.responsible_employee_id IS NULL AND c.service_status = 'active'\nORDER BY c.name",
   },
 ] as const satisfies readonly DmConsolePreset[];

@@ -20,7 +20,7 @@ import { useErrorText, useT } from '../l10n/provider';
 import { useShell } from '../shell/context';
 import { tabHref } from '../shell/modules';
 import { consoleSchemaQuery } from './console-data';
-import { consoleTemplatePrefill } from './console-model';
+import { consoleCpColumns, consoleTemplatePrefill } from './console-model';
 import { consoleOpen, consoleStore } from './console-store';
 import type { ConsoleToTemplate } from './console-tab';
 import { TemplateEditor } from './tpl-editor';
@@ -195,19 +195,8 @@ export function useTemplateActions(): {
         const cpName = t('dm.ed.cp_col');
         const prefillOf = (h: Parameters<typeof consoleTemplatePrefill>[2]) => {
           const pre = consoleTemplatePrefill(sql, last, h);
-          // contractor_id — вид «Контрагент», название «Контрагент (для области …)»; добавленный — первым.
           const own = new Set(h?.columns.map((c) => c.code));
-          const cols = pre.columns.map((c) =>
-            c.code === 'contractor_id' && !own.has(c.code)
-              ? { ...c, name: cpName, type: 'cp' as const, total: false }
-              : c,
-          );
-          const columns = auto?.added
-            ? [
-                ...cols.filter((c) => c.code === 'contractor_id'),
-                ...cols.filter((c) => c.code !== 'contractor_id'),
-              ]
-            : cols;
+          const columns = consoleCpColumns(pre.columns, own, !!auto?.added, cpName);
           return { ...pre, columns };
         };
         if (had?.builtin) {

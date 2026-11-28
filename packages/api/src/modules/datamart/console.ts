@@ -314,7 +314,9 @@ export function consoleHandlers(deps: ApiDeps) {
   ): Promise<DmResult> {
     const q = { text: p.text, params: p.params, maxRows };
     const limitMs = org ? DM_TIMEOUT_MS : DM_CONSOLE_TIMEOUT_MS;
-    const started = Date.now();
+    // Начало запуска для «остановлен или по пределу»: «как организация» — после ожидания места
+    // «Показать» и записи открытия в историю, перед самим запросом.
+    let started = Date.now();
     try {
       const res = org
         ? await withDmPoolSlot(deps, tr, async () => {
@@ -330,6 +332,7 @@ export function consoleHandlers(deps: ApiDeps) {
                 ),
               }),
             );
+            started = Date.now();
             return runDmConsoleOrg(deps.db, { orgId: org.id, adminUserId: adminId }, q);
           })
         : await onConsoleSlot(tr, () => runDmConsole(deps.db, adminId, q));

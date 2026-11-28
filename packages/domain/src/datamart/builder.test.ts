@@ -17,6 +17,7 @@ import {
   dmBuildStart,
   dmConsoleAutoCp,
 } from './builder';
+import { UI_TEXTS } from '../l10n/texts';
 import { DM_CONSOLE_PRESETS } from './presets';
 
 /** Маленькая карта базы: поле — «имя:тип>таблица.поле». */
@@ -347,5 +348,12 @@ describe('сборщик на карте базы продукта', () => {
   });
   it('каждая заготовка «Заготовок» — запрос к таблицам этой карты', () => {
     for (const p of DM_CONSOLE_PRESETS) expect(dmConsoleAutoCp(p.sql, real), p.id).not.toBeNull();
+  });
+  it('у каждой заготовки — название и пояснение в словаре (ключи собирает экран из `id`)', () => {
+    const keys: Record<string, unknown> = UI_TEXTS;
+    for (const p of DM_CONSOLE_PRESETS) {
+      expect(keys[`dm.con.pre.${p.id}`], p.id).toBeDefined();
+      expect(keys[`dm.con.pre.${p.id}.d`], p.id).toBeDefined();
+    }
   });
 });

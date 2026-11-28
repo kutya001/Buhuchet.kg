@@ -226,3 +226,29 @@ export function consolePlanLines(plan: unknown): PlanLine[] {
     walk(x && typeof x === 'object' ? (x as Record<string, unknown>).Plan : null, 0);
   return out;
 }
+
+/**
+ * Столбцы окна шаблона после автостолбца «Контрагент» (этап 2, П7; прототип `dmcToTpl`):
+ * `contractor_id`, которого не было у шаблона, — вид «Контрагент (для области)»; дописанный в запрос —
+ * первым, а если последний запуск шёл до дописывания и его не знает, — добавляется.
+ */
+export function consoleCpColumns(
+  columns: DmTemplateColumnInput[],
+  own: ReadonlySet<string>,
+  added: boolean,
+  cpName: string,
+): DmTemplateColumnInput[] {
+  const cols = columns.map((c) =>
+    c.code === 'contractor_id' && !own.has(c.code)
+      ? { ...c, name: cpName, type: 'cp' as const, total: false }
+      : c,
+  );
+  if (!added) return cols;
+  const cp = cols.find((c) => c.code === 'contractor_id') ?? {
+    code: 'contractor_id',
+    name: cpName,
+    type: 'cp' as const,
+    total: false,
+  };
+  return [cp, ...cols.filter((c) => c.code !== 'contractor_id')];
+}

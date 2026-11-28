@@ -28,7 +28,11 @@ describe('buildStore', () => {
   it('название вкладки — «Сборка: …», не длиннее 60 знаков', () => {
     const name = (list: string) => `Сборка: ${list}`;
     expect(buildTabName(name, ['reports', 'contractors'])).toBe('Сборка: reports, contractors');
-    const long = buildTabName(name, ['one_off_service_payments', 'contractors', 'money_operations']);
+    const long = buildTabName(name, [
+      'one_off_service_payments',
+      'contractors',
+      'money_operations',
+    ]);
     expect(long).toHaveLength(60);
     expect(long.endsWith('…')).toBe(true);
   });

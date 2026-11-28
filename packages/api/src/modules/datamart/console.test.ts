@@ -7,6 +7,7 @@ import { DmConsolePlan, DmConsoleResult, DmConsoleStopped, DmSchemaMap } from '@
 import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../../app';
+import { ADMIN_CARD_VIEW_RATE_LIMIT } from '../admin/card-guard';
 import { parseTechDocs } from '../admin/techdocs-source';
 import {
   apiRequest,
@@ -334,7 +335,7 @@ describe.skipIf(!databaseAvailable())('Витрина данных: консол
         ?.to;
     };
     /** Запрос консоли на своём пуле (в CI основной — одно соединение) и ожидание, пока он в базе. */
-    const startLong = async () => {
+    const startLong = async (orgId?: string) => {
       const race = createRaceApp(f.t.appUrl, f.deps);
       const res = apiRequest(
         race.app,
@@ -344,6 +345,7 @@ describe.skipIf(!databaseAvailable())('Витрина данных: консол
         {
           query: LONG,
           params: {},
+          ...(orgId ? { orgId } : {}),
         },
       );
       await expect
@@ -380,6 +382,35 @@ describe.skipIf(!databaseAvailable())('Витрина данных: консол
       }
     });
 
+    it('«Остановить» прерывает и запрос «как организация» (место «Показать» освобождается)', async () => {
+      const { race, res } = await startLong(f.a.orgId);
+      try {
+        const stop = await ok(
+          await apiRequest(
+            race.app,
+            'POST',
+            '/api/admin/dm/console/stop',
+            cookies['platform-admin'],
+          ),
+          DmConsoleStopped,
+        );
+        expect(stop.stopped).toBe(1);
+        expect((await fail(await res, 409)).code).toBe('dm_console_stopped');
+        expect(await lastOutcome()).toBe('stopped');
+      } finally {
+        await race.close();
+      }
+      // Место «Показать» отпущено: следующий запрос как организация идёт сразу.
+      await ok(
+        await call('platform-admin', 'POST', '/run', {
+          query: 'select 1 as n',
+          params: {},
+          orgId: f.a.orgId,
+        }),
+        DmConsoleResult,
+      );
+    });
+
     it('отмена после 60 с — «дольше предела»: 503 и «timeout» в журнале', async () => {
       // Отмену по пределу и по «Остановить» сервер различает временем: часы сдвигаются на минуту.
       const real = Date.now.bind(Date);
@@ -390,6 +421,25 @@ describe.skipIf(!databaseAvailable())('Витрина данных: консол
         shift = 61_000;
         await apiRequest(race.app, 'POST', '/api/admin/dm/console/stop', cookies['platform-admin']);
         expect((await fail(await res, 503)).code).toBe('dm_console_timeout');
+        expect(await lastOutcome()).toBe('timeout');
+      } finally {
+        now.mockRestore();
+        await race.close();
+      }
+    });
+
+    it('«как организация» — предел 15 с, как у «Показать»: 503 и свой текст, «timeout» в журнале', async () => {
+      const real = Date.now.bind(Date);
+      let shift = 0;
+      const now = vi.spyOn(Date, 'now').mockImplementation(() => real() + shift);
+      const { race, res } = await startLong(f.a.orgId);
+      try {
+        // 16 с — больше предела организации, но меньше предела консоли (60 с).
+        shift = 16_000;
+        await apiRequest(race.app, 'POST', '/api/admin/dm/console/stop', cookies['platform-admin']);
+        const e = await fail(await res, 503);
+        expect(e.code).toBe('dm_console_timeout');
+        expect(e.message).toBe(txt('err.dm_console_timeout_org'));
         expect(await lastOutcome()).toBe('timeout');
       } finally {
         now.mockRestore();
@@ -494,6 +544,70 @@ describe.skipIf(!databaseAvailable())('Витрина данных: консол
       expect(hist.items[0]!.org).toEqual({ id: f.a.orgId, name: org!.name });
     });
 
+    it('это открытие данных организации: чужой сайт — 403, предел открытий — 429 без запуска и без записи, неверный номер — 400', async () => {
+      const cross = await f.app.request('/api/admin/dm/console/run', {
+        method: 'POST',
+        headers: {
+          origin: 'http://localhost',
+          cookie: cookies['platform-admin']!,
+          'content-type': 'application/json',
+          'sec-fetch-site': 'cross-site',
+        },
+        body: JSON.stringify({ query: 'select 1 as n', params: {}, orgId: f.a.orgId }),
+      });
+      expect(cross.status).toBe(403);
+      expect(((await cross.json()) as { error: { code: string } }).error.code).toBe(
+        'origin_mismatch',
+      );
+      expect((await fail(await asOrg('select 1 as n', 'not-a-uuid'), 400)).code).toBe(
+        'validation_failed',
+      );
+
+      const [user] = await f.t.admin.db
+        .select({ id: schema.users.id })
+        .from(schema.users)
+        .where(eq(schema.users.login, 'platform-admin'));
+      const mine = and(
+        eq(schema.rateLimits.kind, ADMIN_CARD_VIEW_RATE_LIMIT.kind),
+        eq(schema.rateLimits.subject, user!.id),
+      );
+      const [taken = { n: 0 }] = await f.t.admin.db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(schema.rateLimits)
+        .where(mine);
+      await f.t.admin.db.insert(schema.rateLimits).values(
+        Array.from({ length: ADMIN_CARD_VIEW_RATE_LIMIT.max - taken.n }, () => ({
+          kind: ADMIN_CARD_VIEW_RATE_LIMIT.kind,
+          subject: user!.id,
+        })),
+      );
+      try {
+        const views = async () =>
+          (
+            await f.t.admin.db
+              .select({ n: sql<number>`count(*)::int` })
+              .from(auditLog)
+              .where(and(eq(auditLog.orgId, f.a.orgId), eq(auditLog.action, 'card_view')))
+          )[0]!.n;
+        const before = await views();
+        const runs = async () =>
+          (
+            await f.t.admin.db
+              .select({ n: sql<number>`count(*)::int` })
+              .from(platformAuditLog)
+              .where(eq(platformAuditLog.entity, 'dm_console'))
+          )[0]!.n;
+        const ran = await runs();
+        expect((await fail(await asOrg('select 1 as n', f.a.orgId), 429)).code).toBe(
+          'card_view_limit',
+        );
+        expect(await views()).toBe(before);
+        expect(await runs()).toBe(ran);
+      } finally {
+        await f.t.admin.db.delete(schema.rateLimits).where(mine);
+      }
+    });
+
     it('таблица платформы — «данные платформы, организациям закрыта», чужая организация не видна', async () => {
       const e = await fail(await asOrg('select id from platform_leads', f.a.orgId), 400);
       expect(e.code).toBe('dm_console_closed');
@@ -530,6 +644,12 @@ describe.skipIf(!databaseAvailable())('Витрина данных: консол
           expect.objectContaining({ field: 'org', to: expect.objectContaining({ id: f.b.orgId }) }),
         ]),
       );
+      // В истории организации — открытие с причиной «выгрузка», не «запуск».
+      const views = await f.t.admin.db
+        .select({ reason: auditLog.reason })
+        .from(auditLog)
+        .where(and(eq(auditLog.orgId, f.b.orgId), eq(auditLog.action, 'card_view')));
+      expect(views.map((v) => v.reason)).toContain(txt('dm.con.history_porg_export'));
     });
 
     it('места «Показать» заняты — 429 `dm_busy_all`, место консоли не нужно', async () => {

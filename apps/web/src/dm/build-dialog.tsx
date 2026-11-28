@@ -22,6 +22,7 @@ import {
   Note,
   Tag,
   useToast,
+  useWindow,
 } from '@buhuchet/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter } from 'next/navigation';
@@ -111,6 +112,36 @@ export function BuildHost() {
   );
 }
 
+/**
+ * «Открыть в консоли» сборщика: окно закрывается перед переходом с заменой записи истории — иначе
+ * закрытие окна шагом «Назад» отменяет переход со «Схемы базы» и карточки метода (CLAUDE.md сайта,
+ * `useBackClose`); в самой консоли — просто закрыть окно.
+ */
+function BuildGo({ disabled, onGo }: { disabled: boolean; onGo: () => boolean }) {
+  const t = useT();
+  const router = useRouter();
+  const path = usePathname();
+  const { leave } = useWindow();
+  return (
+    <button
+      type="button"
+      className={buttonClass('cta')}
+      disabled={disabled}
+      data-dm-b-go=""
+      onClick={() => {
+        if (!onGo()) return;
+        const href = tabHref('dm', 'con');
+        if (path === href) return buildStore.close();
+        leave();
+        router.replace(href);
+      }}
+    >
+      <Icon name="code" size="sm" />
+      {t('dm.con.api.open')}
+    </button>
+  );
+}
+
 function BuildWindow({
   req,
   index,
@@ -123,8 +154,6 @@ function BuildWindow({
   cut: boolean;
 }) {
   const t = useT();
-  const router = useRouter();
-  const path = usePathname();
   const { userId } = useShell();
   const schema = index.tables;
   const [st, setSt] = useState(initial);
@@ -146,16 +175,14 @@ function BuildWindow({
     });
 
   const go = () => {
-    if (!sql) return;
+    if (!sql) return false;
     consoleOpen(userId ?? '', {
       sql,
       name: buildTabName((list) => t('dm.b.name', { list }), filled.names),
       src: 'build',
       ...(req.notes ? { notes: req.notes } : {}),
     });
-    buildStore.close();
-    const href = tabHref('dm', 'con');
-    if (path !== href) router.push(href);
+    return true;
   };
 
   return (
@@ -175,16 +202,7 @@ function BuildWindow({
           <button type="button" className={buttonClass('ghost')} onClick={() => buildStore.close()}>
             {t('btn.cancel')}
           </button>
-          <button
-            type="button"
-            className={buttonClass('cta')}
-            disabled={!sql}
-            data-dm-b-go=""
-            onClick={go}
-          >
-            <Icon name="code" size="sm" />
-            {t('dm.con.api.open')}
-          </button>
+          <BuildGo disabled={!sql} onGo={go} />
         </>
       }
     >

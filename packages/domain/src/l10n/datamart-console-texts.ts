@@ -42,18 +42,18 @@ export const DATAMART_CONSOLE_TEXTS = {
     section: S,
   },
   'dm.con.pre.sys': { ru: 'Готовые шаблоны · {n}', section: S },
-  'dm.con.pre.rep-resp': { ru: 'Отчёты контрагентов с ответственным', section: S },
-  'dm.con.pre.rep-resp.d': {
+  'dm.con.pre.rep_resp': { ru: 'Отчёты контрагентов с ответственным', section: S },
+  'dm.con.pre.rep_resp.d': {
     ru: 'Отчёт, срок, статус и ответственный сотрудник; замененные отчёты исключены',
     section: S,
   },
-  'dm.con.pre.by-month': { ru: 'Итоги по месяцам: отчёты и налоги', section: S },
-  'dm.con.pre.by-month.d': {
+  'dm.con.pre.by_month': { ru: 'Итоги по месяцам: отчёты и налоги', section: S },
+  'dm.con.pre.by_month.d': {
     ru: 'Группировка по месяцу срока: число отчётов и сумма налогов в сомах',
     section: S,
   },
-  'dm.con.pre.tax-debt': { ru: 'Долг по оплате налогов', section: S },
-  'dm.con.pre.tax-debt.d': {
+  'dm.con.pre.tax_debt': { ru: 'Долг по оплате налогов', section: S },
+  'dm.con.pre.tax_debt.d': {
     ru: 'Начислено, оплачено и остаток по контрагенту — только где есть долг',
     section: S,
   },
@@ -72,13 +72,13 @@ export const DATAMART_CONSOLE_TEXTS = {
     ru: 'Срок прошёл, отчёт не сдан; сколько дней просрочки',
     section: S,
   },
-  'dm.con.pre.fee-period': { ru: 'Оплаты за обслуживание за период', section: S },
-  'dm.con.pre.fee-period.d': {
+  'dm.con.pre.fee_period': { ru: 'Оплаты за обслуживание за период', section: S },
+  'dm.con.pre.fee_period.d': {
     ru: 'Параметры :date_from и :date_to; удалённые оплаты исключены',
     section: S,
   },
-  'dm.con.pre.ops-month': { ru: 'Операции по деньгам за месяц', section: S },
-  'dm.con.pre.ops-month.d': {
+  'dm.con.pre.ops_month': { ru: 'Операции по деньгам за месяц', section: S },
+  'dm.con.pre.ops_month.d': {
     ru: 'Параметр :month (ГГГГ-ММ); отменённые операции исключены',
     section: S,
   },
@@ -92,8 +92,8 @@ export const DATAMART_CONSOLE_TEXTS = {
     ru: 'sum(…) OVER (PARTITION BY … ORDER BY …) — налоги контрагента нарастающим итогом',
     section: S,
   },
-  'dm.con.pre.no-resp': { ru: 'Контрагенты без ответственного', section: S },
-  'dm.con.pre.no-resp.d': {
+  'dm.con.pre.no_resp': { ru: 'Контрагенты без ответственного', section: S },
+  'dm.con.pre.no_resp.d': {
     ru: 'Обслуживаемые контрагенты, за которыми не закреплён сотрудник',
     section: S,
   },

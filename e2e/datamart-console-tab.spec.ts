@@ -389,13 +389,135 @@ test.describe('Витрина данных: консоль запросов, э�
 
     // «Сохранить в шаблон»: в запросе есть контрагенты — столбец contractor_id «Контрагент (для
     // области)» добавлен сам, уведомление называет модуль (блок 2, пункт 8).
+    // Уведомление живёт несколько секунд — проверяется сразу после нажатия, до окна.
     await pc.locator('[data-dm-con-tpl]').click();
-    const dialog = page.getByRole('dialog', { name: texts['dm.ed.new']! });
-    await expect(dialog.locator('[data-dm-ed-col="contractor_id"]')).toBeVisible();
-    await expect(editorOf(dialog)).toContainText('AS contractor_id');
     await expect(
       page.getByRole('status').filter({ hasText: textPart(texts['dm.con.cp_auto']!) }),
     ).toBeVisible();
+    const dialog = page.getByRole('dialog', { name: texts['dm.ed.new']! });
+    await expect(dialog.locator('[data-dm-ed-col="contractor_id"]')).toBeVisible();
+    await expect(editorOf(dialog)).toContainText('AS contractor_id');
+  });
+
+  test('(консоль, этап 2, блок 6, пункт 1) «Схема базы» → «Собрать запрос» → отметить contractors, reports, employees → «Собрать» → окно сборщика → «Открыть в консоли» — вкладка «Сборка: …»; «Назад» — к схеме без окна', async ({
+    page,
+    baseURL,
+    isMobile,
+  }) => {
+    test.skip(isMobile, 'сборщик — на ПК');
+    const origin = new URL(baseURL!).origin;
+    await platformAdmin(page.request, origin);
+    const texts = await dictionary(page.request);
+
+    await page.goto('/app/tdocs/db');
+    // Страница схемы — в рамке-песочнице; отметки и «Собрать» — внутри неё, окно сборщика — у сайта.
+    const schema = page.frameLocator('iframe.td-frame');
+    await schema.locator('#emb-build').click();
+    const names = ['contractors', 'reports', 'employees'];
+    for (const n of names) await schema.locator(`.tcard[data-t="${n}"]`).click();
+    await expect(schema.locator('#bld-txt')).toContainText(names.join(', '));
+    await schema.locator('#bld-go').click();
+
+    const win = page.locator('[data-dm-b]');
+    await expect(win).toBeVisible();
+    await expect(win.locator('[data-dm-b-table]')).toHaveCount(3);
+    await expect(win.locator('[data-dm-b-none]')).toHaveCount(0);
+    await expect(win.locator('[data-dm-b-table="employees"] [data-dm-b-link]')).toContainText(
+      'responsible_employee_id',
+    );
+    await page.locator('[data-dm-b-go]').click();
+    await expect(page).toHaveURL(/\/app\/dm\/con$/);
+    const pc = page.locator('[data-dm-con]');
+    await expect(pc.locator('[data-dm-con-tab][aria-current="true"]')).toContainText(
+      texts['dm.b.name']!.replace('{list}', names.join(', ')),
+    );
+    await expect(editorOf(pc)).toContainText('LEFT JOIN employees');
+
+    // Окно закрылось с заменой записи истории: «Назад» — на схему, окна сборщика нет.
+    await page.goBack();
+    await expect(page).toHaveURL(/\/app\/tdocs\/db$/);
+    await expect(page.locator('[data-dm-b]')).toHaveCount(0);
+  });
+
+  test('(консоль, этап 2, блок 5, пункт 3) метод API без SQL → «Собрать запрос по таблицам метода» → окно сборщика с таблицами метода → «Открыть в консоли» — пометка «Собрано по таблицам метода»', async ({
+    page,
+    baseURL,
+    isMobile,
+  }) => {
+    test.skip(isMobile, 'сборщик — на ПК');
+    const origin = new URL(baseURL!).origin;
+    await platformAdmin(page.request, origin);
+    const texts = await dictionary(page.request);
+
+    // Метод чтения без SQL, который читает хотя бы две таблицы, — из описания API (снимок меняется).
+    const list = await page.request.get('/api/admin/tech-docs/methods?size=all');
+    expect(list.status()).toBe(200);
+    const { items } = (await list.json()) as {
+      items: { id: string; method: string; path: string; tables: number; writes: boolean }[];
+    };
+    let found: { id: string; path: string; reads: string[] } | null = null;
+    for (const m of items.filter((x) => x.method === 'GET' && x.tables >= 2 && !x.writes)) {
+      const res = await page.request.get(
+        `/api/admin/tech-docs/method?id=${encodeURIComponent(m.id)}`,
+      );
+      const card = (await res.json()) as { queries: unknown[]; reads: { name: string }[] };
+      if (card.queries.length === 0 && card.reads.length >= 2) {
+        found = { id: m.id, path: m.path, reads: card.reads.map((x) => x.name) };
+        break;
+      }
+    }
+    expect(found, 'метод чтения без SQL').not.toBeNull();
+    const { id, path, reads } = found!;
+
+    await page.goto('/app/tdocs/api');
+    await expect(page.locator('[data-grid]')).toBeVisible();
+    await search(page, false, path);
+    await page.locator(`[data-grid] [data-id="${id}"]`).click();
+    const card = page.getByRole('dialog', { name: id });
+    await card.locator('[data-td-bld]').click();
+
+    const win = page.locator('[data-dm-b]');
+    await expect(win).toBeVisible();
+    for (const n of reads.slice(0, 5)) {
+      await expect(win.locator(`[data-dm-b-table="${n}"]`)).toBeVisible();
+    }
+    await page.locator('[data-dm-b-go]').click();
+    await expect(page).toHaveURL(/\/app\/dm\/con$/);
+    const notes = page.locator('[data-dm-con] [data-dm-con-notes]');
+    await expect(notes).toContainText(texts['dm.con.from']!.replace('{method}', id));
+    await expect(notes).toContainText(textPart(texts['dm.con.rw.built']!));
+  });
+
+  test('(консоль, этап 2, блок 6, пункт 2) «Собрать запрос»: прямой связи нет — промежуточная таблица добавлена сама с пометкой', async ({
+    page,
+    baseURL,
+    isMobile,
+  }) => {
+    test.skip(isMobile, 'сборщик — на ПК');
+    const origin = new URL(baseURL!).origin;
+    await platformAdmin(page.request, origin);
+    const texts = await dictionary(page.request);
+
+    await page.goto('/app/dm/con');
+    const pc = page.locator('[data-dm-con]');
+    await expect(pc).toBeVisible();
+    await pc.locator('[data-dm-con-sidetab="db"]').click();
+    await pc.locator('[data-dm-con-pick-start]').click();
+    for (const table of ['contractors', 'report_types']) {
+      await pc.locator(`[data-dm-con-pick-row="${table}"] input`).check();
+    }
+    await pc.locator('[data-dm-con-pick-go]').click();
+
+    const win = page.locator('[data-dm-b]');
+    await expect(win).toBeVisible();
+    // Контрагенты и виды отчётов связаны только через третью таблицу — её добавил сборщик.
+    await expect(win.locator('[data-dm-b-table]')).toHaveCount(3);
+    await expect(win.locator('[data-dm-b-none]')).toHaveCount(0);
+    const via = win
+      .locator('[data-dm-b-table]')
+      .filter({ hasText: texts['dm.b.via']! })
+      .filter({ hasText: textPart(texts['dm.b.via_hint']!) });
+    await expect(via).toHaveCount(1);
   });
 
   test('(консоль, этап 2, блок 2, пункт 8) «Выполнять как: Организация …» — результат организации с пометкой; таблица платформы — «данные платформы, организациям закрыта»', async ({
@@ -404,6 +526,9 @@ test.describe('Витрина данных: консоль запросов, э�
     isMobile,
   }) => {
     test.skip(isMobile, 'писать запросы — на ПК');
+    // Два запуска как организация — на общих местах «Показать» (два на сайт, их же занимают тесты
+    // «Витрины» и автозапуск «Показать»): каждый может ждать место до 30 с.
+    test.slow();
     const origin = new URL(baseURL!).origin;
     await platformAdmin(page.request, origin);
     const texts = await dictionary(page.request);
