@@ -200,7 +200,7 @@ function dmEdit(t0,pre){const sys=!!t0&&t0.src==='system'&&!pre,pub=!!t0&&t0.sta
   const st=Object.assign({name:'',code:'',desc:'',kind:'org',mod:'reports',perm:'',access:'all',sql:'SELECT c.id AS contractor_id, c.name AS cp\nFROM contractors c\nORDER BY c.name',params:[],cols:[],run:null},t0?structuredClone(t0):{});
   st.perm=st.perm||'';st.okSql=t0&&t0.checked?st.sql:null;st.chk=null;st.org=ORG.id;if(!t0)st.cols=[{k:'contractor_id',label:'Контрагент (для области «Свои контрагенты»)',type:'cp',total:false},{k:'cp',label:'Контрагент',type:'text',total:false}];
   // Из консоли (блок 1, пункт 7; блок 4, пункт 4): запрос, параметры и столбцы последнего запуска уже стоят — заново не набираются и не размечаются
-  const fromCon=!!pre,sqlEd=!!pre&&!!t0&&pre.sql!==t0.sql;if(pre){st.sql=pre.sql;if(pre.params)st.params=pre.params;if(pre.cols)st.cols=pre.cols;if(pre.name&&!t0)st.name=pre.name}
+  const fromCon=!!pre,sqlEd=!!pre&&!!t0&&pre.sql!==t0.sql;if(pre){st.sql=pre.sql;if(pre.params)st.params=pre.params;if(pre.cols)st.cols=pre.cols;if(pre.name&&!t0)st.name=pre.name;if(pre.mod&&!t0)st.mod=pre.mod;if(pre.perm&&!t0)st.perm=pre.perm}
   const dis=sys?'disabled':'';
   const rd=el=>{if(sys)return;const g=id=>{const x=$('#'+id,el);return x?x.value:null};['name:de-n','code:de-c','desc:de-d','kind:de-k','mod:de-m','perm:de-p','sql:de-s'].forEach(x=>{const[k,id]=x.split(':'),v=g(id);if(v!=null)st[k]=k==='sql'||k==='desc'?v:v.trim()});
     const a=g('de-a');if(a!=null)st.access=a==='all'?'all':$$('[data-dm-org]',el).filter(x=>x.checked).map(x=>x.dataset.dmOrg);
@@ -230,7 +230,7 @@ function dmEdit(t0,pre){const sys=!!t0&&t0.src==='system'&&!pre,pub=!!t0&&t0.sta
       const sq=q('#de-s');dmHlBind(sq);if(!sys)dmcAssist(sq,{org:()=>st.kind==='org',errBox:q('#de-errs')});if(q('#de-con'))q('#de-con').onclick=()=>{rd(el);dmTplToCon(Object.assign({},t0,{sql:st.sql,params:st.params}))};if(sq&&!sys){sq.oninput=()=>{st.sql=sq.value;const b=q('#de-pub');if(b)b.disabled=!ok()};sq.onchange=()=>{st.sql=sq.value}}
       q('#de-o').onchange=e=>st.org=e.target.value;q('#de-td').onclick=()=>{m.close(true);go('tdocs')};
       if(q('#de-copy'))q('#de-copy').onclick=()=>{m.close();dmCopy(t0)};
-      q('#de-chk').onclick=()=>{rd(el);const e=dmSqlErr(st.sql);if(!setErr(el,'de-s',e))return;syncPars();
+      q('#de-chk').onclick=()=>{rd(el);const cl=st.kind==='org'?(dmcIssues(st.sql,{org:true}).find(x=>/организациям закрыта/.test(x[2]))||[])[2]:'';const e=dmSqlErr(st.sql)||cl||'';if(!setErr(el,'de-s',e))return;syncPars();
         const f=DM_RUN[st.run||st.code];let r=null;
         if(f){const tmp=Object.assign({},st,{state:'Опубликован'}),p={};st.params.forEach(x=>{p[x.k]=dmDef(x.def)});r=dmRun(tmp,p,st.kind==='adm'?null:st.org)}
         else{const ks=dmSqlCols(st.sql);if(!ks.length)return setErr(el,'de-s','Дайте столбцам имена через AS: по ним строятся столбцы вывода');

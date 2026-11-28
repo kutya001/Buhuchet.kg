@@ -1,11 +1,13 @@
 'use strict';
 // Консоль запросов «Витрины данных» в Админке (доработки 27.11.2026: консоль запросов, этап 1 — П4 вкладка, П5 редактор
-// с подсказками, П6 методы API → запрос; прототип v166). Прототип не выполняет SQL: «Выполнить» показывает ответ готового
+// с подсказками, П6 методы API → запрос; прототип v166; этап 2 — П7 «Выполнять как», П8 заготовки, П9 сборщик — v167, vitrina-builder.js). Прототип не выполняет SQL: «Выполнить» показывает ответ готового
 // шаблона, если запрос с ним совпадает, иначе — «На стенде здесь будет ответ базы». Подсказки, проверка по ходу набора,
 // «Форматировать» и перестройка запроса метода работают по-настоящему. В продукте: редактор CodeMirror 6, подсказки — из карты
 // базы (поля из самой базы, права ролей), ошибки — разборщиком PostgreSQL на сервере.
 
-const DMC={tabs:null,cur:0,side:'db',q:'',mq:'mine',db:null};
+const DMC={tabs:null,cur:0,side:'db',q:'',mq:'mine',db:null,as:'adm',pick:null};
+// «Выполнять как» (блок 2, пункт 8): 'adm' — администратор, иначе номер организации; запрос идёт ролью организаций с её строками
+const dmcAsOrg=()=>DMC.as&&DMC.as!=='adm'?ORGS.find(o=>o.id===DMC.as)||null:null;
 // Хранятся в данных прототипа: «Мои запросы» — личные, «История» — последние 100 запусков каждого администратора
 const dmcMine=()=>DB.dmConMine||(DB.dmConMine=[]),dmcHist=()=>DB.dmConHist||(DB.dmConHist=[]);
 const DMC_HIST_MAX=100;
@@ -31,15 +33,15 @@ const dmcTbl=n=>{const d=dmcDb();return d?d.m.get(String(n).replace(/^public\./i
 
 /* Вкладки запросов: недописанный запрос не теряется при уходе со вкладки — держится в памяти страницы, в браузере — как удобство */
 let dmcSeq=0;
-const dmcNewTab=(o={})=>({id:'q'+Date.now().toString(36)+(dmcSeq++),name:o.name||'Запрос '+(dmcSeq),sql:o.sql??'SELECT c.name AS cp, c.inn\nFROM contractors c\nORDER BY c.name\nLIMIT 100',params:o.params||{},tpl:o.tpl||null,mq:o.mq||null,notes:o.notes||null,cols:o.cols||null,res:null});
+const dmcNewTab=(o={})=>({id:'q'+Date.now().toString(36)+(dmcSeq++),name:o.name||'Запрос '+(dmcSeq),sql:o.sql??'SELECT c.name AS cp, c.inn\nFROM contractors c\nORDER BY c.name\nLIMIT 100',params:o.params||{},tpl:o.tpl||null,mq:o.mq||null,notes:o.notes||null,cols:o.cols||null,src:o.src||null,res:null});
 function dmcState(){if(DMC.tabs)return;const sv=store.get('dm.con.'+S.me,null);
-  DMC.tabs=sv&&Array.isArray(sv.tabs)&&sv.tabs.length?sv.tabs.map(t=>Object.assign(dmcNewTab(t),{id:t.id||dmcNewTab().id,res:null})):[dmcNewTab()];DMC.cur=sv?Math.max(0,Math.min(sv.cur|0,DMC.tabs.length-1)):0}
-function dmcSave(){try{store.set('dm.con.'+S.me,{tabs:DMC.tabs.map(t=>({id:t.id,name:t.name,sql:t.sql,params:t.params,tpl:t.tpl,mq:t.mq,notes:t.notes,cols:t.cols})),cur:DMC.cur})}catch(e){}}
+  DMC.tabs=sv&&Array.isArray(sv.tabs)&&sv.tabs.length?sv.tabs.map(t=>Object.assign(dmcNewTab(t),{id:t.id||dmcNewTab().id,res:null})):[dmcNewTab()];DMC.cur=sv?Math.max(0,Math.min(sv.cur|0,DMC.tabs.length-1)):0;if(sv&&sv.as&&(sv.as==='adm'||ORGS.some(o=>o.id===sv.as)))DMC.as=sv.as}
+function dmcSave(){try{store.set('dm.con.'+S.me,{tabs:DMC.tabs.map(t=>({id:t.id,name:t.name,sql:t.sql,params:t.params,tpl:t.tpl,mq:t.mq,notes:t.notes,cols:t.cols,src:t.src})),cur:DMC.cur,as:DMC.as})}catch(e){}}
 const dmcTab=()=>{dmcState();return DMC.tabs[DMC.cur]};
 
 // Одна функция «открыть в консоли» (П4): её зовут шаблон, метод API (П6) и сборщик (П9)
 function dmConOpen(sql,params,name,o={}){dmcState();let i=o.tpl?DMC.tabs.findIndex(t=>t.tpl===o.tpl):o.mq?DMC.tabs.findIndex(t=>t.mq===o.mq):-1;
-  if(i<0){DMC.tabs.push(dmcNewTab({sql,params:params||{},name,tpl:o.tpl,mq:o.mq,notes:o.notes,cols:o.cols}));i=DMC.tabs.length-1}else Object.assign(DMC.tabs[i],{sql,params:params||DMC.tabs[i].params,notes:o.notes||DMC.tabs[i].notes,res:null});
+  if(i<0){DMC.tabs.push(dmcNewTab({sql,params:params||{},name,tpl:o.tpl,mq:o.mq,notes:o.notes,cols:o.cols,src:o.src}));i=DMC.tabs.length-1}else Object.assign(DMC.tabs[i],{sql,params:params||DMC.tabs[i].params,notes:o.notes||DMC.tabs[i].notes,res:null});
   DMC.cur=i;dmcSave();MODALS.slice().forEach(m=>m.close(true));go('dm','con');if(o.toTpl)setTimeout(()=>dmcToTpl(DMC.tabs[i]),0)}
 
 /* Разбор текста: строки, комментарии, операторы, псевдонимы таблиц */
@@ -71,7 +73,7 @@ function dmcIssues(s,o={}){const R=[],d=dmcDb(),m=dmcMask(s);
   const dn=DMC_DENY.exec(m);if(dn)R.push([dn.index,dn.index+dn[0].length,o.org?`«${dn[1]}» нельзя: шаблон только читает таблицы организации`:`«${dn[1]}» нельзя в консоли: она только читает`]);
   if(d){const {al,cte,order}=dmcRefs(s);
     order.forEach(r=>{if(!cte.has(r.t)&&!d.m.has(r.t)&&!/^(generate_series|unnest|jsonb_\w+|json_\w+)$/.test(r.t))R.push([r.at,r.at+r.len,`Таблицы «${r.t}» нет в базе`]);
-      else if(o.org&&d.m.has(r.t)&&!d.m.get(r.t).org)R.push([r.at,r.at+r.len,`«${r.t}» закрыта для организаций: шаблон «Для организаций» её не прочитает`])});
+      else if(o.org&&d.m.has(r.t)&&!d.m.get(r.t).org)R.push([r.at,r.at+r.len,`Таблица ${r.t} — данные платформы, организациям закрыта`])});
     for(const x of m.matchAll(/\b([a-z_]\w*)\.([a-z_]\w*)\b(?!\s*\()/gi)){const a=x[1].toLowerCase(),f=x[2].toLowerCase();if(a==='app'||a==='public'||a==='pg_catalog'||a==='dm')continue;
       const tn=al.get(a);if(!tn||cte.has(tn))continue;const t=d.m.get(tn);if(t&&!t.cols.some(c=>c.n===f))R.push([x.index+a.length+1,x.index+x[0].length,`Поля «${f}» нет в таблице «${tn}»`])}}
   // выражение в списке SELECT без имени AS — без него нет столбца вывода
@@ -114,8 +116,8 @@ function dmcSuggest(s,p,o={}){const d=dmcDb();if(!d)return null;const before=s.s
   if(w&&w[1]){const tn=al.get(w[1].toLowerCase()),t=tn&&d.m.get(tn);if(!t)return null;const pre=(w[2]||'').toLowerCase();
     return {from:p-(w[2]||'').length,items:t.cols.filter(c=>!pre||c.n.startsWith(pre)||c.ru.toLowerCase().includes(pre)).map(c=>({l:c.n,d:`${dmcKind(c)} · ${c.ru||'нет описания'}`,ins:c.n,no:!c.desc}))}}
   const pre=w?w[3]:'',pl=pre.toLowerCase(),head=m.slice(0,m.length-pre.length),prev=(/([a-z_]+)\s*$/i.exec(head)||[])[1];const pv=prev&&prev.toLowerCase();
-  if(pv==='from'||pv==='join'){const L=d.T.filter(t=>!pl||t.n.startsWith(pl)||t.n.includes(pl)||t.ru.toLowerCase().includes(pl)).sort((a,b)=>{const r=t=>t.n.startsWith(pl)?0:t.ru.toLowerCase().startsWith(pl)?1:t.n.includes(pl)?2:3;return r(a)-r(b)||a.n.localeCompare(b.n)}).slice(0,40);
-    return {from:p-pre.length,items:L.map(t=>({l:t.n,d:t.ru+(o.org&&!t.org?' · закрыто для организаций':''),ins:t.n}))}}
+  if(pv==='from'||pv==='join'){const L=d.T.filter(t=>(!o.org||t.org)&&(!pl||t.n.startsWith(pl)||t.n.includes(pl)||t.ru.toLowerCase().includes(pl))).sort((a,b)=>{const r=t=>t.n.startsWith(pl)?0:t.ru.toLowerCase().startsWith(pl)?1:t.n.includes(pl)?2:3;return r(a)-r(b)||a.n.localeCompare(b.n)}).slice(0,40);
+    return {from:p-pre.length,items:L.map(t=>({l:t.n,d:t.ru,ins:t.n}))}}
   if(pv==='on'&&!pre){const last=order.filter(r=>r.kw==='join').pop();if(!last)return null;const X=d.m.get(last.t);if(!X)return null;const L=[];
     order.filter(r=>r!==last).forEach(r=>{const Y=d.m.get(r.t);if(!Y)return;X.out.filter(f=>f.to===Y.n).forEach(f=>L.push(`${last.a}.${f.col} = ${r.a}.${f.toCol}`));Y.out.filter(f=>f.to===X.n).forEach(f=>L.push(`${r.a}.${f.col} = ${last.a}.${f.toCol}`))});
     return L.length?{from:p,items:[...new Set(L)].map(x=>({l:x,d:'Условие по связи таблиц',ins:x}))}:null}
@@ -179,21 +181,26 @@ function dmcRewrite(src){const notes=[];let s=String(src).trim().replace(/;\s*$/
   return {sql:s,notes,params,cols}}
 // Точный SQL метода чтения: запрос или представление из снимка; null — запрос написан кодом (П9: «Собрать запрос по таблицам метода»)
 function dmcMethodSql(m){if(!m||m.m!=='GET')return null;const a=tdApi();const qs=(m.q||[]).map(i=>a.sql[i]).filter(q=>q&&(q.k==='sql'||q.k==='view')&&/^\s*(select|with|create\s+(or\s+replace\s+)?view)\b/i.test(q.t));return qs.length?qs[0].t:null}
-function dmcFromMethod(m,toTpl){const t=dmcMethodSql(m);if(!t)return toast('У метода нет точного SQL: запрос написан кодом','alert',true);const r=dmcRewrite(t);if(!r.sql)return toast(r.notes[0],'alert',true);
+// Метод без точного SQL (блок 5, пункт 3): «Собрать запрос по таблицам метода» — сборщик с отмеченными таблицами, которые метод читает
+function dmcMethodBuild(m){const d=dmcDb();const L=(m.r||[]).filter(n=>d&&d.m.has(n));
+  dmcBuild(L,{method:`${m.m} ${m.p}`,notes:{warn:DMC_WARN,list:['Собрано по таблицам метода: '+(L.join(', ')||'—')],from:`${m.m} ${m.p}`}})}
+function dmcFromMethod(m,toTpl){const t=dmcMethodSql(m);if(!t)return dmcMethodBuild(m);const r=dmcRewrite(t);if(!r.sql)return toast(r.notes[0],'alert',true);
   const p={};r.params.forEach(k=>p[k]='');dmConOpen(r.sql,p,m.sum||m.p,{notes:{warn:DMC_WARN,list:r.notes,from:`${m.m} ${m.p}`},cols:r.cols,toTpl})}
 
 /* Вкладка «Консоль» */
-function renderDmCon(body){dmcState();if(isMobile())return dmcPhone(body);const t=dmcTab();
+function renderDmCon(body){dmcState();if(isMobile())return dmcPhone(body);const t=dmcTab(),ao=dmcAsOrg();
   body.innerHTML=`<div class="dmc">
     <aside class="dmc-side box"><div class="tabs sm dmc-st" role="tablist">${[['db','База'],['api','Методы API'],['pre','Заготовки'],['mine','Мои запросы']].map(([k,l])=>`<button type="button" class="tab${DMC.side===k?' on':''}" data-dmc-side="${k}">${l}</button>`).join('')}</div>
       <input class="inp dmc-q" id="dmc-q" value="${esc(DMC.q)}" placeholder="${DMC.side==='api'?'Метод или адрес':DMC.side==='mine'?'Название или текст':'Таблица или поле, можно по-русски'}" ${DMC.side==='pre'?'hidden':''}><div class="dmc-list" id="dmc-list"></div></aside>
     <section class="dmc-main"><div class="dmc-tabs">${DMC.tabs.map((x,i)=>`<button type="button" class="dmc-tab${i===DMC.cur?' on':''}" data-dmc-tab="${i}" title="${esc(x.name)}"><span>${esc(x.name)}</span><span class="dmc-x" data-dmc-close="${i}" title="Закрыть вкладку">${ic('x','sm')}</span></button>`).join('')}<button type="button" class="btn sm ghost" id="dmc-new" title="Новая вкладка запроса">${ic('plus','sm')}</button></div>
       <div class="row dmc-bar"><button type="button" class="btn cta" id="dmc-run" title="Ctrl+Enter: выделенный текст, без выделения — оператор под курсором">${ic('play','sm')}Выполнить</button><button type="button" class="btn" id="dmc-stop" disabled title="Запрос не выполняется">Остановить</button><button type="button" class="btn" id="dmc-plan">План запроса</button><button type="button" class="btn" id="dmc-fmt">Форматировать</button><button type="button" class="btn" id="dmc-xl" ${t.res&&t.res.rows?'':'disabled title="Сначала выполните запрос"'}>${ic('download','sm')}В Excel</button><span class="grow"></span><button type="button" class="btn" id="dmc-mine">Сохранить в Мои запросы</button><button type="button" class="btn" id="dmc-tpl">${ic('layers','sm')}Сохранить в шаблон</button></div>
+      <div class="row dmc-asr"><label class="dmc-as" for="dmc-as">Выполнять как</label><select class="inp" id="dmc-as"><option value="adm">Администратор</option>${ORGS.slice().sort((a,b)=>(b.id===ORG.id)-(a.id===ORG.id)).map(o=>`<option value="${esc(o.id)}" ${DMC.as===o.id?'selected':''}>Организация «${esc(o.name)}»${o.id===ORG.id?' (демо)':''}</option>`).join('')}</select>
+        <span class="hint" style="margin:0">${ao?`Запрос идёт ролью организаций от «${esc(ao.name)}»: видно ровно то, что видит она, таблицы платформы закрыты. Пределы — как у «Показать»: 15 секунд, 50 000 строк`:'Роль шаблонов администратора: все организации, без секретов; до 60 секунд'}</span></div>
       ${t.notes?`<div class="note warn dmc-from">${ic('alert')}<span><b>${esc(t.notes.warn)}.</b>${t.notes.from?` Метод <span class="mono">${esc(t.notes.from)}</span>.`:''}${t.notes.list&&t.notes.list.length?`<br>Что заменено: ${t.notes.list.map(esc).join('; ')}.`:''}</span></div>`:''}
       ${t.tpl&&dmTpl(t.tpl)?`<div class="hint" style="margin:0">Запрос шаблона «${esc(dmTpl(t.tpl).name)}»: «Сохранить в шаблон» пишет в этот шаблон${dmTpl(t.tpl).src==='system'?' — готовый шаблон платформы сохраняется только копией':''}</div>`:''}
       <div class="dm-sqlb dmc-ed"><div class="dm-sqlg" aria-hidden="true"><div>${dmLn(t.sql)}</div></div><pre class="dm-hl mono" aria-hidden="true">${dmHl(t.sql)}</pre><textarea class="inp mono dm-sql" id="dmc-s" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Запрос">${esc(t.sql)}</textarea></div>
       <ul class="dmc-errs" id="dmc-errs"></ul><div class="dm-pars dmc-pars" id="dmc-pars"></div><div id="dmc-res"></div></section></div>`;
-  const q=s=>$(s,body),ta=q('#dmc-s');dmHlBind(ta);dmcAssist(ta,{errBox:q('#dmc-errs')});
+  const q=s=>$(s,body),ta=q('#dmc-s');dmHlBind(ta);dmcAssist(ta,{errBox:q('#dmc-errs'),org:()=>!!dmcAsOrg()});
   const pars=()=>{const ks=dmSqlPars(ta.value);q('#dmc-pars').innerHTML=ks.length?ks.map(k=>{const v=t.params[k]??(/month/.test(k)?ym(TODAY):/date|_from|_to/.test(k)?TODAY:'');const ty=/month/.test(k)?'month':/date|_from$|_to$/.test(k)?'date':'text';
       return fld(':'+esc(k),`<input class="inp" type="${ty}" id="dmcp-${esc(k)}" data-dmc-p="${esc(k)}" value="${esc(v)}">`,{id:'dmcp-'+k})}).join('')+'<span class="hint" style="margin:0">Значение уходит в базу как данные и в текст запроса не вклеивается</span>':'';
     $$('[data-dmc-p]',body).forEach(x=>x.oninput=()=>{t.params[x.dataset.dmcP]=x.value;dmcSave()})};
@@ -205,24 +212,36 @@ function renderDmCon(body){dmcState();if(isMobile())return dmcPhone(body);const 
   q('#dmc-xl').onclick=()=>dmcXl(t);q('#dmc-mine').onclick=()=>dmcMineDlg(t);q('#dmc-tpl').onclick=()=>{t.sql=ta.value;dmcToTpl(t)};
   q('#dmc-new').onclick=()=>{DMC.tabs.push(dmcNewTab({sql:''}));DMC.cur=DMC.tabs.length-1;dmcSave();renderPage()};
   $$('[data-dmc-tab]',body).forEach(b=>b.onclick=e=>{const c=e.target.closest('[data-dmc-close]');if(c){const i=+c.dataset.dmcClose;DMC.tabs.splice(i,1);if(!DMC.tabs.length)DMC.tabs.push(dmcNewTab());DMC.cur=Math.min(DMC.cur>i?DMC.cur-1:DMC.cur,DMC.tabs.length-1)}else DMC.cur=+b.dataset.dmcTab;dmcSave();renderPage()});
-  $$('[data-dmc-side]',body).forEach(b=>b.onclick=()=>{DMC.side=b.dataset.dmcSide;DMC.q='';renderPage()});
+  $$('[data-dmc-side]',body).forEach(b=>b.onclick=()=>{DMC.side=b.dataset.dmcSide;DMC.q='';DMC.pick=null;renderPage()});
+  q('#dmc-as').onchange=e=>{DMC.as=e.target.value;t.res=null;dmcSave();renderPage()};
   q('#dmc-q').oninput=e=>{DMC.q=e.target.value;dmcSide(body)}}
 
 // Левая панель: «База», «Методы API», «Заготовки», «Мои запросы» и «История»
 function dmcSide(body){const host=$('#dmc-list',body),q=DMC.q.trim().toLowerCase(),ta=$('#dmc-s',body);const ins=x=>{if(!ta)return;ta.focus();ta.setRangeText(x,ta.selectionStart,ta.selectionEnd,'end');ta.dispatchEvent(new Event('input',{bubbles:true}))};
   if(DMC.side==='db'){const d=dmcDb();if(!d){host.innerHTML=tdMissing('описание базы');return}
     const L=d.T.filter(t=>!q||t.n.includes(q)||t.ru.toLowerCase().includes(q)||t.cols.some(c=>c.n.includes(q)||c.ru.toLowerCase().includes(q)));
-    host.innerHTML=d.G.map(g=>{const ts=L.filter(t=>t.g===g.id);return ts.length?`<details class="dmc-g" ${q?'open':''}><summary>${esc(g.ru)} <span class="faint">${ts.length}</span></summary>${ts.map(t=>`<details class="dmc-t"><summary><button type="button" class="linkbtn mono" data-dmc-ins="${esc(t.n)}" title="Вставить в запрос">${esc(t.n)}</button> <span class="faint">${esc(t.ru)}</span>${t.org?'':' <span class="tag sm" title="Роль организаций таблицу не читает">закрыто для организаций</span>'}</summary><ul>${t.cols.map(c=>`<li><button type="button" class="linkbtn mono" data-dmc-ins="${esc(c.n)}">${esc(c.n)}</button> <span class="faint">${esc(dmcKind(c))}</span> <span class="${c.desc?'':'faint'}">${esc(c.ru||'нет описания')}</span></li>`).join('')}</ul><button type="button" class="linkbtn" data-dmc-sch="${esc(t.n)}">${ic('db','sm')}Показать на схеме</button></details>`).join('')}</details>`:''}).join('')||'<span class="faint">Ничего не нашлось</span>'}
+    const pk=DMC.pick;
+    host.innerHTML=(pk?`<div class="note dmc-pick">${ic('info')}<span>Нажмите на таблицы, которые соединить: до ${DMC_BUILD_MAX}. Отмечено ${pk.length}${pk.length?': '+pk.map(esc).join(', '):''}.</span><div class="row"><button type="button" class="btn sm cta" id="dmc-pk-go" ${pk.length?'':'disabled'}>Собрать · ${pk.length}</button><button type="button" class="btn sm ghost" id="dmc-pk-x">Отмена</button></div></div>`
+      :`<button type="button" class="btn sm" id="dmc-pk">${ic('layers','sm')}Собрать запрос</button>`)+
+      (d.G.map(g=>{const ts=L.filter(t=>t.g===g.id);return ts.length?`<details class="dmc-g" ${q||pk?'open':''}><summary>${esc(g.ru)} <span class="faint">${ts.length}</span></summary>${ts.map(t=>pk?`<label class="check-row dmc-pkr"><input type="checkbox" data-dmc-pk="${esc(t.n)}" ${pk.includes(t.n)?'checked':''} ${!pk.includes(t.n)&&pk.length>=DMC_BUILD_MAX?'disabled':''}><span class="mono">${esc(t.n)}</span> <span class="faint">${esc(t.ru)}</span></label>`:`<details class="dmc-t"><summary><button type="button" class="linkbtn mono" data-dmc-ins="${esc(t.n)}" title="Вставить в запрос">${esc(t.n)}</button> <span class="faint">${esc(t.ru)}</span>${t.org?'':' <span class="tag sm" title="Роль организаций таблицу не читает">закрыто для организаций</span>'}</summary><ul>${t.cols.map(c=>`<li><button type="button" class="linkbtn mono" data-dmc-ins="${esc(c.n)}">${esc(c.n)}</button> <span class="faint">${esc(dmcKind(c))}</span> <span class="${c.desc?'':'faint'}">${esc(c.ru||'нет описания')}</span></li>`).join('')}</ul><button type="button" class="linkbtn" data-dmc-sch="${esc(t.n)}">${ic('db','sm')}Показать на схеме</button></details>`).join('')}</details>`:''}).join('')||'<span class="faint">Ничего не нашлось</span>')}
   else if(DMC.side==='api'){const a=tdApi();if(!a){host.innerHTML=tdMissing('описание API');return}
     const L=a.methods.filter(m=>m.m==='GET'&&(!q||m.p.toLowerCase().includes(q)||(m.sum||'').toLowerCase().includes(q))).slice(0,150);
-    host.innerHTML=`<span class="hint" style="margin:0">Методы чтения (GET). Кнопки передают запрос в консоль, сами ничего не выполняют.</span>`+L.map(m=>{const ok=!!dmcMethodSql(m);return `<div class="dmc-m"><button type="button" class="linkbtn" data-dmc-md="${esc(m.id)}" title="Карточка метода">${tdMth(m.m)} <span class="mono">${esc(m.p)}</span></button><span class="faint">${esc(m.sum||'')}</span>${ok?`<div class="row"><button type="button" class="btn sm" data-dmc-mo="${esc(m.id)}">Открыть в консоли</button><button type="button" class="btn sm" data-dmc-mt="${esc(m.id)}">Создать шаблон на основе</button></div>`:'<span class="hint" style="margin:0">Запрос написан кодом: точного SQL нет</span>'}</div>`}).join('')}
-  else if(DMC.side==='pre'){host.innerHTML=`<div class="state">${ic('book','lg')}<b>Заготовки появятся в следующей версии</b><span>Частые запросы и образцы конструкций. Запрос готового шаблона открывается в консоли из вкладки «Шаблоны» — кнопкой «Открыть в консоли».</span></div>`}
+    host.innerHTML=`<span class="hint" style="margin:0">Методы чтения (GET). Кнопки передают запрос в консоль, сами ничего не выполняют.</span>`+L.map(m=>{const ok=!!dmcMethodSql(m);return `<div class="dmc-m"><button type="button" class="linkbtn" data-dmc-md="${esc(m.id)}" title="Карточка метода">${tdMth(m.m)} <span class="mono">${esc(m.p)}</span></button><span class="faint">${esc(m.sum||'')}</span>${ok?`<div class="row"><button type="button" class="btn sm" data-dmc-mo="${esc(m.id)}">Открыть в консоли</button><button type="button" class="btn sm" data-dmc-mt="${esc(m.id)}">Создать шаблон на основе</button></div>`:`<span class="hint" style="margin:0">Запрос написан кодом: точного SQL нет</span><div class="row"><button type="button" class="btn sm" data-dmc-mb="${esc(m.id)}">Собрать запрос по таблицам метода</button></div>`}</div>`}).join('')}
+  else if(DMC.side==='pre'){const sys=DM_TPL.filter(x=>x.src==='system');
+    host.innerHTML=`<span class="hint" style="margin:0">Частые запросы и образцы конструкций. Удалённые и заменённые записи уже исключены, деньги — в тыйынах.</span>`+
+      DMC_PRE.map(x=>`<div class="dmc-m"><button type="button" class="linkbtn" data-dmc-pre="${esc(x.id)}"><b>${esc(x.n)}</b></button><span class="faint">${esc(x.d)}</span></div>`).join('')+
+      `<div class="dmc-g"><b>Готовые шаблоны · ${sys.length}</b></div>`+sys.map(x=>`<div class="dmc-m"><span><b>${esc(x.name)}</b> <span class="faint">${x.kind==='adm'?'Для администратора':'Для организаций'}</span></span><div class="row"><button type="button" class="btn sm" data-dmc-st="${esc(x.code)}">Открыть в консоли</button></div></div>`).join('')}
   else{const mine=dmcMine().filter(x=>x.by===S.me&&(!q||x.name.toLowerCase().includes(q)||x.sql.toLowerCase().includes(q))),hist=dmcHist().filter(x=>x.by===S.me&&(!q||x.sql.toLowerCase().includes(q)));
     host.innerHTML=`<div class="tabs sm" role="tablist"><button type="button" class="tab${DMC.mq==='mine'?' on':''}" data-dmc-mq="mine">Мои запросы · ${mine.length}</button><button type="button" class="tab${DMC.mq==='hist'?' on':''}" data-dmc-mq="hist">История · ${hist.length}</button></div>`+
       (DMC.mq==='mine'?(mine.length?mine.slice().sort((a,b)=>b.at.localeCompare(a.at)).map(x=>`<div class="dmc-m"><button type="button" class="linkbtn" data-dmc-mine="${esc(x.id)}"><b>${esc(x.name)}</b></button><span class="mono faint dmc-1">${esc(x.sql.split('\n')[0])}</span><div class="row"><span class="faint">${fmtDT(x.at)}</span><span class="grow"></span><button type="button" class="btn sm ghost" data-dmc-mdel="${esc(x.id)}" title="Удалить">${ic('trash','sm')}</button></div></div>`).join(''):'<span class="faint">Сохранённых запросов нет. «Сохранить в Мои запросы» над редактором. Их видите только вы.</span>')
-        :(hist.length?hist.slice(-DMC_HIST_MAX).reverse().map((x,i)=>`<div class="dmc-m"><button type="button" class="linkbtn mono dmc-1" data-dmc-h="${dmcHist().indexOf(x)}">${esc(x.sql.split('\n')[0])}</button><span class="faint">${fmtDT(x.at)} · ${esc(x.res)}${x.n!=null?` · строк ${x.n}`:''}</span></div>`).join(''):'<span class="faint">Запусков ещё не было. Здесь — ваши последние 100.</span>'))}
+        :(hist.length?hist.slice(-DMC_HIST_MAX).reverse().map((x,i)=>`<div class="dmc-m"><button type="button" class="linkbtn mono dmc-1" data-dmc-h="${dmcHist().indexOf(x)}">${esc(x.sql.split('\n')[0])}</button><span class="faint">${fmtDT(x.at)} · ${esc(x.res)}${x.n!=null?` · строк ${x.n}`:''}${x.as?` · как «${esc(x.as)}»`:''}</span></div>`).join(''):'<span class="faint">Запусков ещё не было. Здесь — ваши последние 100.</span>'))}
+  host.onchange=e=>{const x=e.target.closest('[data-dmc-pk]');if(!x||!DMC.pick)return;const n=x.dataset.dmcPk,i=DMC.pick.indexOf(n);if(x.checked&&i<0&&DMC.pick.length<DMC_BUILD_MAX)DMC.pick.push(n);else if(!x.checked&&i>=0)DMC.pick.splice(i,1);dmcSide(body)};
   host.onclick=e=>{let b;if(b=e.target.closest('[data-dmc-ins]'))ins(b.dataset.dmcIns);else if(b=e.target.closest('[data-dmc-sch]'))tdShowTable(b.dataset.dmcSch);
-    else if(b=e.target.closest('[data-dmc-md]'))tdMethod(b.dataset.dmcMd,'sql');else if(b=e.target.closest('[data-dmc-mo],[data-dmc-mt]')){const id=b.dataset.dmcMo||b.dataset.dmcMt;dmcFromMethod(tdApi().methods.find(m=>m.id===id),!!b.dataset.dmcMt)}
+    else if(b=e.target.closest('[data-dmc-md]'))tdMethod(b.dataset.dmcMd,'sql');else if(b=e.target.closest('[data-dmc-mb]'))dmcMethodBuild(tdApi().methods.find(m=>m.id===b.dataset.dmcMb));
+    else if(b=e.target.closest('[data-dmc-pre]')){const x=DMC_PRE.find(y=>y.id===b.dataset.dmcPre);const p={};dmSqlPars(x.sql).forEach(k=>p[k]=/month/.test(k)?ym(TODAY):/date/.test(k)?TODAY:'');dmConOpen(x.sql,p,x.n,{src:'pre'})}
+    else if(b=e.target.closest('[data-dmc-st]')){const x=dmTpl(b.dataset.dmcSt);if(x)dmTplToCon(x)}
+    else if(b=e.target.closest('#dmc-pk')){DMC.pick=[];dmcSide(body)}else if(b=e.target.closest('#dmc-pk-x')){DMC.pick=null;dmcSide(body)}
+    else if(b=e.target.closest('#dmc-pk-go')){const L=DMC.pick;DMC.pick=null;dmcSide(body);dmcBuild(L)}else if(b=e.target.closest('[data-dmc-mo],[data-dmc-mt]')){const id=b.dataset.dmcMo||b.dataset.dmcMt;dmcFromMethod(tdApi().methods.find(m=>m.id===id),!!b.dataset.dmcMt)}
     else if(b=e.target.closest('[data-dmc-mq]')){DMC.mq=b.dataset.dmcMq;dmcSide(body)}
     else if(b=e.target.closest('[data-dmc-mine]')){const x=dmcMine().find(y=>y.id===b.dataset.dmcMine);if(x)dmConOpen(x.sql,Object.assign({},x.params),x.name,{mq:x.id})}
     else if(b=e.target.closest('[data-dmc-mdel]')){const x=dmcMine().find(y=>y.id===b.dataset.dmcMdel);if(x)confirmDlg({title:'Удалить запрос?',text:`«${esc(x.name)}» пропадёт из «Моих запросов».`,ok:'Удалить',danger:true,run:()=>{dmcMine().splice(dmcMine().indexOf(x),1);DMC.tabs.forEach(t=>{if(t.mq===x.id)t.mq=null});dmcSave();dmcSide(body);toast('Запрос удалён','trash')}})}
@@ -233,11 +252,11 @@ const dmcNorm=s=>dmcMask(String(s)).replace(/\s+/g,' ').trim().replace(/;$/,'').
 function dmcPick(ta){const a=ta.selectionStart,b=ta.selectionEnd;return a!==b?ta.value.slice(a,b).trim():dmcStmtAt(ta.value,a)}
 function dmcRun(body,t,ta){const s=dmcPick(ta);if(!s)return toast('Нет запроса под курсором','alert',true);
   if(dmcStmts(s).length>1){t.res={err:'В базу уходит один оператор: выделите один запрос или поставьте курсор на него'};return dmcResDraw($('#dmc-res',body),t)}
-  const E=dmcIssues(s).filter(x=>/нельзя|закрыт|Лишняя/.test(x[2]));const p={};dmSqlPars(s).forEach(k=>p[k]=t.params[k]??null);
+  const ao=dmcAsOrg(),E=dmcIssues(s,{org:!!ao}).filter(x=>/нельзя|закрыт|Лишняя/.test(x[2]));const p={};dmSqlPars(s).forEach(k=>p[k]=t.params[k]??null);
   const miss=dmSqlPars(s).filter(k=>!p[k]);if(miss.length){t.res={err:`Укажите значение параметра :${miss[0]} — полоска полей над результатом`};return dmcResDraw($('#dmc-res',body),t)}
-  let r;if(E.length)r={err:E[0][2]};else{const tp=DM_TPL.find(x=>x.sql&&dmcNorm(x.sql)===dmcNorm(s));const run=tp&&DM_RUN[tp.run||tp.code]?dmRun(Object.assign({},tp,{state:'Опубликован'}),Object.assign(Object.fromEntries(tp.params.map(x=>[x.k,dmDef(x.def)])),p),ORG.id):null;
-    r=run?{rows:run.rows,ms:run.ms,cols:tp.cols.filter(c=>c.type!=='cp'),tpl:tp.name}:{stand:true,cols:dmSqlCols(s).map(k=>({k,label:k,type:'text'}))}}
-  t.res=r;t.cols=r.cols||t.cols;dmcHist().push({at:nowStamp(),by:S.me,sql:s,params:p,n:r.rows?r.rows.length:null,res:r.err?'Ошибка':r.stand?'На стенде':'Успешно'});
+  let r;if(E.length)r={err:E[0][2]};else{const tp=DM_TPL.find(x=>x.sql&&dmcNorm(x.sql)===dmcNorm(s));const run=tp&&DM_RUN[tp.run||tp.code]&&(!ao||tp.kind==='org')?dmRun(Object.assign({},tp,{state:'Опубликован'}),Object.assign(Object.fromEntries(tp.params.map(x=>[x.k,dmDef(x.def)])),p),ao?ao.id:ORG.id):null;
+    r=run?{rows:run.rows,ms:run.ms,cols:tp.cols.filter(c=>c.type!=='cp'),tpl:tp.name,as:ao?ao.name:null}:{stand:true,cols:dmSqlCols(s).map(k=>({k,label:k,type:'text'}))}}
+  t.res=r;t.cols=r.cols||t.cols;dmcHist().push({at:nowStamp(),by:S.me,sql:s,params:p,n:r.rows?r.rows.length:null,res:r.err?'Ошибка':r.stand?'На стенде':'Успешно',as:ao?ao.name:null});
   while(dmcHist().filter(x=>x.by===S.me).length>DMC_HIST_MAX)dmcHist().splice(dmcHist().findIndex(x=>x.by===S.me),1);
   dmcResDraw($('#dmc-res',body),t);const xl=$('#dmc-xl',body);if(xl){xl.disabled=!r.rows;xl.title=r.rows?'':'Сначала выполните запрос'}if(DMC.side==='mine')dmcSide(body)}
 function dmcPlan(body,t,ta){const s=dmcPick(ta);if(!s)return toast('Нет запроса под курсором','alert',true);t.res={plan:true};dmcResDraw($('#dmc-res',body),t)}
@@ -247,7 +266,7 @@ function dmcResDraw(host,t){const r=t.res;if(!host)return;if(!r){host.innerHTML=
   if(r.plan){host.innerHTML=`<div class="note">${ic('info')}<span>«План запроса» — оценка запроса базой без выполнения: сколько строк и насколько тяжёлый запрос. Прототип не выполняет SQL: план покажет тестовый стенд. В журнал консоли он не пишется.</span></div>`;return}
   if(r.stand){host.innerHTML=`<div class="note">${ic('info')}<span>На стенде здесь будет ответ базы: строки, их число и время выполнения, ошибка — текстом базы. Прототип показывает ответ, только если запрос совпадает с готовым шаблоном.${r.cols.length?` Столбцы вывода: ${r.cols.map(c=>esc(c.k)).join(', ')}.`:''}</span></div>`;return}
   const money=r.cols.some(c=>c.type==='money');
-  host.innerHTML=`<div class="row dm-meta"><span class="hint" style="margin:0">Строк: <b>${r.rows.length}</b> · выполнено за ${r.ms} мс · прототип: ответ шаблона «${esc(r.tpl)}» на демо-данных${money?' · деньги — в сомах, в базе тыйыны':''}</span></div><div class="ex-stat" id="dmc-st"></div><div id="dmc-g"></div>`;
+  host.innerHTML=`<div class="row dm-meta"><span class="hint" style="margin:0">Строк: <b>${r.rows.length}</b> · выполнено за ${r.ms} мс · прототип: ответ шаблона «${esc(r.tpl)}» на демо-данных${r.as?` · как организация «${esc(r.as)}»`:''}${money?' · деньги — в сомах, в базе тыйыны':''}</span></div><div class="ex-stat" id="dmc-st"></div><div id="dmc-g"></div>`;
   grid($('#dmc-g',host),{id:'dmc-res',audit:false,fixedView:'table',size:'all',rid:x=>x._i,ordered:true,noun:['строка','строки','строк'],cols:r.cols.map((c,i)=>Object.assign(dmCol(c,i),{label:c.k+(c.type==='money'?' · сом':''),title:c.type==='money'?'В базе тыйыны, здесь — сомы':c.label})),rows:r.rows,
     empty:{icon:'search',title:'Запрос не вернул строк',text:'Измените запрос или параметры и нажмите «Выполнить».'},after:h=>dmEx(h,$('#dmc-st',host))})}
 function dmcXl(t){const r=t.res;if(!r||!r.rows)return;const rows=[r.cols.map(c=>({v:c.k,s:XL_ST.head})),...r.rows.map(x=>r.cols.map(c=>({v:x[c.k]??''})))];
@@ -263,19 +282,20 @@ function dmcMineDlg(t){const x0=t.mq&&dmcMine().find(x=>x.id===t.mq&&x.by===S.me
       $('#dcm-ok',el).onclick=()=>go2(false);if($('#dcm-new',el))$('#dcm-new',el).onclick=()=>go2(true)}})})}
 
 /* «Сохранить в шаблон» (блок 1, пункт 7; блок 4, пункт 4): обычное окно шаблона, в нём уже запрос, параметры и столбцы последнего запуска */
-function dmcToTpl(t){const ks=dmSqlPars(t.sql),cols=(t.cols&&t.cols.length?t.cols:dmSqlCols(t.sql).map(k=>({k,label:k,type:'text'}))).map(c=>({k:c.k,label:c.label||c.k,type:c.type||'text',total:!!c.total}));
+function dmcToTpl(t){const t1=t.tpl&&dmTpl(t.tpl),au=(!t1||t1.kind==='org')?dmcAutoCp(t.sql):null;if(au&&au.added){t.sql=au.sql;if(t.cols&&t.cols.length)t.cols=[{k:'contractor_id',type:'cp'},...t.cols.filter(c=>c.k!=='contractor_id')];dmcSave();toast(`Добавлен столбец contractor_id — «Контрагент (для области)»${t1?'':`. Модуль шаблона: «${DM_MODS[au.mod]}»`}`,'layers')}
+  const ks=dmSqlPars(t.sql),cols=(t.cols&&t.cols.length?t.cols:dmSqlCols(t.sql).map(k=>({k,label:k,type:'text'}))).map(c=>c.k==='contractor_id'?{k:c.k,label:'Контрагент (для области «Свои контрагенты»)',type:'cp',total:false}:{k:c.k,label:c.label||c.k,type:c.type||'text',total:!!c.total});
   const params=ks.map(k=>({k,label:k,type:/month/.test(k)?'month':/date|_from$|_to$/.test(k)?'date':/year/.test(k)?'year':'text',req:true,def:null}));
   const t0=t.tpl&&dmTpl(t.tpl);
   if(t0&&t0.src==='system'){let code=t0.code+'-copy',i=2;while(dmTpl(code))code=t0.code+'-copy'+i++;const n=Object.assign(structuredClone(t0),{id:'dt'+Date.now().toString(36),code,name:t0.name+' (копия)',state:'Черновик',src:'copy',run:t0.run||t0.code,checked:null,err:'',hist:[],_cb:S.me,_ca:nowStamp()});
     DM_TPL.push(n);dmHist(n,`Создан копированием шаблона «${t0.name}» из консоли: Черновик`);t.tpl=n.code;dmcSave();toast('Готовый шаблон платформы сохраняется копией','copy');return dmEdit(n,{sql:t.sql,params:params.map(p=>n.params.find(x=>x.k===p.k)||p)})}
   if(t0)return dmEdit(t0,{sql:t.sql,params:params.map(p=>t0.params.find(x=>x.k===p.k)||p),cols:t0.state==='Черновик'?cols.map(c=>t0.cols.find(x=>x.k===c.k)||c):null});
-  dmEdit(null,{sql:t.sql,params,cols:cols.length?cols:null,name:t.notes?t.name:''})}
+  dmEdit(null,{sql:t.sql,params,cols:cols.length?cols:null,name:t.notes?t.name:'',mod:au?au.mod:null,perm:au&&au.fee?'fee':null})}
 
 /* Телефон (блок 1, пункт 6): список «Моих запросов», запуск и результат; писать запросы — на ПК */
 function dmcPhone(body){const t=dmcTab(),mine=dmcMine().filter(x=>x.by===S.me);
   body.innerHTML=`<div class="note">${ic('info')}<span>На телефоне — «Мои запросы», запуск и результат. Писать запросы — на ПК.</span></div>
     <div class="box dmc-pm">${mine.length?mine.map(x=>`<button type="button" class="dmc-pi${t.mq===x.id?' on':''}" data-dmc-pm="${esc(x.id)}"><b>${esc(x.name)}</b><span class="mono faint dmc-1">${esc(x.sql.split('\n')[0])}</span></button>`).join(''):'<span class="faint">Сохранённых запросов нет: сохраните запрос в консоли на ПК.</span>'}</div>
-    ${t.mq?`<div class="box"><h3>${esc(t.name)}</h3><pre class="dm-hl mono dmc-ro">${dmHl(t.sql)}</pre><div class="dm-pars" id="dmc-pars">${dmSqlPars(t.sql).map(k=>fld(':'+esc(k),`<input class="inp" type="${/month/.test(k)?'month':/date|_from$|_to$/.test(k)?'date':'text'}" data-dmc-p="${esc(k)}" value="${esc(t.params[k]??'')}">`)).join('')}</div><button type="button" class="btn cta" id="dmc-run">${ic('play','sm')}Выполнить</button></div><div id="dmc-res"></div>`:''}`;
+    ${t.mq||t.src||t.tpl?`<div class="box"><h3>${esc(t.name)}</h3><pre class="dm-hl mono dmc-ro">${dmHl(t.sql)}</pre><div class="dm-pars" id="dmc-pars">${dmSqlPars(t.sql).map(k=>fld(':'+esc(k),`<input class="inp" type="${/month/.test(k)?'month':/date|_from$|_to$/.test(k)?'date':'text'}" data-dmc-p="${esc(k)}" value="${esc(t.params[k]??'')}">`)).join('')}</div><button type="button" class="btn cta" id="dmc-run">${ic('play','sm')}Выполнить</button></div><div id="dmc-res"></div>`:''}`;
   $$('[data-dmc-pm]',body).forEach(b=>b.onclick=()=>{const x=dmcMine().find(y=>y.id===b.dataset.dmcPm);dmConOpen(x.sql,Object.assign({},x.params),x.name,{mq:x.id})});
   $$('[data-dmc-p]',body).forEach(x=>x.oninput=()=>{t.params[x.dataset.dmcP]=x.value;dmcSave()});
   const r=$('#dmc-run',body);if(r){const ro={value:t.sql,selectionStart:0,selectionEnd:0};r.onclick=()=>dmcRun(body,t,ro);dmcResDraw($('#dmc-res',body),t)}}
