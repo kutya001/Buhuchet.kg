@@ -502,6 +502,31 @@ describe.skipIf(!databaseAvailable())('Пакет 28.11.2026, этап 0: осн
       );
     });
 
+    it('прежний список Админки «Запросы» до этапа 2 — только «Добавить в справочник» прежних статусов', async () => {
+      const dict = await newRequest(a, staff.userId, 'Прежний список');
+      const [typo] = await db.admin.db
+        .insert(dictChangeRequests)
+        .values({
+          orgId: a.orgId,
+          no: 0,
+          kind: 'typo',
+          topic: '«Отчеты для сдачи»',
+          form: { was: 'Отчеты для сдачи', right: 'Отчёты для сдачи' },
+          createdBy: staff.userId,
+        })
+        .returning({ id: dictChangeRequests.id });
+      const seen = await withUserContext(db.app.db, adminId, (tx) =>
+        tx.execute<{ id: string }>(sql`select id from app.admin_dict_change_requests`),
+      );
+      const listed = seen.map((r) => r.id);
+      expect(listed).toContain(dict.id);
+      expect(listed).not.toContain(typo!.id);
+      const [count] = await withUserContext(db.app.db, adminId, (tx) =>
+        tx.execute<{ n: number }>(sql`select app.admin_dict_requests() as n`),
+      );
+      expect(count!.n).toBe(listed.length);
+    });
+
     it('«прочитано» — только автор и не дальше ленты; прочие поля организация не меняет', async () => {
       const req = await newRequest(a, staff.userId, 'Прочитано');
       await inOrg(a, adminId, (tx) =>

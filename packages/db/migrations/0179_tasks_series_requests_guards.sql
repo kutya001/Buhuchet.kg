@@ -217,6 +217,39 @@ REVOKE ALL ON FUNCTION app.admin_answer_dict_request(uuid, text, text, integer) 
 --> statement-breakpoint
 GRANT EXECUTE ON FUNCTION app.admin_answer_dict_request(uuid, text, text, integer) TO buhuchet_app;
 --> statement-breakpoint
+-- Прежний список Админки → «Запросы» и его плашка до этапа 2 пакета показывают только то, что показывали:
+-- «Добавить в справочник» в статусах «Новый», «Добавлено», «Отклонён» (запросы других видов и статусов
+-- появятся вместе с новым модулем «Запросы» Админки).
+CREATE OR REPLACE VIEW app.admin_dict_change_requests WITH (security_barrier = true) AS
+  SELECT
+    r.id,
+    r.org_id,
+    o.name AS org_name,
+    r.dict,
+    r.what,
+    r.comment,
+    r.status,
+    r.answer,
+    r.created_at,
+    r.created_by,
+    e.full_name AS created_by_name,
+    r.decided_at,
+    r.decided_by,
+    r.updated_at,
+    r.version
+  FROM public.dict_change_requests r
+  JOIN public.organizations o ON o.id = r.org_id
+  LEFT JOIN public.employees e ON e.user_id = r.created_by
+  WHERE app.is_platform_admin() AND r.kind = 'dict' AND r.status IN ('new', 'added', 'rejected');
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION app.admin_dict_requests() RETURNS integer
+  LANGUAGE sql STABLE SECURITY DEFINER
+  SET search_path = pg_catalog, pg_temp
+  AS $$
+    SELECT count(*)::integer FROM public.dict_change_requests r
+    WHERE app.is_platform_admin() AND r.kind = 'dict' AND r.status IN ('new', 'added', 'rejected')
+  $$;
+--> statement-breakpoint
 -- Переписка, снимки и «Заметки» после записи не меняются и не удаляются (вместе с запросом — каскад).
 REVOKE UPDATE, DELETE, TRUNCATE ON TABLE request_messages FROM buhuchet_app;
 --> statement-breakpoint
