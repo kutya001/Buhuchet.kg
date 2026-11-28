@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import apiDocs from '../../../../spec/data/apiDocs.json';
+import schemaDoc from '../../../../spec/prototype/db/schema.json';
 import {
   dmConsoleParamType,
   dmConsoleParamTypes,
   dmMethodSql,
   dmMethodTables,
   dmMethodToSelect,
+  dmSqlAliasScopes,
   dmSqlFormat,
   dmSqlLex,
   dmSqlMoneyName,
@@ -342,5 +344,62 @@ describe('метод API → SELECT на всём снимке (блок 5, пу
   it('таблицы метода — для сборщика этапа 2', () => {
     const m = withSql.find((x) => x.p === '/admin/organizations')!;
     expect(dmMethodTables(m, docs.sql)).toContain('organizations');
+  });
+});
+
+/** Карта базы из описания схемы (`spec/prototype/db/schema.json`): таблицы «Есть в базе» и их поля. */
+const schema = schemaDoc as unknown as {
+  tables: {
+    name: string;
+    status: string;
+    columns: { name: string; type: string; status?: string }[];
+  }[];
+};
+const known = new Map(
+  schema.tables
+    .filter((t) => t.status === 'actual')
+    .map((t) => [
+      t.name,
+      new Map(t.columns.filter((c) => c.status !== 'planned').map((c) => [c.name, c.type])),
+    ]),
+);
+
+describe('псевдонимы по уровням запроса (исправление этапа 2, docs/typical-mistakes.md № 86)', () => {
+  it('псевдоним, заново объявленный в подзапросе, — своя таблица на своём уровне', () => {
+    const sql =
+      'select f.name, (select l.source_kind from platform_leads l where l.id = f.lead_id) as k from files f join leads_view l on l.id = f.id';
+    const sig = dmSqlLex(sql).filter((t) => t.kind !== 'space' && t.kind !== 'comment');
+    const at = (text: string, n = 0) =>
+      sig.map((t, i) => [t.text, i] as const).filter(([x]) => x === text)[n]![1];
+    const resolve = dmSqlAliasScopes(sql);
+    expect(resolve(at('l', 0), 'l')).toBe('platform_leads');
+    // Коррелированный подзапрос видит внешний псевдоним.
+    expect(resolve(at('f', 1), 'f')).toBe('files');
+    // Снаружи l — своя таблица внешнего уровня.
+    expect(resolve(at('l', 4), 'l')).toBe('leads_view');
+  });
+  it('WITH и LATERAL — свои уровни', () => {
+    const r = dmMethodToSelect(
+      'with x as (select c.name from contractors c) select c.inn from organizations c left join lateral (select c.name from contractors c) y on true',
+      known,
+    );
+    expect(r.replace.filter((x) => x.code === 'closed_fields')).toEqual([]);
+    const bad = dmMethodToSelect('select c.secret_field from contractors c', known);
+    expect(bad.replace.find((x) => x.code === 'closed_fields')?.vars.list).toBe(
+      'contractors.secret_field',
+    );
+  });
+  it('ни одного ложного «поля не видно» на запросах снимка с точным SQL', () => {
+    const files = docs.methods.find((m) => m.m === 'GET' && m.p === '/admin/files');
+    expect(files && dmMethodSql(files, docs.sql)).toBeTruthy();
+    const wrong: string[] = [];
+    for (const m of docs.methods) {
+      const src = dmMethodSql(m, docs.sql);
+      if (!src) continue;
+      const r = dmMethodToSelect(src, known);
+      const f = r.replace.find((x) => x.code === 'closed_fields');
+      if (f) wrong.push(`${m.p}: ${f.vars.list}`);
+    }
+    expect(wrong).toEqual([]);
   });
 });
