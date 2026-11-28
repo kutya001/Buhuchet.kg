@@ -52,6 +52,7 @@ export type DemoKind =
   | 'assignment'
   | 'report'
   | 'task'
+  | 'task_series'
   | 'task_comment'
   | 'requisite'
   | 'money_operation'

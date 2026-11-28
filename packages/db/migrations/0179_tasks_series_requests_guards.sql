@@ -118,8 +118,14 @@ CREATE OR REPLACE FUNCTION app.dict_change_requests_org_guard() RETURNS trigger
     IF NEW.status IS DISTINCT FROM OLD.status THEN
       IF NOT (
         (OLD.status = 'new' AND NEW.status = 'withdrawn' AND OLD.created_by = me)
+        -- Ответ в закрытый — не позже 30 дней с дня закрытия по Бишкеку (правило `requestReplyEffect`
+        -- считает днями, здесь — с запасом в сутки); вопрос, ошибку и опечатку — автор или владелец
+        -- (кто их видит), «Добавить в справочник» — проверяет API по праву «Справочники».
         OR (NEW.status = 'in_work' AND OLD.status IN ('solved', 'added', 'rejected')
-          AND OLD.closed_at > now() - interval '30 days')
+          AND OLD.closed_at > now() - interval '31 days'
+          AND (OLD.kind = 'dict' OR OLD.created_by = me OR EXISTS (
+            SELECT 1 FROM public.employees e JOIN public.roles ro ON ro.id = e.role_id
+            WHERE e.user_id = me AND e.org_id = OLD.org_id AND ro.is_owner)))
       ) THEN
         RAISE EXCEPTION 'dict_change_requests: такой статус ставит администратор платформы'
           USING ERRCODE = '42501';
