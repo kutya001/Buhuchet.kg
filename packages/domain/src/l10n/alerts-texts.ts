@@ -71,6 +71,9 @@ export const ALERTS_TEXTS = {
     section: S,
   },
   'alert.job.reports_create_due': { ru: 'Создание отчётов к сроку', section: S },
+  // Повторяющиеся задачи (доработки 28.11.2026, блок 6, пункт 3).
+  'alert.job.tasks_series': { ru: 'Задачи: повторы', section: S },
+  'alert.job.tasks_series_notify': { ru: 'Задачи: сообщения о повторах', section: S },
   'alert.job.leads_docs_purge': {
     ru: 'Удаление файлов заявок с сайта по сроку',
     section: S,

@@ -55,6 +55,9 @@ const QUIET = [
   'contractor-page.cleanup-grants',
   'telegram.bell-cleanup',
   'reports.create-due',
+  // Серий повтора в наборе нет: ни задач, ни сообщений.
+  'tasks.series',
+  'tasks.series-notify',
   'files.cleanup-pending',
   'files.sent-purge',
   'files.storage-retry',

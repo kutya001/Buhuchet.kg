@@ -83,6 +83,7 @@ describe('/api/cron/tick без базы', () => {
       'subs.memory-checks',
       'files.storage-reconcile',
       'dm.token-expiry',
+      'tasks.series-notify',
     ];
     expect(names(jobsFor({ APP_BASE_URL: 'https://test.buhuchet.kg' }))).toEqual([
       ...names(jobs),

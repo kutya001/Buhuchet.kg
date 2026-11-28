@@ -156,6 +156,7 @@ export const SHELL_TEXTS = {
   'tab.tasks.byme': { ru: 'Поставленные мной', section: 'Вкладки' },
   'tab.tasks.all': { ru: 'Все', section: 'Вкладки' },
   'tab.tasks.overdue': { ru: 'Просроченные', section: 'Вкладки' },
+  'tab.tasks.series': { ru: 'Повторы', section: 'Вкладки' },
   'tab.staff.list': { ru: 'Сотрудники', section: 'Вкладки' },
   'tab.staff.roles': { ru: 'Роли', section: 'Вкладки' },
   'tab.staff.bonus': { ru: 'Бонусы', section: 'Вкладки' },

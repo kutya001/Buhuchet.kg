@@ -41,12 +41,29 @@ import {
   taskValuesRoute,
 } from './list';
 import { createTaskHandler, createTaskRoute, updateTaskHandler, updateTaskRoute } from './save';
+import {
+  exportSeriesHandler,
+  exportSeriesRoute,
+  listSeriesHandler,
+  listSeriesRoute,
+  resumeSeriesHandler,
+  resumeSeriesRoute,
+  seriesTasksHandler,
+  seriesTasksRoute,
+  seriesValuesHandler,
+  seriesValuesRoute,
+  stopSeriesHandler,
+  stopSeriesRoute,
+  updateSeriesRuleHandler,
+  updateSeriesRuleRoute,
+} from './series';
 
 /**
  * Модуль «Задачи» (задача 2.23, docs/decisions.md п. Б-1): ручные задачи — список с вкладками
  * (значения для фильтра, выгрузка в Excel, счётчики и плашка «На подтверждении»), карточка, форма,
  * действия со статусом, откат, комментарии и вкладка «Задачи» карточки контрагента. Отчётов в «Задачах»
- * нет (решение заказчика 17.11.2026); проект у задачи — 2.26, уведомления в Telegram — 2.25.
+ * нет (решение заказчика 17.11.2026); проект у задачи — 2.26, уведомления в Telegram — 2.25; повторяющиеся
+ * задачи — доработки 28.11.2026 (`series.ts`, ночной запуск — `series-job.ts`).
  */
 export function tasksModule(deps: ApiDeps) {
   return (
@@ -72,5 +89,14 @@ export function tasksModule(deps: ApiDeps) {
       .openapi(rollbackTaskRoute, rollbackTaskHandler(deps))
       .openapi(commentTaskRoute, commentTaskHandler(deps))
       .openapi(contractorTasksRoute, contractorTasksHandler(deps))
+      // Повторяющиеся задачи (доработки 28.11.2026): вкладка «Повторы» и действия с серией;
+      // «values» и «export» — раньше `/task-series/{id}/…`.
+      .openapi(listSeriesRoute, listSeriesHandler(deps))
+      .openapi(seriesValuesRoute, seriesValuesHandler(deps))
+      .openapi(exportSeriesRoute, exportSeriesHandler(deps))
+      .openapi(seriesTasksRoute, seriesTasksHandler(deps))
+      .openapi(updateSeriesRuleRoute, updateSeriesRuleHandler(deps))
+      .openapi(stopSeriesRoute, stopSeriesHandler(deps))
+      .openapi(resumeSeriesRoute, resumeSeriesHandler(deps))
   );
 }

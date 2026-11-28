@@ -27,6 +27,7 @@ import { cleanupVideoUploadsJob } from '../modules/kb/video-cleanup';
 import { duesRecalcJob } from '../modules/platform-dicts/admin-dues';
 import { dmCheckTemplatesJob } from '../modules/datamart/check-job';
 import { createDueReportsJob } from '../modules/reports/job';
+import { taskSeriesJob, taskSeriesNotifyJob } from '../modules/tasks/series-job';
 import { bellCleanupJob, bellDayJob } from '../modules/telegram/bell-day';
 import { contractorDebtJob } from '../modules/telegram/client/debt';
 import { contractorPayJob } from '../modules/telegram/client/pay';
@@ -139,6 +140,8 @@ export const jobs: readonly Job[] = [
   bellDayJob,
   bellCleanupJob,
   createDueReportsJob,
+  // «Задачи: повторы» (доработки 28.11.2026): 00:05 по Бишкеку.
+  taskSeriesJob,
   cleanupPendingFilesJob,
   purgeSentFilesJob,
   storageRetryJob,
@@ -220,6 +223,8 @@ export function jobsFor(
     storageReconcileJob(config.APP_BASE_URL),
     // Срок API-токенов «Витрины данных» (общий план 20.11, этап 3, П5): ссылка «Открыть» — окно токена.
     dmTokenExpiryJob(config.APP_BASE_URL),
+    // Сообщения о задачах по повтору (доработки 28.11.2026, блок 5): кнопка «Открыть задачу».
+    taskSeriesNotifyJob(config.APP_BASE_URL),
   ];
   if (
     !config.TELEGRAM_BOT_TOKEN ||

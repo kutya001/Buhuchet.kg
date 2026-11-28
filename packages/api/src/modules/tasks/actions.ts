@@ -4,6 +4,7 @@ import {
   changeTaskStatus,
   employeeShortName,
   getTask,
+  lockSeries,
   lockTask,
   taskReadyFiles,
   withOrgContext,
@@ -16,24 +17,28 @@ import {
 import {
   formatText,
   rollbackRefusal,
+  seriesBossRefusal,
   ROLLBACK_REASON_MAX,
   taskActionRefusal,
   taskDoneStatus,
   taskRollbackClears,
   taskRollbackTarget,
   type AccessSubject,
+  type IsoDate,
   type TaskAction,
   type TaskStatus,
 } from '@buhuchet/domain';
 import {
   StatusRollback,
   Task,
+  TaskCancelQuery,
   TaskCommentRequest,
   TaskConfirmRequest,
   TaskDoneRequest,
   TaskFailRequest,
   TaskReworkRequest,
   Uuid,
+  type SeriesScope,
   type Task as TaskBody,
 } from '@buhuchet/shared';
 import type { Context } from 'hono';
@@ -56,6 +61,7 @@ import {
   taskNotFound,
   todayOf,
 } from './common';
+import { seriesActorOf, seriesRefuse, stopSeriesByUser } from './series';
 
 /*
  * Действия со статусом ручной задачи (ТЗ «Выполнение», «Подтверждение выполнения»; прототип
@@ -73,6 +79,8 @@ interface ActionContext {
   lock: TaskLock;
   filesOn: boolean;
   now: Date;
+  /** Сегодня по Бишкеку (часы приложения). */
+  today: IsoDate;
   t: (key: string, params?: Record<string, string | number>) => string;
 }
 
@@ -128,7 +136,16 @@ async function runAction<B>(
     const task = await getTask(tx, id, taskAccessOf(subject));
     const lock = task && (await lockTask(tx, id));
     if (!task || !lock) taskNotFound();
-    const ctx = { tx, subject, task, lock, filesOn: settings.files, now: deps.clock.now(), t };
+    const ctx = {
+      tx,
+      subject,
+      task,
+      lock,
+      filesOn: settings.files,
+      now: deps.clock.now(),
+      today,
+      t,
+    };
     const result = await act(ctx, body);
     if (result) await changeTaskStatus(tx, id, result.change, result.patch);
     const after = (await getTask(tx, id, undefined))!;
@@ -295,8 +312,21 @@ const rework: Act<z.infer<typeof TaskReworkRequest>> = async (ctx, body) => {
 };
 
 /** «Отменить задачу»: постановщик или владелец, у открытой задачи (ТЗ «Выполнение»). */
-const cancel: Act<null> = async (ctx) => {
+/**
+ * «Отменить задачу» (у задачи действующей серии — вопрос «Только эту задачу» или «Эту и следующие»,
+ * блок 3, пункт 2; прототип `taskCancelDlg`): «Эту и следующие» — задача «Отменена», повтор
+ * остановлен; остановить повтор может его постановщик с правом «Ставить задачи» или владелец.
+ */
+const cancel: Act<{ scope: SeriesScope }> = async (ctx, body) => {
   allowed(ctx, 'cancel');
+  if (body.scope === 'next' && ctx.task.seriesId) {
+    const s = await lockSeries(ctx.tx, ctx.task.seriesId);
+    if (s && s.state === 'active') {
+      const boss = seriesBossRefusal(s.authorEmployeeId, seriesActorOf(ctx.subject));
+      if (boss) seriesRefuse(boss);
+      await stopSeriesByUser(ctx.tx, s, ctx.today, ctx.task.id);
+    }
+  }
   return { change: change(ctx, 'cancelled') };
 };
 
@@ -421,12 +451,19 @@ export const cancelTaskRoute = createRoute({
   tags: ['tasks'],
   summary: 'Отменить задачу',
   middleware: [requireEmployee] as const,
-  request: { params: idParam },
-  responses: { 200: taskOk('Задача «Отменена»'), ...actionErrors },
+  request: { params: idParam, query: TaskCancelQuery },
+  responses: {
+    200: taskOk('Задача «Отменена»; с `scope=next` у задачи серии — и повтор остановлен'),
+    ...actionErrors,
+  },
 });
 
 export function cancelTaskHandler(deps: ApiDeps): RouteHandler<typeof cancelTaskRoute, AppEnv> {
-  return async (c) => c.json(await runAction(deps, c, c.req.valid('param').id, null, cancel), 200);
+  return async (c) =>
+    c.json(
+      await runAction(deps, c, c.req.valid('param').id, c.req.valid('query'), cancel),
+      200,
+    );
 }
 
 export const rollbackTaskRoute = createRoute({

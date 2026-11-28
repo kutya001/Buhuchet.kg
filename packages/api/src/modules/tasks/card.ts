@@ -47,6 +47,7 @@ import {
   taskNotFound,
   todayOf,
 } from './common';
+import { seriesInfoOf } from './series';
 
 const off = 'Задачи выключены в учётной политике';
 
@@ -106,6 +107,10 @@ export async function taskOut(
     history: history
       .filter((h) => filesVisible || !FILE_ACTIONS.has(h.action))
       .map((h) => ({ ...h, at: h.at.toISOString() })),
+    // Строка «Повтор» (доработки 28.11.2026, блок 4, пункт 2).
+    series: r.seriesId
+      ? await seriesInfoOf(tx, r.seriesId, options.subject, options.today)
+      : null,
   };
 }
 

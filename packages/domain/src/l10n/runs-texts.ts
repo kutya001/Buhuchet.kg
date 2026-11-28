@@ -108,6 +108,8 @@ export const RUNS_TEXTS = {
   'runs.done.telegram_bell_day': { ru: 'Добавлено строк колокольчика: {n}', section: S },
   'runs.done.telegram_bell_cleanup': { ru: 'Удалено строк колокольчика: {n}', section: S },
   'runs.done.reports_create_due': { ru: 'Создано отчётов: {n}', section: S },
+  'runs.done.tasks_series': { ru: 'Поставлено задач по повтору: {n}', section: S },
+  'runs.done.tasks_series_notify': { ru: 'Сообщений о повторах: {n}', section: S },
   'runs.done.contractors_sync_service_status': { ru: 'Изменено статусов: {n}', section: S },
   'runs.done.files_erase_deleted': { ru: 'Стёрто файлов: {n}', section: S },
   'runs.done.kb_cleanup_video_uploads': { ru: 'Удалено загрузок видео: {n}', section: S },
@@ -141,6 +143,14 @@ export const RUNS_TEXTS = {
   },
   'runs.what.telegram_bell_cleanup': {
     ru: 'Удаляет строки колокольчика старше 90 дней',
+    section: S,
+  },
+  'runs.what.tasks_series': {
+    ru: 'Ставит следующую задачу повторяющихся задач — в ночь после срока предыдущей; останавливает повтор, если исполнитель заблокирован, контрагент в архиве или проект не активен',
+    section: S,
+  },
+  'runs.what.tasks_series_notify': {
+    ru: 'В час напоминаний организации — сообщение исполнителю о задаче, поставленной по повтору, и постановщику — «Повтор закончился» или «Повтор остановлен»',
     section: S,
   },
   'runs.what.reports_create_due': {

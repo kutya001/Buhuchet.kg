@@ -1,8 +1,10 @@
 import { createRoute, type RouteHandler } from '@hono/zod-openapi';
 import {
+  activeSeriesCount,
   exportTasks,
   listTasksPage,
   listTaskValues,
+  seriesTexts,
   taskBoardExecutors,
   taskPendingStats,
   taskTabCounts,
@@ -12,7 +14,7 @@ import {
   type TaskTab,
   type Tx,
 } from '@buhuchet/db';
-import { monthStart } from '@buhuchet/domain';
+import { hasPermission, monthStart } from '@buhuchet/domain';
 import {
   ListExportParams,
   ListQueryParams,
@@ -31,6 +33,7 @@ import { exportRateResponses, withExportSlot, xlsxContent, xlsxResponse } from '
 import { orgContextOf, requireEmployee, requirePermission } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
 import { error, listRowBody, requireTasks, subjectOf, todayOf, viewerOf } from './common';
+import { seriesSeeAll } from './series';
 
 const off = { description: 'Задачи выключены в учётной политике', content: error };
 
@@ -49,6 +52,7 @@ async function listOptions(
     today: todayOf(deps),
     viewer: viewerOf(subjectOf(c)),
     tab,
+    series: await seriesTexts(tx),
   };
 }
 
@@ -128,7 +132,12 @@ export function taskSummaryHandler(deps: ApiDeps): RouteHandler<typeof taskSumma
         taskPendingStats(tx, viewer),
         tasksOrgEmpty(tx, source),
       ]);
-      return { ...counts, ...pending, monthStart: monthStart(today), empty };
+      // Вкладка «Повторы» — тем, кто ставит задачи: действующие серии в видимости (прототип `taskTabs`).
+      const subject = subjectOf(c);
+      const series = hasPermission(subject, 'tasksCreate')
+        ? await activeSeriesCount(tx, seriesSeeAll(subject) ? null : subject.employeeId)
+        : null;
+      return { ...counts, ...pending, monthStart: monthStart(today), empty, series };
     });
     return c.json(body, 200);
   };
