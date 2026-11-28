@@ -14,6 +14,8 @@ export interface DmSchemaColumnRow {
   type: string;
   /** Открыта ли таблица роли организаций (хоть одно поле). */
   orgVisible: boolean;
+  /** Открыто ли само поле роли организаций (этап 2, П7). */
+  orgField: boolean;
   refTable: string | null;
   refColumn: string | null;
 }
@@ -25,12 +27,14 @@ export async function dmSchemaColumns(db: Db, adminUserId: string): Promise<DmSc
       column: string;
       type: string;
       org_visible: boolean;
+      org_field: boolean;
       ref_table: string | null;
       ref_column: string | null;
     }>(sql`
       select c.relname as "table", a.attname as "column",
         pg_catalog.format_type(a.atttypid, a.atttypmod) as type,
         has_any_column_privilege('buhuchet_dm_org', c.oid, 'SELECT') as org_visible,
+        has_column_privilege('buhuchet_dm_org', c.oid, a.attnum, 'SELECT') as org_field,
         fk.ref_table, fk.ref_column
       from pg_catalog.pg_class c
       join pg_catalog.pg_attribute a on a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped
@@ -52,6 +56,7 @@ export async function dmSchemaColumns(db: Db, adminUserId: string): Promise<DmSc
     column: r.column,
     type: r.type,
     orgVisible: r.org_visible,
+    orgField: r.org_field,
     refTable: r.ref_table,
     refColumn: r.ref_column,
   }));

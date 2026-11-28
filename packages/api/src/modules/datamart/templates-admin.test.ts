@@ -238,6 +238,20 @@ describe.skipIf(!databaseAvailable())('Витрина данных: шаблон
     );
     expect(db).toMatchObject({ ok: false, problem: 'failed' });
     if (!db.ok) expect(db.message).toContain('nope');
+    // Таблица платформы у шаблона «Для организаций» — словами (этап 2 консоли, П7; прототип v167).
+    const closed = await ok(
+      await admin('POST', '/check', {
+        audience: 'org',
+        query: 'select id as n from platform_leads',
+      }),
+      200,
+      DmTemplateCheckResult,
+    );
+    expect(closed).toMatchObject({
+      ok: false,
+      problem: 'failed',
+      message: txt('err.dm_console_closed').replace('{table}', 'platform_leads'),
+    });
     const noName = await ok(
       await admin('POST', '/check', { audience: 'admin', query: 'select 1' }),
       200,

@@ -87,7 +87,7 @@ import { requirePlatformAdmin } from '../../middleware/access';
 import { guardCardRead } from '../admin/card-guard';
 import { serverTexts } from '../l10n/texts';
 import { withRunSlot } from './output';
-import { DM_ROWS_MAX, dmSqlProblemText, withDmPoolSlot } from './run';
+import { DM_ROWS_MAX, dmClosedTableOf, dmSqlProblemText, withDmPoolSlot } from './run';
 import { dmTemplateSqlProblem } from './sql-check';
 
 /*
@@ -615,6 +615,17 @@ async function runCheck(
         problem: 'timeout',
         code: 'dm_timeout',
         message: tr('err.dm_timeout'),
+        params,
+      };
+    }
+    // Шаблон «Для организаций» с таблицей платформы — словами (этап 2 консоли, П7; прототип v167).
+    const closed = org && pg.code === '42501' ? dmClosedTableOf(pg.message) : null;
+    if (closed) {
+      return {
+        ok: false,
+        problem: 'failed',
+        code: 'dm_console_closed',
+        message: tr('err.dm_console_closed', { table: closed }),
         params,
       };
     }

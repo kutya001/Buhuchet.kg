@@ -159,4 +159,21 @@ export const DATAMART_ADMIN_TEXTS = {
     section: E,
   },
   'err.dm_console_stopped': { ru: 'Запрос остановлен', section: E },
+  // «Выполнять как: Организация …» (этап 2, П7; прототип v167 `dmcIssues`).
+  'err.dm_console_closed': {
+    ru: 'Таблица {table} — данные платформы, организациям закрыта',
+    section: E,
+  },
+  'err.dm_console_timeout_org': {
+    ru: 'Запрос выполнялся дольше 15 секунд и остановлен',
+    section: E,
+  },
+  'dm.con.history_porg': {
+    ru: 'Запрос консоли витрины данных глазами организации',
+    section: S,
+  },
+  'dm.con.history_porg_export': {
+    ru: 'Выгрузка запроса консоли витрины данных глазами организации',
+    section: S,
+  },
 } as const satisfies Record<string, UiTextDefault>;

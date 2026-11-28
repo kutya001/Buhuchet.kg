@@ -148,7 +148,7 @@ export const DATAMART_CONSOLE_TEXTS = {
   'dm.con.no_table': { ru: 'Таблицы «{table}» нет в базе', section: S },
   'dm.con.no_field': { ru: 'Поля «{field}» нет в таблице «{table}»', section: S },
   'dm.con.org_closed': {
-    ru: '«{table}» закрыта для организаций: шаблон «Для организаций» её не прочитает',
+    ru: 'Таблица {table} — данные платформы, организациям закрыта',
     section: S,
   },
   'dm.con.err_line': { ru: 'Строка {n}: {error}', section: S },
