@@ -135,6 +135,16 @@ export const DM_RUN_ALL_LIMIT: RateLimit = {
   leaseSeconds: 30,
 };
 
+/**
+ * Таблица из ошибки «нет права» базы (`permission denied for table x`): у роли организаций закрыты
+ * таблицы платформы — консоль «как организация» и «Проверить» шаблона «Для организаций» говорят это
+ * словами (прототип v167: «Таблица X — данные платформы, организациям закрыта»). Не та ошибка — null.
+ */
+export function dmClosedTableOf(message: string): string | null {
+  const m = /^permission denied for (?:table|view|relation) "?([a-z_][a-z0-9_]*)"?$/.exec(message);
+  return m ? m[1]! : null;
+}
+
 /** Выполнить `run` на свободном месте; свободных нет — 429 `dm_busy_all` (вне транзакций). */
 export async function withDmPoolSlot<T>(
   deps: ApiDeps,

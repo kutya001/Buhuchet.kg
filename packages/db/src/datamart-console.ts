@@ -118,6 +118,8 @@ export interface DmConsoleRunRow {
   rows: number | null;
   ms: number | null;
   error: string | null;
+  /** «Выполнять как: Организация …» (этап 2, П7): от какой организации шёл запрос. */
+  org: { id: string; name: string } | null;
 }
 
 const OUTCOMES = ['ok', 'error', 'timeout', 'stopped', 'refused'] as const;
@@ -147,6 +149,7 @@ export async function dmConsoleHistory(tx: Tx, limit: number): Promise<DmConsole
     const num = (v: unknown) =>
       typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : null;
     const params = get('params');
+    const org = get('org') as { id?: unknown; name?: unknown } | undefined;
     return {
       id: r.id,
       at: r.at.toISOString(),
@@ -162,6 +165,10 @@ export async function dmConsoleHistory(tx: Tx, limit: number): Promise<DmConsole
       rows: num(get('rows')),
       ms: num(get('ms')),
       error: typeof get('error') === 'string' ? (get('error') as string) : null,
+      org:
+        org && typeof org.id === 'string' && typeof org.name === 'string'
+          ? { id: org.id, name: org.name }
+          : null,
     };
   });
 }

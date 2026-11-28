@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Вкладки консоли (доработки 27.11.2026: консоль запросов, блок 1, пункты 2 и 5; прототип v166 `DMC`,
 // `dmcState`, `dmConOpen`): свои у каждого входа, держатся в памяти страницы и в браузере как удобство.
@@ -18,6 +18,14 @@ function fakeStorage() {
 }
 
 let storage: ReturnType<typeof fakeStorage>;
+
+// Первый импорт модуля (с `@buhuchet/domain`) под нагрузкой `pnpm check` идёт дольше 5 с предела
+// теста: прогреваем его один раз заранее, тесты потом берут модуль заново (`vi.resetModules`) быстро.
+beforeAll(async () => {
+  vi.stubGlobal('window', { localStorage: fakeStorage() });
+  await import('./console-store');
+  vi.unstubAllGlobals();
+}, 60_000);
 
 beforeEach(() => {
   vi.resetModules();
@@ -108,6 +116,44 @@ describe('consoleStore', () => {
 
     consoleStore.forgetMine('m1');
     expect(consoleStore.get().tabs.some((x) => x.mine)).toBe(false);
+  });
+
+  it('вкладка «Заготовок» и «Собрать запрос» помнит, откуда она; из браузера — только известное (этап 2, П8–П9)', async () => {
+    const { consoleOpen, consoleStore } = await load();
+    consoleOpen('u1', { sql: 'SELECT 1', name: 'Заготовка', src: 'pre' });
+    consoleOpen('u1', { sql: 'SELECT 2', name: 'Сборка: reports', src: 'build' });
+    expect(consoleStore.get().tabs.map((x) => x.src)).toEqual([null, 'pre', 'build']);
+    const saved = JSON.parse(storage.data.get('bh_dmcon_u1')!) as { tabs: { src: unknown }[] };
+    saved.tabs[1]!.src = 'evil';
+    storage.data.set('bh_dmcon_u1', JSON.stringify(saved));
+    vi.resetModules();
+    const again = await load();
+    again.consoleStore.ensure('u1');
+    expect(again.consoleStore.get().tabs.map((x) => x.src)).toEqual([null, null, 'build']);
+  });
+
+  it('«Выполнять как» запоминается в браузере у своего входа; не строка — администратор (этап 2, П7)', async () => {
+    const first = await load();
+    first.consoleStore.ensure('u1');
+    expect(first.consoleStore.get().as).toBeNull();
+    first.consoleStore.setAs('org-1');
+    expect(JSON.parse(storage.data.get('bh_dmcon_u1')!).as).toBe('org-1');
+
+    vi.resetModules();
+    const again = await load();
+    again.consoleStore.ensure('u1');
+    expect(again.consoleStore.get().as).toBe('org-1');
+    again.consoleStore.ensure('u2');
+    expect(again.consoleStore.get().as).toBeNull();
+
+    for (const junk of [42, '', { id: 'org-1' }]) {
+      const saved = JSON.parse(storage.data.get('bh_dmcon_u1')!) as Record<string, unknown>;
+      storage.data.set('bh_dmcon_u1', JSON.stringify({ ...saved, as: junk }));
+      vi.resetModules();
+      const next = await load();
+      next.consoleStore.ensure('u1');
+      expect(next.consoleStore.get().as, JSON.stringify(junk)).toBeNull();
+    }
   });
 
   it('выход стирает вкладки всех входов; без входа в браузер ничего не пишется', async () => {

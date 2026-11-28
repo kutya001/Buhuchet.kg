@@ -37,7 +37,15 @@ export interface ConsoleTab {
   /** Запрос «Моих запросов»: номер и версия записи. */
   mine: { id: string; version: number } | null;
   notes: ConsoleNotes | null;
+  /**
+   * Откуда вкладка (этап 2, П8–П9; прототип v167 `src`): «Заготовки» или «Собрать запрос» — на телефоне
+   * её запрос показывается для запуска, как «Мои запросы» и шаблон.
+   */
+  src: ConsoleTabSource | null;
 }
+
+export type ConsoleTabSource = 'pre' | 'build';
+const isSource = (v: unknown): v is ConsoleTabSource => v === 'pre' || v === 'build';
 
 export type ConsoleSide = 'db' | 'api' | 'pre' | 'mine';
 
@@ -51,6 +59,11 @@ export interface ConsoleState {
   toTemplate: string | null;
   /** Счётчик для названий «Запрос N». */
   seq: number;
+  /**
+   * «Выполнять как» (этап 2, П7; прототип v167 `DMC.as`): номер организации или пусто — «Администратор».
+   * Организации, которой больше нет в списке, экран не предлагает и выполняет как администратор.
+   */
+  as: string | null;
 }
 
 /** Запрос новой вкладки (прототип `dmcNewTab`). */
@@ -87,7 +100,16 @@ function savedTypes(v: unknown): Record<string, DmParamType> | null {
 }
 
 function fresh(): ConsoleState {
-  return { tabs: [], cur: 0, side: 'db', mineTab: 'mine', q: '', toTemplate: null, seq: 0 };
+  return {
+    tabs: [],
+    cur: 0,
+    side: 'db',
+    mineTab: 'mine',
+    q: '',
+    toTemplate: null,
+    seq: 0,
+    as: null,
+  };
 }
 
 const storeKey = (u: string) => `bh_dmcon_${u}`;
@@ -114,6 +136,7 @@ function load(u: string): ConsoleState {
             tpl: x.tpl ?? null,
             mine: x.mine ?? null,
             notes: savedNotes(x.notes),
+            src: isSource(x.src) ? x.src : null,
           }))
       : [];
     return {
@@ -121,6 +144,7 @@ function load(u: string): ConsoleState {
       tabs,
       cur: Math.max(0, Math.min(Number(saved.cur) || 0, tabs.length - 1)),
       seq: Number(saved.seq) || tabs.length,
+      as: typeof saved.as === 'string' && saved.as ? saved.as : null,
     };
   } catch {
     return base;
@@ -131,8 +155,8 @@ function save() {
   // Вход ещё не известен — в браузер не пишем: иначе вкладки легли бы под общий ключ.
   if (!user) return;
   try {
-    const { tabs, cur, seq } = state;
-    window.localStorage.setItem(storeKey(user), JSON.stringify({ tabs, cur, seq }));
+    const { tabs, cur, seq, as } = state;
+    window.localStorage.setItem(storeKey(user), JSON.stringify({ tabs, cur, seq, as }));
   } catch {
     // Хранилища нет (частное окно, запрет): вкладки живут, пока открыта страница.
   }
@@ -166,6 +190,7 @@ function makeTab(o: Partial<ConsoleTab> & { name: string; sql: string }, seq: nu
     tpl: o.tpl ?? null,
     mine: o.mine ?? null,
     notes: o.notes ?? null,
+    src: o.src ?? null,
   };
 }
 
@@ -176,6 +201,7 @@ export const consoleStore = {
   setMineTab: (mineTab: 'mine' | 'hist') => set({ mineTab }, false),
   setQ: (q: string) => set({ q }, false),
   select: (cur: number) => set({ cur }),
+  setAs: (as: string | null) => set({ as }),
   patch: (id: string, p: Partial<ConsoleTab>) =>
     set({ tabs: state.tabs.map((x) => (x.id === id ? { ...x, ...p } : x)) }),
   add: () => {
@@ -215,6 +241,7 @@ export interface ConsoleOpen {
   tpl?: ConsoleTemplateRef;
   mine?: { id: string; version: number };
   notes?: ConsoleNotes;
+  src?: ConsoleTabSource;
   /** Сразу открыть окно шаблона с этим запросом. */
   toTemplate?: boolean;
 }

@@ -139,6 +139,8 @@ export * from './datamart/scope';
 export * from './datamart/editor';
 export * from './datamart/sql-rules';
 export * from './datamart/console';
+export * from './datamart/builder';
+export * from './datamart/presets';
 export * from './kb/catalog';
 export * from './kb/ready';
 export * from './kb/events';

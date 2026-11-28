@@ -91,6 +91,7 @@ export const outOrgsQuery = () =>
       return [...items.filter((o) => o.isDemo), ...items.filter((o) => !o.isDemo)].map((o) => ({
         id: o.id,
         name: o.name,
+        demo: o.isDemo,
       }));
     },
   });

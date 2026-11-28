@@ -1,6 +1,6 @@
 'use client';
 
-import { bishkekDate, DM_REASON_MAX, dmParamDefault } from '@buhuchet/domain';
+import { bishkekDate, DM_REASON_MAX, dmConsoleAutoCp, dmParamDefault } from '@buhuchet/domain';
 import type { DmAdminTemplateCard, DmAdminTemplateRow } from '@buhuchet/shared';
 import {
   buttonClass,
@@ -19,7 +19,8 @@ import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { useErrorText, useT } from '../l10n/provider';
 import { useShell } from '../shell/context';
 import { tabHref } from '../shell/modules';
-import { consoleTemplatePrefill } from './console-model';
+import { consoleSchemaQuery } from './console-data';
+import { consoleCpColumns, consoleTemplatePrefill } from './console-model';
 import { consoleOpen, consoleStore } from './console-store';
 import type { ConsoleToTemplate } from './console-tab';
 import { TemplateEditor } from './tpl-editor';
@@ -58,6 +59,8 @@ export function useTemplateActions(): {
   create: () => Promise<void>;
   copy: (id: string) => Promise<void>;
   fromConsole: ConsoleToTemplate;
+  /** «Открыть в консоли» шаблона по номеру (меню строки, «Заготовки» консоли). */
+  toConsole: (id: string) => Promise<void>;
   actions: (row: DmAdminTemplateRow) => ActionEntry[];
   node: ReactNode;
 } {
@@ -172,6 +175,30 @@ export function useTemplateActions(): {
         const got = await load(tab.tpl?.id ?? null);
         if (!got) return;
         const had = got.card;
+        // Автостолбец «Контрагент» (этап 2, П7; прототип `dmcToTpl` → `dmcAutoCp`): новый шаблон или
+        // шаблон «Для организаций» — в запрос основного SELECT добавляется contractor_id, если его нет.
+        const index =
+          !had || had.audience === 'org'
+            ? await client.fetchQuery(consoleSchemaQuery).catch(() => null)
+            : null;
+        const auto = index ? dmConsoleAutoCp(tab.sql, index.tables) : null;
+        const sql = auto?.added ? auto.sql : tab.sql;
+        if (auto?.added) {
+          consoleStore.patch(tab.id, { sql });
+          toast(
+            had
+              ? t('dm.con.cp_auto')
+              : t('dm.con.cp_auto_mod', { module: t(`dm.mod.${auto.module}`) }),
+            { icon: 'layers' },
+          );
+        }
+        const cpName = t('dm.ed.cp_col');
+        const prefillOf = (h: Parameters<typeof consoleTemplatePrefill>[2]) => {
+          const pre = consoleTemplatePrefill(sql, last, h);
+          const own = new Set(h?.columns.map((c) => c.code));
+          const columns = consoleCpColumns(pre.columns, own, !!auto?.added, cpName);
+          return { ...pre, columns };
+        };
         if (had?.builtin) {
           // Готовый шаблон платформы — только копией (прототип `dmcToTpl`): копия и её окно с запросом.
           const res = await copyTemplate(had.id);
@@ -184,7 +211,7 @@ export function useTemplateActions(): {
             tpl: { id: copied.data.id, name: copied.data.name, builtin: false },
           });
           toast(t('dm.con.tpl_copy'), { icon: 'copy' });
-          const pre = consoleTemplatePrefill(tab.sql, last, copied.data);
+          const pre = prefillOf(copied.data);
           return setEditor(
             openSlot<EditorData>({
               card: copied.data,
@@ -192,7 +219,7 @@ export function useTemplateActions(): {
             }),
           );
         }
-        const pre = consoleTemplatePrefill(tab.sql, last, had);
+        const pre = prefillOf(had);
         const prefill: Partial<TplDraft> = had
           ? {
               query: pre.query,
@@ -204,6 +231,7 @@ export function useTemplateActions(): {
               params: pre.params,
               ...(pre.columns.length ? { columns: pre.columns } : {}),
               ...(tab.notes ? { name: tab.name } : {}),
+              ...(auto ? { module: auto.module, needPermission: auto.fee ? 'fee' : null } : {}),
             };
         setEditor(openSlot<EditorData>({ card: had, prefill }));
       })();
@@ -290,7 +318,7 @@ export function useTemplateActions(): {
     </>
   );
 
-  return { open, create, copy, fromConsole, actions, node };
+  return { open, create, copy, fromConsole, toConsole: openInConsole, actions, node };
 }
 
 /** «Отключить шаблон?» и «Включить шаблон?» с причиной (прототип `dmStateDlg`). */

@@ -26,6 +26,7 @@ const field = (
   title: null,
   description: null,
   ref: null,
+  orgVisible: true,
   ...over,
 });
 
@@ -147,11 +148,13 @@ describe('assistAt', () => {
     expect(at('SELECT z.| FROM contractors c')).toBeNull();
   });
 
-  it('после FROM — таблицы: имя с начала выше, поиск по-русски; у шаблона организаций — пометка закрытой', () => {
+  it('после FROM — таблицы: имя с начала выше, поиск по-русски; для организаций закрытых нет (v167)', () => {
     expect(at('SELECT * FROM rep|')?.items.map((x) => x.label)).toEqual(['reports']);
     expect(at('SELECT * FROM отч|')?.items.map((x) => x.label)).toEqual(['reports']);
+    expect(at('SELECT * FROM |')!.items.map((x) => x.label)).toContain('sessions_log');
     const all = at('SELECT * FROM |', { org: true })!;
-    expect(all.items.find((x) => x.label === 'sessions_log')?.detail).toBe(' · закрыто');
+    expect(all.items.map((x) => x.label)).not.toContain('sessions_log');
+    expect(all.items.map((x) => x.label)).toContain('reports');
   });
 
   it('после ON — условия по связям таблиц', () => {

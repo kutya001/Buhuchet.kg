@@ -11,6 +11,7 @@ import {
   methodSqlOf,
   methodToConsole,
   type MethodSource,
+  consoleCpColumns,
 } from './console-model';
 
 // Чистые правила вкладки «Консоль» (доработки 27.11.2026: консоль запросов, блоки 1, 4, 5; прототип
@@ -155,8 +156,15 @@ describe('methodToConsole', () => {
         description: null,
         orgVisible: true,
         fields: [
-          { name: 'name', type: 'text', title: null, description: null, ref: null },
-          { name: 'id', type: 'uuid', title: null, description: null, ref: null },
+          {
+            name: 'name',
+            type: 'text',
+            title: null,
+            description: null,
+            ref: null,
+            orgVisible: true,
+          },
+          { name: 'id', type: 'uuid', title: null, description: null, ref: null, orgVisible: true },
         ],
       },
     ],
@@ -177,5 +185,36 @@ describe('methodToConsole', () => {
     expect(
       methodToConsole(card({ queries: [{ kind: 'code', text: 'db.select()' }] }), null, false),
     ).toBeNull();
+  });
+});
+
+describe('consoleCpColumns (этап 2, П7: автостолбец «Контрагент»)', () => {
+  const col = (code: string): DmTemplateColumnInput => ({
+    code,
+    name: code,
+    type: 'text',
+    total: false,
+  });
+  const cp = { code: 'contractor_id', name: 'Контрагент', type: 'cp', total: false };
+
+  it('последний запуск шёл до дописывания — contractor_id добавляется первым', () => {
+    expect(consoleCpColumns([col('name'), col('inn')], new Set(), true, 'Контрагент')).toEqual([
+      cp,
+      col('name'),
+      col('inn'),
+    ]);
+  });
+
+  it('уже есть в запуске — получает вид «Контрагент» и встаёт первым; у шаблона свой — не трогается', () => {
+    expect(
+      consoleCpColumns([col('name'), col('contractor_id')], new Set(), true, 'Контрагент'),
+    ).toEqual([cp, col('name')]);
+    expect(
+      consoleCpColumns([col('name'), col('contractor_id')], new Set(['contractor_id']), false, 'К'),
+    ).toEqual([col('name'), col('contractor_id')]);
+  });
+
+  it('не дописан — порядок прежний', () => {
+    expect(consoleCpColumns([col('name')], new Set(), false, 'Контрагент')).toEqual([col('name')]);
   });
 });

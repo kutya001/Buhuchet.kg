@@ -2,11 +2,12 @@ import { readFileSync } from 'node:fs';
 import { releaseRateLimit, schema, takeRateLimit } from '@buhuchet/db';
 import { DM_BUILTIN_SQL } from '@buhuchet/db/seed';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
-import { UI_TEXTS } from '@buhuchet/domain';
+import { DM_CONSOLE_PRESETS, UI_TEXTS } from '@buhuchet/domain';
 import { DmConsolePlan, DmConsoleResult, DmConsoleStopped, DmSchemaMap } from '@buhuchet/shared';
 import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../../app';
+import { ADMIN_CARD_VIEW_RATE_LIMIT } from '../admin/card-guard';
 import { parseTechDocs } from '../admin/techdocs-source';
 import {
   apiRequest,
@@ -28,7 +29,7 @@ import { dmTemplateSqlProblem } from './sql-check';
  */
 
 type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
-const { platformAuditLog, contractors } = schema;
+const { platformAuditLog, contractors, auditLog, organizations } = schema;
 const txt = (key: keyof typeof UI_TEXTS) => UI_TEXTS[key].ru;
 
 describe.skipIf(!databaseAvailable())('Витрина данных: консоль запросов Админки', () => {
@@ -334,7 +335,7 @@ describe.skipIf(!databaseAvailable())('Витрина данных: консол
         ?.to;
     };
     /** Запрос консоли на своём пуле (в CI основной — одно соединение) и ожидание, пока он в базе. */
-    const startLong = async () => {
+    const startLong = async (orgId?: string) => {
       const race = createRaceApp(f.t.appUrl, f.deps);
       const res = apiRequest(
         race.app,
@@ -344,6 +345,7 @@ describe.skipIf(!databaseAvailable())('Витрина данных: консол
         {
           query: LONG,
           params: {},
+          ...(orgId ? { orgId } : {}),
         },
       );
       await expect
@@ -380,6 +382,35 @@ describe.skipIf(!databaseAvailable())('Витрина данных: консол
       }
     });
 
+    it('«Остановить» прерывает и запрос «как организация» (место «Показать» освобождается)', async () => {
+      const { race, res } = await startLong(f.a.orgId);
+      try {
+        const stop = await ok(
+          await apiRequest(
+            race.app,
+            'POST',
+            '/api/admin/dm/console/stop',
+            cookies['platform-admin'],
+          ),
+          DmConsoleStopped,
+        );
+        expect(stop.stopped).toBe(1);
+        expect((await fail(await res, 409)).code).toBe('dm_console_stopped');
+        expect(await lastOutcome()).toBe('stopped');
+      } finally {
+        await race.close();
+      }
+      // Место «Показать» отпущено: следующий запрос как организация идёт сразу.
+      await ok(
+        await call('platform-admin', 'POST', '/run', {
+          query: 'select 1 as n',
+          params: {},
+          orgId: f.a.orgId,
+        }),
+        DmConsoleResult,
+      );
+    });
+
     it('отмена после 60 с — «дольше предела»: 503 и «timeout» в журнале', async () => {
       // Отмену по пределу и по «Остановить» сервер различает временем: часы сдвигаются на минуту.
       const real = Date.now.bind(Date);
@@ -390,6 +421,25 @@ describe.skipIf(!databaseAvailable())('Витрина данных: консол
         shift = 61_000;
         await apiRequest(race.app, 'POST', '/api/admin/dm/console/stop', cookies['platform-admin']);
         expect((await fail(await res, 503)).code).toBe('dm_console_timeout');
+        expect(await lastOutcome()).toBe('timeout');
+      } finally {
+        now.mockRestore();
+        await race.close();
+      }
+    });
+
+    it('«как организация» — предел 15 с, как у «Показать»: 503 и свой текст, «timeout» в журнале', async () => {
+      const real = Date.now.bind(Date);
+      let shift = 0;
+      const now = vi.spyOn(Date, 'now').mockImplementation(() => real() + shift);
+      const { race, res } = await startLong(f.a.orgId);
+      try {
+        // 16 с — больше предела организации, но меньше предела консоли (60 с).
+        shift = 16_000;
+        await apiRequest(race.app, 'POST', '/api/admin/dm/console/stop', cookies['platform-admin']);
+        const e = await fail(await res, 503);
+        expect(e.code).toBe('dm_console_timeout');
+        expect(e.message).toBe(txt('err.dm_console_timeout_org'));
         expect(await lastOutcome()).toBe('timeout');
       } finally {
         now.mockRestore();
@@ -449,6 +499,174 @@ describe.skipIf(!databaseAvailable())('Витрина данных: консол
     });
   });
 
+  describe('«Выполнять как: Организация …» (этап 2, П7; п. О-70)', () => {
+    const asOrg = (query: string, orgId: string, path = '/run') =>
+      call('platform-admin', 'POST', path, { query, params: {}, orgId });
+    const lastConsole = async (action = 'dm_console_run') => {
+      const [entry] = await f.t.admin.db
+        .select()
+        .from(platformAuditLog)
+        .where(and(eq(platformAuditLog.entity, 'dm_console'), eq(platformAuditLog.action, action)))
+        .orderBy(sql`${platformAuditLog.id} desc`)
+        .limit(1);
+      return entry!;
+    };
+
+    it('видно ровно то, что видит организация; журнал называет её, история организации — открытие', async () => {
+      const [org] = await f.t.admin.db
+        .select({ name: organizations.name })
+        .from(organizations)
+        .where(eq(organizations.id, f.a.orgId));
+      const res = await ok(
+        await asOrg(
+          "select name from contractors where name like 'Консоль %' order by name",
+          f.a.orgId,
+        ),
+        DmConsoleResult,
+      );
+      expect(res.rows).toEqual([['Консоль А']]);
+      expect(res.max).toBe(1000);
+      expect((await lastConsole()).changes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ field: 'org', to: { id: f.a.orgId, name: org!.name } }),
+          expect.objectContaining({ field: 'outcome', to: 'ok' }),
+        ]),
+      );
+      const views = await f.t.admin.db
+        .select({ reason: auditLog.reason })
+        .from(auditLog)
+        .where(and(eq(auditLog.orgId, f.a.orgId), eq(auditLog.action, 'card_view')));
+      expect(views.map((v) => v.reason)).toContain(txt('dm.con.history_porg'));
+      // «История» консоли — с организацией.
+      const hist = (await (await call('platform-admin', 'GET', '/history')).json()) as {
+        items: { org: { id: string; name: string } | null }[];
+      };
+      expect(hist.items[0]!.org).toEqual({ id: f.a.orgId, name: org!.name });
+    });
+
+    it('это открытие данных организации: чужой сайт — 403, предел открытий — 429 без запуска и без записи, неверный номер — 400', async () => {
+      const cross = await f.app.request('/api/admin/dm/console/run', {
+        method: 'POST',
+        headers: {
+          origin: 'http://localhost',
+          cookie: cookies['platform-admin']!,
+          'content-type': 'application/json',
+          'sec-fetch-site': 'cross-site',
+        },
+        body: JSON.stringify({ query: 'select 1 as n', params: {}, orgId: f.a.orgId }),
+      });
+      expect(cross.status).toBe(403);
+      expect(((await cross.json()) as { error: { code: string } }).error.code).toBe(
+        'origin_mismatch',
+      );
+      expect((await fail(await asOrg('select 1 as n', 'not-a-uuid'), 400)).code).toBe(
+        'validation_failed',
+      );
+
+      const [user] = await f.t.admin.db
+        .select({ id: schema.users.id })
+        .from(schema.users)
+        .where(eq(schema.users.login, 'platform-admin'));
+      const mine = and(
+        eq(schema.rateLimits.kind, ADMIN_CARD_VIEW_RATE_LIMIT.kind),
+        eq(schema.rateLimits.subject, user!.id),
+      );
+      const [taken = { n: 0 }] = await f.t.admin.db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(schema.rateLimits)
+        .where(mine);
+      await f.t.admin.db.insert(schema.rateLimits).values(
+        Array.from({ length: ADMIN_CARD_VIEW_RATE_LIMIT.max - taken.n }, () => ({
+          kind: ADMIN_CARD_VIEW_RATE_LIMIT.kind,
+          subject: user!.id,
+        })),
+      );
+      try {
+        const views = async () =>
+          (
+            await f.t.admin.db
+              .select({ n: sql<number>`count(*)::int` })
+              .from(auditLog)
+              .where(and(eq(auditLog.orgId, f.a.orgId), eq(auditLog.action, 'card_view')))
+          )[0]!.n;
+        const before = await views();
+        const runs = async () =>
+          (
+            await f.t.admin.db
+              .select({ n: sql<number>`count(*)::int` })
+              .from(platformAuditLog)
+              .where(eq(platformAuditLog.entity, 'dm_console'))
+          )[0]!.n;
+        const ran = await runs();
+        expect((await fail(await asOrg('select 1 as n', f.a.orgId), 429)).code).toBe(
+          'card_view_limit',
+        );
+        expect(await views()).toBe(before);
+        expect(await runs()).toBe(ran);
+      } finally {
+        await f.t.admin.db.delete(schema.rateLimits).where(mine);
+      }
+    });
+
+    it('таблица платформы — «данные платформы, организациям закрыта», чужая организация не видна', async () => {
+      const e = await fail(await asOrg('select id from platform_leads', f.a.orgId), 400);
+      expect(e.code).toBe('dm_console_closed');
+      expect(e.message).toBe(txt('err.dm_console_closed').replace('{table}', 'platform_leads'));
+      expect(e.details).toEqual({ table: 'platform_leads' });
+      const other = await ok(
+        await asOrg(
+          `select count(*)::int as n from contractors where org_id = '${f.b.orgId}'`,
+          f.a.orgId,
+        ),
+        DmConsoleResult,
+      );
+      expect(other.rows).toEqual([[0]]);
+      expect((await lastConsole()).changes).toEqual(
+        expect.arrayContaining([expect.objectContaining({ field: 'outcome', to: 'ok' })]),
+      );
+    });
+
+    it('нет такой организации — 404; сотруднику организации — 403', async () => {
+      await fail(await asOrg('select 1', '00000000-0000-4000-8000-000000000000'), 404);
+      const res = await call('owner-a', 'POST', '/run', {
+        query: 'select 1',
+        params: {},
+        orgId: f.a.orgId,
+      });
+      expect(res.status).toBe(403);
+    });
+
+    it('«В Excel» как организация — тем же путём, запись в журнале с организацией', async () => {
+      const res = await asOrg('select name from contractors', f.b.orgId, '/export');
+      expect(res.status, await res.clone().text()).toBe(200);
+      expect((await lastConsole('dm_console_export')).changes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ field: 'org', to: expect.objectContaining({ id: f.b.orgId }) }),
+        ]),
+      );
+      // В истории организации — открытие с причиной «выгрузка», не «запуск».
+      const views = await f.t.admin.db
+        .select({ reason: auditLog.reason })
+        .from(auditLog)
+        .where(and(eq(auditLog.orgId, f.b.orgId), eq(auditLog.action, 'card_view')));
+      expect(views.map((v) => v.reason)).toContain(txt('dm.con.history_porg_export'));
+    });
+
+    it('места «Показать» заняты — 429 `dm_busy_all`, место консоли не нужно', async () => {
+      const held: { subject: string; ticket: number }[] = [];
+      for (const subject of ['slot:0', 'slot:1']) {
+        const s = await takeRateLimit(f.t.admin.db, DM_RUN_ALL_LIMIT, subject);
+        if (s.ok) held.push({ subject, ticket: s.ticket });
+      }
+      try {
+        expect((await fail(await asOrg('select 1', f.a.orgId), 429)).code).toBe('dm_busy_all');
+      } finally {
+        for (const h of held)
+          await releaseRateLimit(f.t.admin.db, DM_RUN_ALL_LIMIT, h.subject, h.ticket);
+      }
+    });
+  });
+
   describe('карта базы для подсказок (П3)', () => {
     it('поля из базы, закрытое не отдаётся, роль организаций отмечена', async () => {
       const map = await ok(await call('platform-admin', 'GET', '/schema'), DmSchemaMap);
@@ -466,6 +684,19 @@ describe.skipIf(!databaseAvailable())('Витрина данных: консол
         field: 'id',
       });
       expect(map.tables.find((t) => t.name === 'platform_leads')?.orgVisible).toBe(false);
+      // Поле — своей отметкой (этап 2, П7): открытая таблица — открытые поля.
+      expect(cps.fields.find((x) => x.name === 'name')?.orgVisible).toBe(true);
+      // Составной ключ «поле + org_id» — тоже связь (сборщик запроса, этап 2, П9); сам `org_id`
+      // такого ключа — связь с организацией, а не с контрагентом.
+      const reports = map.tables.find((t) => t.name === 'reports')!;
+      expect(reports.fields.find((x) => x.name === 'contractor_id')?.ref).toEqual({
+        table: 'contractors',
+        field: 'id',
+      });
+      expect(reports.fields.find((x) => x.name === 'org_id')?.ref).toEqual({
+        table: 'organizations',
+        field: 'id',
+      });
     });
 
     it('названия, группы и описания — из схемы прототипа; поля без описания — пусто', async () => {
@@ -512,6 +743,22 @@ describe.skipIf(!databaseAvailable())('Витрина данных: консол
         group: null,
       });
     });
+  });
+
+  describe('«Заготовки» (этап 2, П8; прототип v167 DMC_PRE)', () => {
+    it.each(DM_CONSOLE_PRESETS.map((p) => [p.id, p.sql] as const))(
+      'заготовка %s проходит разборщик и выполняется',
+      async (_id, query) => {
+        const params = Object.fromEntries(
+          [...new Set([...query.matchAll(/(?<!:):([a-z_][a-z0-9_]*)/g)].map((m) => m[1]!))].map(
+            (k) => [k, k.includes('month') ? '2026-11' : '2026-11-01'],
+          ),
+        );
+        const res = await ok(await run(query, params), DmConsoleResult);
+        expect(res.columns.length).toBeGreaterThan(0);
+        expect(res.params.sort()).toEqual(Object.keys(params).sort());
+      },
+    );
   });
 
   describe('шаблоны и токены: разборщик (блок 2, пункты 7–8)', () => {

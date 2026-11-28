@@ -53,6 +53,8 @@ import {
   useTechDocsState,
 } from './techdocs-data';
 import { MethodBadge, useMethodCard } from './techdocs-method';
+import { BuildHost } from '../dm/build-dialog';
+import { buildStore } from '../dm/build-store';
 import { accessTone, frameHeight, schemaHash, schemaPageMessage } from './techdocs-model';
 import './techdocs.css';
 
@@ -174,6 +176,11 @@ function DbTab({ meta }: { meta: AdminTechDocsMeta }) {
     if (d.hash) techDocsStore.setHash(d.hash);
     if (d.open) card.open(d.open);
     if (d.full !== undefined) setFullMode(d.full);
+    if (d.build) {
+      // Окно сборщика — поверх программы: из полноэкранного режима схемы выходим.
+      if (fullNow.current) setFullMode(false);
+      buildStore.open(d.build);
+    }
     // Esc, который схема не обработала: закрывает карточку метода, без неё — полноэкранный режим.
     if (d.esc) {
       if (card.isOpen) card.close();
@@ -531,5 +538,10 @@ export function TechDocsScreen({ tab }: { tab: string }) {
       </div>
     );
   }
-  return tab === 'api' ? <ApiTab meta={meta.data} /> : <DbTab meta={meta.data} />;
+  return (
+    <>
+      {tab === 'api' ? <ApiTab meta={meta.data} /> : <DbTab meta={meta.data} />}
+      <BuildHost />
+    </>
+  );
 }

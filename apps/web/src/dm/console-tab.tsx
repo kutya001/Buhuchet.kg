@@ -2,6 +2,7 @@
 
 import {
   bishkekDate,
+  DM_BUILD_MAX,
   dmSqlFormat,
   dmSqlRunText,
   dmSqlStatements,
@@ -19,8 +20,8 @@ import {
 } from '@buhuchet/shared';
 import {
   buttonClass,
+  CHECKBOX_CLASS,
   ConfirmDialog,
-  EmptyState,
   Field,
   FormGrid,
   Hint,
@@ -83,7 +84,11 @@ import {
   type ConsoleState,
   type ConsoleTab as Tab,
 } from './console-store';
+import { BuildHost } from './build-dialog';
+import { buildStore } from './build-store';
+import { PreSide } from './console-pre';
 import { useMethodConsole } from './method-console';
+import { outOrgsQuery } from './out-data';
 import type { DmOutResult } from './out-model';
 import { OutTable } from './out-table';
 import { SqlEditor, type SqlEditorApi } from './sql-editor';
@@ -93,7 +98,7 @@ export type ConsoleToTemplate = (o: { tab: Tab; last: DmOutResult | null }) => v
 
 /** Ответ под редактором (прототип `t.res`): живёт в памяти страницы, в браузер не пишется. */
 type ConsoleRes =
-  | { kind: 'rows'; result: DmOutResult; key: string; body: DmConsoleInput }
+  | { kind: 'rows'; result: DmOutResult; key: string; body: DmConsoleInput; as: string | null }
   | { kind: 'error'; text: string }
   | { kind: 'plan'; plan: unknown }
   | { kind: 'busy' };
@@ -137,39 +142,64 @@ function paramValue(tab: Tab, k: string): string {
 
 const oneLine = (s: string) => s.replace(/\s+/g, ' ').trim();
 
+/** «Выполнять как»: выбранная организация из списка Админки (нет в списке — «Администратор»). */
+type AsOrg = { id: string; name: string } | null;
+
+function useAsOrg(as: string | null) {
+  const orgs = useQuery(outOrgsQuery());
+  const list = orgs.data ?? [];
+  const org = as ? (list.find((o) => o.id === as) ?? null) : null;
+  return { list, org: org ? { id: org.id, name: org.name } : null };
+}
+
 /**
  * «Витрина данных» → «Консоль» Админки (доработки 27.11.2026: консоль запросов, блоки 1, 3, 4; этап 1,
  * П4–П6; прототип v166 `renderDmCon`, `dmcSide`, `dmcRun`, `dmcResDraw`, `dmcPhone`): слева «База»,
  * «Методы API», «Заготовки», «Мои запросы» с «Историей»; справа вкладки запросов, кнопки, редактор,
  * параметры и результат. На телефоне — «Мои запросы», запуск и результат; писать запросы — на ПК.
  */
-export function ConsoleTab({ toTemplate }: { toTemplate: ConsoleToTemplate }) {
+export function ConsoleTab({
+  toTemplate,
+  onTplConsole,
+}: {
+  toTemplate: ConsoleToTemplate;
+  /** «Открыть в консоли» готового шаблона из «Заготовок» (П8). */
+  onTplConsole: (id: string) => void;
+}) {
   const { userId } = useShell();
   const phone = useMediaQuery(PHONE_QUERY);
   const state = useConsoleState(userId ?? '');
   useResVersion();
   const tab = state.tabs[state.cur] ?? state.tabs[0]!;
+  const as = useAsOrg(state.as);
   // «Создать шаблон на основе» (П6) и «Сохранить в шаблон» из другого места: окно — сразу после перехода.
   useEffect(() => {
     const id = consoleStore.takeToTemplate();
     const at = id ? consoleStore.get().tabs.find((x) => x.id === id) : null;
     if (at) toTemplate({ tab: at, last: lastRows(at.id) });
   }, [state.toTemplate, toTemplate]);
-  const run = useConsoleRun(tab);
-  return phone ? (
-    <ConsolePhone tab={tab} run={run} />
-  ) : (
-    <ConsolePc
-      state={state}
-      tab={tab}
-      run={run}
-      onTemplate={() => toTemplate({ tab, last: lastRows(tab.id) })}
-    />
+  const run = useConsoleRun(tab, as.org);
+  return (
+    <>
+      {phone ? (
+        <ConsolePhone tab={tab} run={run} asOrg={as.org} />
+      ) : (
+        <ConsolePc
+          state={state}
+          tab={tab}
+          run={run}
+          as={as}
+          onTemplate={() => toTemplate({ tab, last: lastRows(tab.id) })}
+          onTplConsole={onTplConsole}
+        />
+      )}
+      <BuildHost />
+    </>
   );
 }
 
 /** «Выполнить», «Остановить», «План запроса» вкладки (прототип `dmcRun`, `dmcPlan`, `dmcPick`). */
-function useConsoleRun(tab: Tab) {
+function useConsoleRun(tab: Tab, asOrg: AsOrg) {
   const t = useT();
   const toast = useToast();
   const errorText = useErrorText();
@@ -200,7 +230,12 @@ function useConsoleRun(tab: Tab) {
     const types = tab.types
       ? Object.fromEntries(names.flatMap((k) => (tab.types?.[k] ? [[k, tab.types[k]]] : [])))
       : {};
-    return Object.keys(types).length ? { query: text, params, types } : { query: text, params };
+    return {
+      query: text,
+      params,
+      ...(Object.keys(types).length ? { types } : {}),
+      ...(asOrg ? { orgId: asOrg.id } : {}),
+    };
   };
 
   const go = async (plan: boolean) => {
@@ -230,6 +265,7 @@ function useConsoleRun(tab: Tab) {
       result: consoleResult(parsed.data, (name) => t('dm.con.som', { name })),
       key: `${id}:${Date.now()}`,
       body,
+      as: plan ? null : (asOrg?.name ?? null),
     });
   };
 
@@ -254,12 +290,16 @@ function ConsolePc({
   state,
   tab,
   run,
+  as,
   onTemplate,
+  onTplConsole,
 }: {
   state: ConsoleState;
   tab: Tab;
   run: Run;
+  as: ReturnType<typeof useAsOrg>;
   onTemplate: () => void;
+  onTplConsole: (id: string) => void;
 }) {
   const t = useT();
   const router = useRouter();
@@ -292,7 +332,12 @@ function ConsolePc({
 
   return (
     <div className="grid grid-cols-[280px_minmax(0,1fr)] items-start gap-3.5" data-dm-con="">
-      <ConsoleSide state={state} onInsert={insert} onSchema={showSchema} />
+      <ConsoleSide
+        state={state}
+        onInsert={insert}
+        onSchema={showSchema}
+        onTplConsole={onTplConsole}
+      />
       <section className="flex min-w-0 flex-col gap-2">
         <ConsoleTabs state={state} />
         <div className="flex flex-wrap items-center gap-1.5" data-dm-con-bar="">
@@ -364,12 +409,14 @@ function ConsolePc({
             {t('dm.con.save_tpl')}
           </button>
         </div>
+        <AsRow as={as} />
         <TabNotes tab={tab} />
         <SqlEditor
           key={tab.id}
           value={tab.sql}
           maxLength={DM_CONSOLE_QUERY_TEXT_MAX}
           schema={schema.data ?? null}
+          org={!!as.org}
           check={checkConsole}
           onChange={(sql) => {
             consoleStore.patch(tab.id, { sql });
@@ -392,6 +439,43 @@ function ConsolePc({
           onClose={() => setMineDlg(closeSlot)}
         />
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * «Выполнять как: Администратор / Организация …» (этап 2, П7; прототип v167 `#dmc-as`): демо — первой,
+ * пояснение — какие пределы и что видно. Смена — прежний результат вкладок не показывается.
+ */
+function AsRow({ as }: { as: ReturnType<typeof useAsOrg> }) {
+  const t = useT();
+  return (
+    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1" data-dm-con-asr="">
+      <label className="text-[13px] font-semibold text-muted" htmlFor="dm-con-as">
+        {t('dm.con.as')}
+      </label>
+      <select
+        id="dm-con-as"
+        className={`${inputClass()} w-auto max-w-[340px]`}
+        value={as.org?.id ?? ''}
+        data-dm-con-as=""
+        onChange={(e) => {
+          for (const x of consoleStore.get().tabs) setRes(x.id, null);
+          consoleStore.setAs(e.target.value || null);
+        }}
+      >
+        <option value="">{t('dm.con.as.adm')}</option>
+        {as.list.map((o) => (
+          <option key={o.id} value={o.id}>
+            {t(o.demo ? 'dm.con.as.org_demo' : 'dm.con.as.org', { name: o.name })}
+          </option>
+        ))}
+      </select>
+      <Hint>
+        <span data-dm-con-as-hint="">
+          {as.org ? t('dm.con.as.hint_org', { name: as.org.name }) : t('dm.con.as.hint_adm')}
+        </span>
+      </Hint>
     </div>
   );
 }
@@ -542,6 +626,11 @@ function ConsoleResult({ res }: { res: ConsoleRes | null }) {
   else {
     body = (
       <>
+        {res.as ? (
+          <Hint>
+            <span data-dm-con-res-as="">{t('dm.con.res_as', { name: res.as })}</span>
+          </Hint>
+        ) : null}
         {consoleHasMoney(res.result) ? <Hint>{t('dm.con.money_note')}</Hint> : null}
         <OutTable result={res.result} run={res.key} />
       </>
@@ -586,10 +675,12 @@ function ConsoleSide({
   state,
   onInsert,
   onSchema,
+  onTplConsole,
 }: {
   state: ConsoleState;
   onInsert: (text: string) => void;
   onSchema: (table: string) => void;
+  onTplConsole: (id: string) => void;
 }) {
   const t = useT();
   return (
@@ -622,9 +713,7 @@ function ConsoleSide({
           <DbSide q={state.q} onInsert={onInsert} onSchema={onSchema} />
         ) : null}
         {state.side === 'api' ? <ApiSide q={state.q} /> : null}
-        {state.side === 'pre' ? (
-          <EmptyState icon="book" title={t('dm.con.pre.title')} text={t('dm.con.pre.text')} />
-        ) : null}
+        {state.side === 'pre' ? <PreSide onTemplate={onTplConsole} /> : null}
         {state.side === 'mine' ? <MineSide state={state} /> : null}
       </div>
     </aside>
@@ -680,6 +769,8 @@ function DbSide({
 }) {
   const t = useT();
   const schema = useQuery(consoleSchemaQuery);
+  // «Собрать запрос» (П9; прототип `DMC.pick`): отмеченные таблицы, `null` — обычный вид.
+  const [pick, setPick] = useState<string[] | null>(null);
   const s = q.trim().toLowerCase();
   const groups = useMemo(() => {
     const index = schema.data;
@@ -698,60 +789,134 @@ function DbSide({
   }, [schema.data, s]);
   if (schema.isError) return <Note tone="bad">{t('grid.load_error')}</Note>;
   if (!schema.data) return <div className="min-h-[80px]" aria-busy="true" />;
-  if (!groups.length) return <span className="text-faint">{t('dm.con.nothing')}</span>;
+  const toggle = (name: string, on: boolean) =>
+    setPick((p) =>
+      !p
+        ? p
+        : on
+          ? p.includes(name) || p.length >= DM_BUILD_MAX
+            ? p
+            : [...p, name]
+          : p.filter((x) => x !== name),
+    );
   return (
     <div data-dm-con-db="">
+      {pick ? (
+        <Note icon="info">
+          <div className="flex flex-col gap-1.5" data-dm-con-pick="">
+            <span>
+              {pick.length
+                ? t('dm.b.pick_hint_list', {
+                    max: DM_BUILD_MAX,
+                    n: pick.length,
+                    list: pick.join(', '),
+                  })
+                : t('dm.b.pick_hint', { max: DM_BUILD_MAX, n: 0 })}
+            </span>
+            <div className="flex gap-1.5">
+              <button
+                type="button"
+                className={buttonClass('cta', 'sm')}
+                disabled={!pick.length}
+                data-dm-con-pick-go=""
+                onClick={() => {
+                  setPick(null);
+                  buildStore.open(pick);
+                }}
+              >
+                {t('dm.b.pick_go', { n: pick.length })}
+              </button>
+              <button
+                type="button"
+                className={buttonClass('ghost', 'sm')}
+                onClick={() => setPick(null)}
+              >
+                {t('btn.cancel')}
+              </button>
+            </div>
+          </div>
+        </Note>
+      ) : (
+        <button
+          type="button"
+          className={`${buttonClass('default', 'sm')} mb-1 self-start`}
+          data-dm-con-pick-start=""
+          onClick={() => setPick([])}
+        >
+          <Icon name="layers" size="sm" />
+          {t('dm.b.pick')}
+        </button>
+      )}
+      {groups.length ? null : <span className="text-faint">{t('dm.con.nothing')}</span>}
       {groups.map(({ g, list }) => (
-        <details key={g || '-'} open={!!s} className="py-0.5">
+        <details key={g || '-'} open={!!s || !!pick} className="py-0.5">
           <summary className="cursor-pointer font-semibold">
             {g || t('dm.con.group_other')}{' '}
             <span className="font-normal text-faint">{list.length}</span>
           </summary>
-          {list.map((x) => (
-            <details key={x.name} className="ml-2" data-dm-con-table={x.name}>
-              <summary className="cursor-pointer py-0.5">
+          {list.map((x) =>
+            pick ? (
+              <label
+                key={x.name}
+                className="ml-2 flex cursor-pointer items-center gap-1.5 py-0.5"
+                data-dm-con-pick-row={x.name}
+              >
+                <input
+                  type="checkbox"
+                  className={CHECKBOX_CLASS}
+                  checked={pick.includes(x.name)}
+                  disabled={!pick.includes(x.name) && pick.length >= DM_BUILD_MAX}
+                  onChange={(e) => toggle(x.name, e.target.checked)}
+                />
+                <span className={MONO}>{x.name}</span>{' '}
+                <span className="text-faint">{x.title ?? ''}</span>
+              </label>
+            ) : (
+              <details key={x.name} className="ml-2" data-dm-con-table={x.name}>
+                <summary className="cursor-pointer py-0.5">
+                  <button
+                    type="button"
+                    className={`${LINK} ${MONO}`}
+                    title={t('dm.con.insert')}
+                    onClick={() => onInsert(x.name)}
+                  >
+                    {x.name}
+                  </button>{' '}
+                  <span className="text-faint">{x.title ?? ''}</span>
+                  {x.orgVisible ? null : (
+                    <span className="ml-1 rounded bg-label-bg px-1 text-[11px]">
+                      {t('dm.con.closed')}
+                    </span>
+                  )}
+                </summary>
+                <ul className="my-0.5 ml-2.5 flex list-none flex-col gap-0.5 p-0">
+                  {x.fields.map((f) => (
+                    <li key={f.name}>
+                      <button
+                        type="button"
+                        className={`${LINK} ${MONO}`}
+                        onClick={() => onInsert(f.name)}
+                      >
+                        {f.name}
+                      </button>{' '}
+                      <span className="text-faint">{f.type}</span>{' '}
+                      <span className={f.title ? undefined : 'text-faint'}>
+                        {f.title ?? t('dm.con.no_desc')}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
                 <button
                   type="button"
-                  className={`${LINK} ${MONO}`}
-                  title={t('dm.con.insert')}
-                  onClick={() => onInsert(x.name)}
+                  className={`${LINK} inline-flex items-center gap-1`}
+                  onClick={() => onSchema(x.name)}
                 >
-                  {x.name}
-                </button>{' '}
-                <span className="text-faint">{x.title ?? ''}</span>
-                {x.orgVisible ? null : (
-                  <span className="ml-1 rounded bg-label-bg px-1 text-[11px]">
-                    {t('dm.con.closed')}
-                  </span>
-                )}
-              </summary>
-              <ul className="my-0.5 ml-2.5 flex list-none flex-col gap-0.5 p-0">
-                {x.fields.map((f) => (
-                  <li key={f.name}>
-                    <button
-                      type="button"
-                      className={`${LINK} ${MONO}`}
-                      onClick={() => onInsert(f.name)}
-                    >
-                      {f.name}
-                    </button>{' '}
-                    <span className="text-faint">{f.type}</span>{' '}
-                    <span className={f.title ? undefined : 'text-faint'}>
-                      {f.title ?? t('dm.con.no_desc')}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <button
-                type="button"
-                className={`${LINK} inline-flex items-center gap-1`}
-                onClick={() => onSchema(x.name)}
-              >
-                <Icon name="db" size="sm" />
-                {t('dm.con.schema')}
-              </button>
-            </details>
-          ))}
+                  <Icon name="db" size="sm" />
+                  {t('dm.con.schema')}
+                </button>
+              </details>
+            ),
+          )}
         </details>
       ))}
     </div>
@@ -957,6 +1122,7 @@ function HistRow({ t, x, userId }: { t: Translate; x: DmConsoleRun; userId: stri
         {` · ${t(`dm.con.outcome.${x.outcome}`)}`}
         {x.action === 'dm_console_export' ? ` · ${t('dm.con.xl')}` : ''}
         {x.rows !== null ? ` · ${t('dm.con.hist.rows', { n: x.rows })}` : ''}
+        {x.org ? ` · ${t('dm.con.hist.as', { name: x.org.name })}` : ''}
       </span>
     </div>
   );
@@ -1108,7 +1274,7 @@ function MineDialog({ tab, open, onClose }: { tab: Tab; open: boolean; onClose: 
 }
 
 /** Телефон (блок 1, пункт 6; прототип `dmcPhone`): «Мои запросы», запуск и результат. */
-function ConsolePhone({ tab, run }: { tab: Tab; run: Run }) {
+function ConsolePhone({ tab, run, asOrg }: { tab: Tab; run: Run; asOrg: AsOrg }) {
   const t = useT();
   const { userId } = useShell();
   const mine = useQuery(consoleQueriesQuery);
@@ -1142,7 +1308,7 @@ function ConsolePhone({ tab, run }: { tab: Tab; run: Run }) {
           <span className="text-faint">{t('dm.con.phone_none')}</span>
         )}
       </section>
-      {tab.mine ? (
+      {tab.mine || tab.src || tab.tpl ? (
         <>
           <section className="flex flex-col gap-2 rounded-xl border border-line bg-raised p-3">
             <h3 className="m-0 text-[15px] font-semibold">{tabName(t, tab)}</h3>
@@ -1154,6 +1320,11 @@ function ConsolePhone({ tab, run }: { tab: Tab; run: Run }) {
               label={t('dm.con.query')}
             />
             <ParamStrip tab={tab} />
+            {asOrg ? (
+              <Hint>
+                <span data-dm-con-as-hint="">{t('dm.con.as.hint_org', { name: asOrg.name })}</span>
+              </Hint>
+            ) : null}
             <button
               type="button"
               className={`${buttonClass('cta')} justify-center`}

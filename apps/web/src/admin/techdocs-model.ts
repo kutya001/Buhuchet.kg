@@ -1,3 +1,4 @@
+import { DM_BUILD_MAX } from '@buhuchet/domain';
 import type { IconName } from '@buhuchet/ui';
 
 /** Вкладки карточки метода (прототип tdMethod). */
@@ -134,14 +135,18 @@ export function frameHeight(at: { top: number; bottom: number; phone: boolean })
   return Math.max(420, at.bottom - Math.max(0, at.top) - (at.phone ? 8 : 16));
 }
 
-/** Сообщение страницы схемы (прототип: `{tdx:1, ready|hash|open|full|esc}`); чужое — null. */
+/** Сообщение страницы схемы (прототип: `{tdx:1, ready|hash|open|full|esc|build}`); чужое — null. */
 export interface SchemaPageMessage {
   ready?: boolean;
   hash?: string;
   open?: string;
   full?: boolean;
   esc?: boolean;
+  /** «Собрать запрос» (консоль, этап 2, П9): отмеченные таблицы — в окно сборщика. */
+  build?: string[];
 }
+
+const TABLE_NAME = /^[a-z_][a-z0-9_]{0,62}$/;
 
 /** Номер метода в снимке — «GET /admin/users»; другое страница схемы открыть не просит. */
 const METHOD_ID = /^(GET|POST|PUT|PATCH|DELETE) \/[\w\-{}/.:]{0,290}$/;
@@ -156,5 +161,14 @@ export function schemaPageMessage(data: unknown): SchemaPageMessage | null {
   if (typeof d.open === 'string' && METHOD_ID.test(d.open)) out.open = d.open;
   if ('full' in d) out.full = Boolean(d.full);
   if (d.esc) out.esc = true;
+  // Только имена таблиц строками, от 1 до 5 (прототип `techdocs.js` `d.build`): окно сборщика само
+  // оставит таблицы карты базы и ничего не выполнит без нажатия администратора.
+  if (
+    Array.isArray(d.build) &&
+    d.build.length > 0 &&
+    d.build.length <= DM_BUILD_MAX &&
+    d.build.every((x) => typeof x === 'string' && TABLE_NAME.test(x))
+  )
+    out.build = [...(d.build as string[])];
   return out;
 }

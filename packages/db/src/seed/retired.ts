@@ -384,6 +384,8 @@ export const RETIRED = {
     'dm.how.tip_csv',
     'dm.how.tip_limits',
     'dm.how.tip_sheets',
+    // Консоль Витрины, этап 2, П8: вместо заглушки — «Заготовки».
+    'dm.con.pre.title',
   ],
 } as const;
 

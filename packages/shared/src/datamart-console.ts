@@ -27,6 +27,12 @@ export const DmConsoleInput = z.object({
     .record(z.string().max(60), z.enum(DM_PARAM_TYPES))
     .refine((o) => Object.keys(o).length <= 20)
     .optional(),
+  /**
+   * «Выполнять как: Организация …» (этап 2, П7; docs/decisions.md п. О-70): запрос идёт ролью организаций
+   * от этой организации — тем же путём и с теми же пределами, что «Показать» (15 с, 50 000 строк, место
+   * «Показать»). Нет — «Администратор» (роль шаблонов Админки, 60 с). На «План запроса» не влияет.
+   */
+  orgId: z.uuid().optional(),
 });
 export type DmConsoleInput = z.infer<typeof DmConsoleInput>;
 
@@ -63,6 +69,8 @@ export const DmSchemaField = z.object({
   description: z.string().nullable(),
   /** Связь: таблица и поле, на которые ссылается это поле. */
   ref: z.object({ table: z.string(), field: z.string() }).nullable(),
+  /** Открыто ли поле роли организаций («Выполнять как: Организация …», этап 2, П7). */
+  orgVisible: z.boolean(),
 });
 export type DmSchemaField = z.infer<typeof DmSchemaField>;
 
@@ -140,6 +148,8 @@ export const DmConsoleRun = z.object({
   rows: z.number().int().nullable(),
   ms: z.number().int().nullable(),
   error: z.string().nullable(),
+  /** От какой организации шёл запрос («Выполнять как», этап 2, П7); от администратора — пусто. */
+  org: z.object({ id: z.string(), name: z.string() }).nullable(),
 });
 export type DmConsoleRun = z.infer<typeof DmConsoleRun>;
 

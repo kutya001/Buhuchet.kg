@@ -150,6 +150,26 @@ export function runDmConsole(db: Db, adminUserId: string, q: DmQuery): Promise<D
   );
 }
 
+/**
+ * «Выполнять как: Организация …» консоли (доработки 27.11.2026: консоль запросов, этап 2, П7;
+ * docs/decisions.md п. О-70): путь «Показать» организации — `withOrgContext` выбранной организации от
+ * имени администратора, `dm.begin_org`, роль `buhuchet_dm_org` (только её строки, таблицы платформы
+ * закрыты), не дольше 15 с, — и та же метка консоли администратора: «Остановить» находит и этот запрос.
+ * Есть ли такая организация, проверяет вызывающий.
+ */
+export function runDmConsoleOrg(
+  db: Db,
+  ctx: { orgId: string; adminUserId: string },
+  q: DmQuery,
+): Promise<DmResult> {
+  return rolledBack(() =>
+    withOrgContext(db, { orgId: ctx.orgId, userId: ctx.adminUserId }, async (tx) => {
+      await tagConsole(tx, ctx.adminUserId);
+      return runInTx(tx, 'org', q);
+    }),
+  );
+}
+
 /** Ответ «Плана запроса» уносится из транзакции ошибкой — как ответ запуска. */
 class DmPlanRolledBack extends Error {
   constructor(readonly plan: unknown) {

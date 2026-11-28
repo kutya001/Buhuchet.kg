@@ -458,7 +458,9 @@ export type DmRewriteCode =
   | 'svc'
   | 'cut'
   | 'closed_tables'
-  | 'closed_fields';
+  | 'closed_fields'
+  // Метод без точного SQL собран по своим таблицам (этап 2, П9; прототип `dmcMethodBuild`).
+  | 'built';
 export interface DmRewriteNote {
   code: DmRewriteCode;
   vars: Record<string, string>;
@@ -751,7 +753,7 @@ const COMPARE = new Set(['=', '<>', '!=', '<', '>', '<=', '>=']);
  * поле uuid), получает приведение к типу поля из карты базы (`:p1::uuid`).
  */
 function castParams(sql: string, known: ReadonlyMap<string, ReadonlyMap<string, string>>): string {
-  const aliases = dmSqlAliases(sql);
+  const aliasAt = dmSqlAliasScopes(sql);
   const toks = dmSqlLex(sql);
   const sigIdx = toks
     .map((t, i) => (t.kind === 'space' || t.kind === 'comment' ? -1 : i))
@@ -762,7 +764,7 @@ function castParams(sql: string, known: ReadonlyMap<string, ReadonlyMap<string, 
     if (p < 2) return null;
     const [a, dot, f] = [toks[sigIdx[p - 2]!]!, toks[sigIdx[p - 1]!]!, toks[j]!];
     if (a.kind !== 'word' || dot.text !== '.' || f.kind !== 'word') return null;
-    const table = aliases.get(a.text.toLowerCase());
+    const table = aliasAt(p - 2, a.text.toLowerCase());
     return (table && known.get(table)?.get(f.text.toLowerCase())) ?? null;
   };
   const casts = new Map<number, string>();
@@ -782,13 +784,36 @@ function castParams(sql: string, known: ReadonlyMap<string, ReadonlyMap<string, 
   return toks.map((t, i) => (casts.has(i) ? `${t.text}::${casts.get(i)}` : t.text)).join('');
 }
 
-/** Псевдонимы таблиц: «FROM contractors c» → c → contractors (и сама таблица — своим именем). */
-export function dmSqlAliases(sql: string): Map<string, string> {
+/**
+ * Псевдонимы по уровням запроса (исправление этапа 2: прежде один общий список путал псевдоним, заново
+ * объявленный в подзапросе, — «GET /admin/files» давал ложное «поля не видно»; docs/typical-mistakes.md
+ * № 86). Уровень — скобки: подзапрос, WITH, LATERAL. Имя ищется на уровне ссылки, потом на внешних — так
+ * работает и коррелированный подзапрос. Ответ — функция: номер значимого куска (без пробелов и
+ * комментариев) и псевдоним → таблица или `undefined`.
+ */
+export function dmSqlAliasScopes(sql: string): (at: number, alias: string) => string | undefined {
   const sig = dmSqlLex(sql).filter((t) => t.kind !== 'space' && t.kind !== 'comment');
-  const out = new Map<string, string>();
+  const parent: number[] = [-1];
+  const blockOf: number[] = [];
+  const decl = new Map<number, Map<string, string>>();
+  const stack = [0];
+  for (const t of sig) {
+    // Открывающая скобка — ещё внешний уровень, закрывающая — уже внешний.
+    if (t.text === ')' && stack.length > 1) stack.pop();
+    blockOf.push(stack[stack.length - 1]!);
+    if (t.text === '(') {
+      parent.push(stack[stack.length - 1]!);
+      stack.push(parent.length - 1);
+    }
+  }
+  const put = (b: number, name: string, table: string) => {
+    if (!decl.has(b)) decl.set(b, new Map());
+    decl.get(b)!.set(name, table);
+  };
   for (let k = 0; k < sig.length; k += 1) {
     const w = upper(sig[k]!);
-    if (w !== 'FROM' && w !== 'JOIN' && !(sig[k]!.text === ',' && out.size)) continue;
+    const b = blockOf[k]!;
+    if (w !== 'FROM' && w !== 'JOIN' && !(sig[k]!.text === ',' && decl.has(b))) continue;
     let p = k + 1;
     if (sig[p]?.kind !== 'word') continue;
     let table = sig[p]!.text.toLowerCase();
@@ -798,7 +823,7 @@ export function dmSqlAliases(sql: string): Map<string, string> {
       p += 2;
     }
     if (sig[p + 1]?.text === '(' || DM_SQL_KEYWORDS.has(table)) continue;
-    out.set(table, table);
+    put(b, table, table);
     let a = p + 1;
     if (upper(sig[a] ?? sig[p]!) === 'AS') a += 1;
     const alias = sig[a];
@@ -808,9 +833,15 @@ export function dmSqlAliases(sql: string): Map<string, string> {
       !DM_SQL_KEYWORDS.has(alias.text.toLowerCase()) &&
       !CLAUSES.has(upper(alias))
     )
-      out.set(alias.text.toLowerCase(), table);
+      put(b, alias.text.toLowerCase(), table);
   }
-  return out;
+  return (at, alias) => {
+    for (let b = blockOf[at] ?? 0; b >= 0; b = parent[b]!) {
+      const t = decl.get(b)?.get(alias);
+      if (t) return t;
+    }
+    return undefined;
+  };
 }
 
 /** Поля «псевдоним.поле» известных таблиц, которых консоли не видно (секретные столбцы). */
@@ -818,14 +849,14 @@ export function dmSqlClosedFields(
   sql: string,
   known: ReadonlyMap<string, ReadonlyMap<string, string>>,
 ): string[] {
-  const aliases = dmSqlAliases(sql);
+  const aliasAt = dmSqlAliasScopes(sql);
   const sig = dmSqlLex(sql).filter((t) => t.kind !== 'space' && t.kind !== 'comment');
   const out: string[] = [];
   for (let k = 0; k + 2 < sig.length; k += 1) {
     if (sig[k]!.kind !== 'word' || sig[k + 1]!.text !== '.' || sig[k + 2]!.kind !== 'word')
       continue;
     if (sig[k + 3]?.text === '(') continue;
-    const table = aliases.get(sig[k]!.text.toLowerCase());
+    const table = aliasAt(k, sig[k]!.text.toLowerCase());
     const cols = table ? known.get(table) : undefined;
     const col = sig[k + 2]!.text.toLowerCase();
     if (table && cols && !cols.has(col) && !out.includes(`${table}.${col}`))
