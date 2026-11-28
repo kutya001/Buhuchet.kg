@@ -739,6 +739,7 @@ const NOT_TABLE_AFTER_PAREN = new Set(['SELECT', 'WITH', 'VALUES', 'TABLE']);
  * внутри функции («EXTRACT(YEAR FROM created_at)») — имя поля (замечание заказчика 28.11.2026,
  * docs/typical-mistakes.md № 89). Ответ — номера кусков FROM, JOIN и запятой перед именем.
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#О-106
 export function dmSqlFromSlots(sig: readonly DmSqlToken[]): Set<number> {
   const out = new Set<number>();
   const hasSelect: boolean[] = [false];
@@ -769,7 +770,8 @@ export function dmSqlFromSlots(sig: readonly DmSqlToken[]): Set<number> {
     const w = t.kind === 'word' ? t.text.toUpperCase() : '';
     if (w === 'SELECT') hasSelect[depth] = true;
     // JOIN — всегда о таблицах, FROM — только у SELECT своего уровня (не «EXTRACT(YEAR FROM …)»).
-    if (w === 'JOIN' || (w === 'FROM' && hasSelect[depth])) {
+    const distinct = sig[k - 1]?.text.toUpperCase() === 'DISTINCT'; // «a IS DISTINCT FROM b»
+    if (w === 'JOIN' || (w === 'FROM' && hasSelect[depth] && !distinct)) {
       inList[depth] = true;
       out.add(k);
     } else if (FROM_LIST_ENDS.has(w)) inList[depth] = false;

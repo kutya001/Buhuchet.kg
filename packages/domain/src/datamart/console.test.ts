@@ -320,6 +320,8 @@ describe('таблицы и столбцы запроса', () => {
       'c',
     ]);
     expect(dmSqlTables('select * from (select 1 from a) s, (values (1)) v, b')).toEqual(['a', 'b']);
+    expect(dmSqlTables('select * from a join (b join c on true) on true')).toEqual(['a', 'b', 'c']);
+    expect(dmSqlTables('select * from a where a.x is distinct from a.y')).toEqual(['a']);
   });
   it('столбцы вывода: псевдоним, иначе последнее имя', () => {
     expect(
