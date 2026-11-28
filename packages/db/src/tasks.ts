@@ -795,7 +795,7 @@ export async function seriesVisibleTaskIds(
   const rows = await fromTasks(tx, { id: tasks.id }).where(
     and(eq(tasks.seriesId, seriesId), where),
   );
-  return new Set(rows.map((r) => r.id));
+  return new Set(rows.map((r) => r.id as string));
 }
 
 export function taskContractorAccess(scope: SQL | undefined): SQL {
