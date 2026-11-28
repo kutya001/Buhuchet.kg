@@ -255,6 +255,30 @@ export const REQUEST_FORM_DICT: Readonly<Record<RequestDictForm, string>> = {
   other: '',
 };
 
+/**
+ * Форма у прежнего запроса «Попросить добавить» по коду справочника продукта (перенос миграции 0178 и
+ * `createDictRequest` до этапа 2): как `reqFidOf` по названию справочника — «Налоговые режимы» идут в
+ * «Налог или ставка», «Формы собственности» — в «Другое» с названием справочника.
+ */
+export const REQUEST_FORM_OF_DICT = {
+  types: 'type',
+  regimes: 'tax',
+  forms: 'other',
+  organs: 'organ',
+  benefits: 'ben',
+  banks: 'bank',
+  cats: 'cat',
+  reasons: 'reason',
+  ugns: 'ugns',
+  bases: 'base',
+  dm: 'dm',
+} as const satisfies Record<string, RequestDictForm>;
+
+/** Название справочника у «Другое» прежнего запроса (поле формы `dict`). */
+export const REQUEST_OTHER_DICT_TITLE: Readonly<Record<string, string>> = {
+  forms: 'Формы собственности',
+};
+
 /** Справочник прежнего запроса по названию → форма (прототип `reqFidOf`). */
 export function requestFormOf(dictTitle: string | null | undefined): RequestDictForm {
   const t = String(dictTitle ?? '');

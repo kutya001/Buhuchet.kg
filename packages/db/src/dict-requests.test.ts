@@ -122,11 +122,14 @@ describe.skipIf(!databaseAvailable())('«Попросить добавить»: 
     const base = { orgId: a.orgId, dict: 'types', what: 'Отчёт', createdBy: a.ownerUserId };
     for (const values of [
       { ...base, createdBy: b.ownerUserId },
+      { ...base, leadAdmin: a.ownerUserId },
+      { ...base, closedAt: new Date() },
+      { ...base, readAdmin: 3 },
       { ...base, status: 'added' },
       { ...base, answer: 'Добавили' },
       { ...base, decidedBy: a.ownerUserId },
       { ...base, decidedAt: new Date() },
-    ]) {
+    ] as (typeof dictChangeRequests.$inferInsert)[]) {
       await expect(
         asOwner(a, (tx) => tx.insert(dictChangeRequests).values(values)),
       ).rejects.toThrow(permissionDenied);
@@ -141,7 +144,7 @@ describe.skipIf(!databaseAvailable())('«Попросить добавить»: 
     ).rejects.toThrow(violates('dict_change_requests_dict_check'));
     await expect(
       asOwner(a, (tx) => createDictRequest(tx, { dict: 'types', what: '   ', comment: '' })),
-    ).rejects.toThrow(violates('dict_change_requests_what_check'));
+    ).rejects.toThrow(violates('dict_change_requests_topic_check'));
   });
 
   it('плашка «Запросы на добавление» в Админке: все запросы — только администратору платформы', async () => {

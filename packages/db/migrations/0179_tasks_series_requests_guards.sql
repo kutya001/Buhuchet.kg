@@ -1,0 +1,252 @@
+-- Права, политики и функции повторяющихся задач и запросов администратору (доработки 28.11.2026; план
+-- разработки 28.11, этап 0, П2; таблицы и перенос — миграция 0178; docs/decisions.md п. О-72).
+--
+-- Задачи серии ставит ночной запуск «Задачи: повторы» без пользователя: вставка задачи без вошедшего
+-- разрешена только с серией этой организации, постановщик — постановщик серии, автор записи пустой.
+-- «Эту и следующие» переносит задачу в серию — роль приложения меняет `series_id`, `series_date`.
+GRANT UPDATE (series_id, series_date) ON TABLE tasks TO buhuchet_app;
+--> statement-breakpoint
+DROP POLICY tasks_insert_own ON tasks;
+--> statement-breakpoint
+CREATE POLICY tasks_insert_own ON tasks AS RESTRICTIVE FOR INSERT TO buhuchet_app
+  WITH CHECK (
+    (
+      created_by = app.current_user_id()
+      AND author_employee_id IN (SELECT e.id FROM employees e WHERE e.user_id = app.current_user_id())
+    )
+    OR (
+      app.current_user_id() IS NULL
+      AND created_by IS NULL
+      AND series_id IS NOT NULL
+      AND EXISTS (
+        SELECT 1 FROM task_series s
+        WHERE s.id = tasks.series_id AND s.org_id = tasks.org_id AND s.state = 'active'
+          AND s.author_employee_id = tasks.author_employee_id
+      )
+    )
+  );
+--> statement-breakpoint
+-- Серию ставит сотрудник от своего имени; серии не удаляются (их останавливают, вместе с контрагентом
+-- удаляет каскад); организацию, постановщика и автора записи после вставки не меняет никто.
+REVOKE UPDATE, DELETE, TRUNCATE ON TABLE task_series FROM buhuchet_app;
+--> statement-breakpoint
+GRANT UPDATE (
+  title, description, category_code, contractor_id, project_id, executor_employee_id, term, need_file,
+  confirm, every, unit, week_days, month_mode, start_date, end_kind, end_date, end_count, state,
+  stop_reason, next_date, made, updated_by, updated_at, version
+) ON TABLE task_series TO buhuchet_app;
+--> statement-breakpoint
+CREATE POLICY task_series_insert_own ON task_series AS RESTRICTIVE FOR INSERT TO buhuchet_app
+  WITH CHECK (
+    created_by = app.current_user_id()
+    AND author_employee_id IN (SELECT e.id FROM employees e WHERE e.user_id = app.current_user_id())
+  );
+--> statement-breakpoint
+-- Ночной запуск без пользователя меняет у серии только состояние, причину, следующую дату и счёт
+-- поставленных (и служебные поля правки); поля задачи и правило — только сотрудник.
+CREATE OR REPLACE FUNCTION app.task_series_job_guard() RETURNS trigger
+  LANGUAGE plpgsql
+  SET search_path = pg_catalog, pg_temp
+  AS $$
+  BEGIN
+    IF app.current_user_id() IS NULL AND (
+      NEW.title, NEW.description, NEW.category_code, NEW.contractor_id, NEW.project_id,
+      NEW.executor_employee_id, NEW.term, NEW.need_file, NEW.confirm, NEW.every, NEW.unit,
+      NEW.week_days, NEW.month_mode, NEW.start_date, NEW.end_kind, NEW.end_date, NEW.end_count,
+      NEW.updated_by
+    ) IS DISTINCT FROM (
+      OLD.title, OLD.description, OLD.category_code, OLD.contractor_id, OLD.project_id,
+      OLD.executor_employee_id, OLD.term, OLD.need_file, OLD.confirm, OLD.every, OLD.unit,
+      OLD.week_days, OLD.month_mode, OLD.start_date, OLD.end_kind, OLD.end_date, OLD.end_count,
+      OLD.updated_by
+    ) THEN
+      RAISE EXCEPTION 'task_series: без пользователя меняются только состояние и счёт'
+        USING ERRCODE = '42501';
+    END IF;
+    RETURN NEW;
+  END
+  $$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION app.task_series_job_guard() FROM PUBLIC, buhuchet_app;
+--> statement-breakpoint
+CREATE TRIGGER task_series_job_guard BEFORE UPDATE ON task_series
+  FOR EACH ROW EXECUTE FUNCTION app.task_series_job_guard();
+--> statement-breakpoint
+-- Номер запроса — сквозной по платформе, с 1201 (прежние получили номера в 0178 по дате отправки).
+-- Ставит его триггер при вставке: свой номер организация не задаёт и чужой не займёт.
+CREATE SEQUENCE public.request_no_seq AS integer START WITH 1201 MINVALUE 1201;
+--> statement-breakpoint
+SELECT CASE WHEN max(no) IS NULL THEN setval('public.request_no_seq', 1201, false)
+  ELSE setval('public.request_no_seq', max(no), true) END
+FROM public.dict_change_requests;
+--> statement-breakpoint
+GRANT USAGE ON SEQUENCE public.request_no_seq TO buhuchet_app;
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION app.dict_change_requests_no() RETURNS trigger
+  LANGUAGE plpgsql
+  SET search_path = pg_catalog, pg_temp
+  AS $$
+  BEGIN
+    NEW.no := nextval('public.request_no_seq');
+    RETURN NEW;
+  END
+  $$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION app.dict_change_requests_no() FROM PUBLIC, buhuchet_app;
+--> statement-breakpoint
+CREATE TRIGGER dict_change_requests_no BEFORE INSERT ON dict_change_requests
+  FOR EACH ROW EXECUTE FUNCTION app.dict_change_requests_no();
+--> statement-breakpoint
+-- Действия организации на запросе (блок 4): «Отозвать запрос» (автор, пока «Новый»), «прочитано» (автор),
+-- ответ в открытый или закрытый не дольше 30 дней (возвращает «В работе», снимает «Ждёт вашего ответа»).
+-- Роль приложения меняет только эти столбцы; что именно можно — проверяет триггер. Остальное (статусы
+-- администратора, «Ведёт», ответ) — только администратор платформы: функция `app.admin_answer_dict_request`
+-- и методы Админки этапа 2 в контексте организации запроса.
+GRANT UPDATE (status, wait, read_author, closed_at, last_at, updated_at, version)
+  ON TABLE dict_change_requests TO buhuchet_app;
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION app.dict_change_requests_org_guard() RETURNS trigger
+  LANGUAGE plpgsql
+  SET search_path = pg_catalog, pg_temp
+  AS $$
+  DECLARE
+    me uuid := app.current_user_id();
+  BEGIN
+    IF app.is_platform_admin() THEN
+      RETURN NEW;
+    END IF;
+    IF NEW.status IS DISTINCT FROM OLD.status THEN
+      IF NOT (
+        (OLD.status = 'new' AND NEW.status = 'withdrawn' AND OLD.created_by = me)
+        OR (NEW.status = 'in_work' AND OLD.status IN ('solved', 'added', 'rejected')
+          AND OLD.closed_at > now() - interval '30 days')
+      ) THEN
+        RAISE EXCEPTION 'dict_change_requests: такой статус ставит администратор платформы'
+          USING ERRCODE = '42501';
+      END IF;
+      NEW.closed_at := CASE WHEN NEW.status IN ('new', 'in_work') THEN NULL ELSE now() END;
+      NEW.wait := false;
+    ELSE
+      NEW.closed_at := OLD.closed_at;
+    END IF;
+    -- «Ждёт вашего ответа» организация только снимает (ответом).
+    IF NEW.wait AND NOT OLD.wait THEN
+      RAISE EXCEPTION 'dict_change_requests: «Ждёт ответа» ставит администратор платформы'
+        USING ERRCODE = '42501';
+    END IF;
+    -- «Прочитано» — только своё, не дальше последнего сообщения ленты.
+    IF NEW.read_author IS DISTINCT FROM OLD.read_author AND (
+      OLD.created_by IS DISTINCT FROM me
+      OR NEW.read_author < 0
+      OR NEW.read_author > (
+        SELECT coalesce(max(m.n), 0) FROM public.request_messages m WHERE m.request_id = OLD.id
+      )
+    ) THEN
+      RAISE EXCEPTION 'dict_change_requests: прочитано отмечает только автор'
+        USING ERRCODE = '42501';
+    END IF;
+    NEW.last_at := greatest(OLD.last_at, least(NEW.last_at, now()));
+    RETURN NEW;
+  END
+  $$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION app.dict_change_requests_org_guard() FROM PUBLIC, buhuchet_app;
+--> statement-breakpoint
+CREATE TRIGGER dict_change_requests_org_guard BEFORE UPDATE ON dict_change_requests
+  FOR EACH ROW EXECUTE FUNCTION app.dict_change_requests_org_guard();
+--> statement-breakpoint
+-- Ответ Админки на «Добавить в справочник» (прежняя функция миграции 0043, тот же вызов): теперь ещё и
+-- лента — ответ сообщением администратора, решение — сменой статуса; запрос закрыт, «Ведёт» — ответивший,
+-- прочитано администраторами. Отозванный и запрос другого вида так не закрываются.
+CREATE OR REPLACE FUNCTION app.admin_answer_dict_request(p_id uuid, p_status text, p_answer text, p_version integer)
+  RETURNS integer
+  LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+  SET search_path = pg_catalog, pg_temp
+  AS $$
+  DECLARE
+    r public.dict_change_requests%ROWTYPE;
+    a text := btrim(coalesce(p_answer, ''));
+    k integer;
+    v integer;
+  BEGIN
+    IF NOT app.is_platform_admin() OR p_status NOT IN ('added', 'rejected')
+      OR (p_status = 'rejected' AND length(a) = 0) OR length(coalesce(p_answer, '')) > 2000 THEN
+      RETURN NULL;
+    END IF;
+    SELECT * INTO r FROM public.dict_change_requests WHERE id = p_id AND version = p_version FOR UPDATE;
+    IF NOT FOUND OR r.kind <> 'dict' OR r.status = 'withdrawn' THEN
+      RETURN NULL;
+    END IF;
+    SELECT coalesce(max(m.n), 0) INTO k FROM public.request_messages m WHERE m.request_id = r.id;
+    IF a <> '' THEN
+      k := k + 1;
+      INSERT INTO public.request_messages (org_id, request_id, n, kind, by_admin, author_user_id, text)
+        VALUES (r.org_id, r.id, k, 'msg', true, app.current_user_id(), a);
+    END IF;
+    IF r.status <> p_status THEN
+      k := k + 1;
+      INSERT INTO public.request_messages
+          (org_id, request_id, n, kind, by_admin, author_user_id, from_status, to_status, why)
+        VALUES (r.org_id, r.id, k, 'st', true, app.current_user_id(), r.status, p_status,
+          CASE WHEN p_status = 'rejected' THEN a ELSE '' END);
+    END IF;
+    UPDATE public.dict_change_requests
+      SET status = p_status,
+          answer = a,
+          decided_by = app.current_user_id(),
+          decided_at = now(),
+          closed_at = CASE WHEN r.status = p_status THEN r.closed_at ELSE now() END,
+          wait = false,
+          lead_admin = coalesce(r.lead_admin, app.current_user_id()),
+          read_admin = k,
+          last_at = now(),
+          version = version + 1,
+          updated_at = now()
+      WHERE id = r.id
+      RETURNING version INTO v;
+    RETURN v;
+  END
+  $$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION app.admin_answer_dict_request(uuid, text, text, integer) FROM PUBLIC;
+--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION app.admin_answer_dict_request(uuid, text, text, integer) TO buhuchet_app;
+--> statement-breakpoint
+-- Переписка, снимки и «Заметки» после записи не меняются и не удаляются (вместе с запросом — каскад).
+REVOKE UPDATE, DELETE, TRUNCATE ON TABLE request_messages FROM buhuchet_app;
+--> statement-breakpoint
+REVOKE UPDATE, DELETE, TRUNCATE ON TABLE request_shots FROM buhuchet_app;
+--> statement-breakpoint
+REVOKE UPDATE, DELETE, TRUNCATE ON TABLE request_notes FROM buhuchet_app;
+--> statement-breakpoint
+-- «Витрина данных» (миграция 0166, `src/datamart-roles.ts`): серии — как задачи, обеим ролям своими
+-- строками; переписка и снимки — только Админке (без ключа хранилища); «Заметки» — никому; новые столбцы
+-- задач и запросов — обеим ролям.
+GRANT SELECT ON TABLE public.task_series TO buhuchet_dm_admin, buhuchet_dm_org;
+--> statement-breakpoint
+CREATE POLICY dm_admin_read ON public.task_series AS PERMISSIVE FOR SELECT TO buhuchet_dm_admin
+  USING (EXISTS (SELECT 1 FROM dm.runs r WHERE r.pid = pg_catalog.pg_backend_pid()
+    AND r.xid = pg_catalog.pg_current_xact_id_if_assigned() AND r.admin));
+--> statement-breakpoint
+CREATE POLICY dm_org_read ON public.task_series AS PERMISSIVE FOR SELECT TO buhuchet_dm_org
+  USING (org_id = (SELECT r.org_id FROM dm.runs r WHERE r.pid = pg_catalog.pg_backend_pid()
+    AND r.xid = pg_catalog.pg_current_xact_id_if_assigned()));
+--> statement-breakpoint
+GRANT SELECT (id, org_id, request_id, n, kind, by_admin, author_user_id, text, from_status, to_status, why, created_at)
+  ON TABLE public.request_messages TO buhuchet_dm_admin;
+--> statement-breakpoint
+CREATE POLICY dm_admin_read ON public.request_messages AS PERMISSIVE FOR SELECT TO buhuchet_dm_admin
+  USING (EXISTS (SELECT 1 FROM dm.runs r WHERE r.pid = pg_catalog.pg_backend_pid()
+    AND r.xid = pg_catalog.pg_current_xact_id_if_assigned() AND r.admin));
+--> statement-breakpoint
+GRANT SELECT (id, org_id, request_id, message_id, name, size, mime, created_by, created_at)
+  ON TABLE public.request_shots TO buhuchet_dm_admin;
+--> statement-breakpoint
+CREATE POLICY dm_admin_read ON public.request_shots AS PERMISSIVE FOR SELECT TO buhuchet_dm_admin
+  USING (EXISTS (SELECT 1 FROM dm.runs r WHERE r.pid = pg_catalog.pg_backend_pid()
+    AND r.xid = pg_catalog.pg_current_xact_id_if_assigned() AND r.admin));
+--> statement-breakpoint
+GRANT SELECT (series_id, series_date) ON TABLE public.tasks TO buhuchet_dm_admin, buhuchet_dm_org;
+--> statement-breakpoint
+GRANT SELECT (no, kind, topic, form_id, form, where_info, wait, lead_admin, read_author, read_admin, last_at, closed_at)
+  ON TABLE public.dict_change_requests TO buhuchet_dm_admin, buhuchet_dm_org;

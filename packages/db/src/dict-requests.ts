@@ -1,5 +1,11 @@
-import { auditActorName, type DictRequestDict, type DictRequestStatus } from '@buhuchet/domain';
-import { desc, eq, sql } from 'drizzle-orm';
+import {
+  auditActorName,
+  REQUEST_FORM_OF_DICT,
+  REQUEST_OTHER_DICT_TITLE,
+  type DictRequestDict,
+  type DictRequestStatus,
+} from '@buhuchet/domain';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import type { Tx } from './client';
 import { writeHistory } from './history';
 import { dictChangeRequests, employees, organizations } from './schema';
@@ -32,7 +38,9 @@ const fields = {
   id: dictChangeRequests.id,
   orgName: organizations.name,
   dict: sql<DictRequestDict>`${dictChangeRequests.dict}`,
-  what: dictChangeRequests.what,
+  // До этапа 2 пакета 28.11.2026 «Мои запросы» показывают только «Добавить в справочник» в прежних
+  // статусах: тема — прежнее «Что добавить».
+  what: sql<string>`coalesce(${dictChangeRequests.what}, ${dictChangeRequests.topic})`,
   comment: dictChangeRequests.comment,
   status: sql<DictRequestStatus>`${dictChangeRequests.status}`,
   answer: dictChangeRequests.answer,
@@ -64,11 +72,21 @@ export async function createDictRequest(
   input: { dict: DictRequestDict; what: string; comment: string },
 ): Promise<DictRequestRecord> {
   const values = { dict: input.dict, what: input.what.trim(), comment: input.comment.trim() };
+  // Новая схема запросов (миграция 0178): вид «Добавить в справочник», тема и форма — как у прежних,
+  // перенесённых миграцией; номер ставит база.
+  const formId = REQUEST_FORM_OF_DICT[input.dict];
+  const form: Record<string, string> = { name: values.what };
+  if (formId === 'other') form.dict = REQUEST_OTHER_DICT_TITLE[input.dict] ?? '';
+  if (values.comment) form.note = values.comment;
   const [created] = await tx
     .insert(dictChangeRequests)
     .values({
       orgId: sql`app.current_org_id()`,
       ...values,
+      kind: 'dict',
+      topic: values.what,
+      formId,
+      form,
       createdBy: sql`app.current_user_id()`,
     })
     .returning({ id: dictChangeRequests.id });
@@ -96,7 +114,13 @@ export async function listDictRequests(tx: Tx): Promise<DictRequestRecord[]> {
     .from(dictChangeRequests)
     .innerJoin(organizations, eq(organizations.id, dictChangeRequests.orgId))
     .leftJoin(employees, eq(employees.userId, dictChangeRequests.createdBy))
-    .where(eq(dictChangeRequests.orgId, sql`app.current_org_id()`))
+    .where(
+      and(
+        eq(dictChangeRequests.orgId, sql`app.current_org_id()`),
+        eq(dictChangeRequests.kind, 'dict'),
+        sql`${dictChangeRequests.status} in ('new', 'added', 'rejected')`,
+      ),
+    )
     .orderBy(desc(dictChangeRequests.createdAt), desc(dictChangeRequests.id))
     .limit(DICT_REQUESTS_SHOWN);
   return rows.map(toRecord);

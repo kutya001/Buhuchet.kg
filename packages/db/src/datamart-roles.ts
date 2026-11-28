@@ -8,6 +8,9 @@
 
 /** Закрыты обеим ролям: пароли, сеансы, коды и ключи Telegram и страниц, хеши токенов, попытки входа. */
 export const DM_CLOSED_TABLES = [
+  // «Заметки» администратора в запросах — не отдаются организации ни одним методом (доработки 28.11.2026:
+  // запросы пользователей администратору, блок 7, пункт 3; миграция 0179).
+  'request_notes',
   'admin_login_codes',
   'contractor_page_grants',
   'contractor_telegram_tokens',
@@ -38,6 +41,10 @@ export const DM_CLOSED_TABLES = [
  * организации, а приложение показывает их только самому пользователю.
  */
 export const DM_ADMIN_ONLY_TABLES = [
+  // Переписка и снимки запросов администратору: в организации их видят только автор и владелец (у
+  // «Вопроса», «Ошибки», «Опечатки»), роль Витрины фильтровала бы только по организации (миграция 0179).
+  'request_messages',
+  'request_shots',
   // Колокольчик: строку видит только получатель.
   'bell_notifications',
   'dict_loads',
@@ -130,6 +137,7 @@ export const DM_SECRET_COLUMNS = [
   'organizations.logo_key',
   'platform_lead_docs.storage_key',
   'platform_leads.tg_chat_id',
+  'request_shots.storage_key',
   'subscription_payments.receipt_key',
   'telegram_groups.chat_id',
   'telegram_links.chat_id',

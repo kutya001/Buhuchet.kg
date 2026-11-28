@@ -1247,6 +1247,20 @@
       "when": 1795808948982,
       "tag": "0177_dm_console",
       "breakpoints": true
+    },
+    {
+      "idx": 178,
+      "version": "7",
+      "when": 1795872382053,
+      "tag": "0178_tasks_series_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 179,
+      "version": "7",
+      "when": 1795872476406,
+      "tag": "0179_tasks_series_requests_guards",
+      "breakpoints": true
     }
   ]
 }
