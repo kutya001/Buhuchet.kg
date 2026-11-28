@@ -47,12 +47,13 @@ async function listOptions(
   tab: TaskTab,
 ): Promise<TaskListOptions> {
   await requireTasks(tx, orgContextOf(c).orgId);
+  const t = await serverTexts(deps);
   return {
-    t: await serverTexts(deps),
+    t,
     today: todayOf(deps),
     viewer: viewerOf(subjectOf(c)),
     tab,
-    series: await seriesTexts(tx),
+    series: await seriesTexts(tx, t),
   };
 }
 

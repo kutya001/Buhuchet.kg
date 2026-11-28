@@ -37,7 +37,7 @@ import {
   Modal,
   Note,
 } from '@buhuchet/ui';
-import { useId, useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { useT } from '../l10n/provider';
 
 /** Поле окна «Повтор», у которого может быть ошибка. */
@@ -109,6 +109,7 @@ export function SeriesRuleDialog({
   start,
   term,
   busy = false,
+  notice = null,
   onDone,
 }: {
   open: boolean;
@@ -117,6 +118,8 @@ export function SeriesRuleDialog({
   start: IsoDate;
   term: TaskTerm;
   busy?: boolean;
+  /** Над полями: «Запись изменена другим пользователем» с «Перечитать» (409 по версии серии). */
+  notice?: ReactNode;
   onDone: (rule: SeriesRuleBody, start: IsoDate) => void;
 }) {
   const t = useT();
@@ -137,7 +140,8 @@ export function SeriesRuleDialog({
       // Число начала сменилось — «Когда», которого для него нет, сбрасывается на «N-го числа».
       const s = startOf(next.start, term);
       if (s && !seriesMonthModes(s).includes(next.monthMode)) next.monthMode = 'date';
-      if (next.unit === 'week' && !next.weekDays.length && s) next.weekDays = [weekdayMondayFirst(s)];
+      if (next.unit === 'week' && !next.weekDays.length && s)
+        next.weekDays = [weekdayMondayFirst(s)];
       return next;
     });
     if (clear) setErrors((e) => ({ ...e, [clear]: undefined }));
@@ -168,6 +172,7 @@ export function SeriesRuleDialog({
       open={open}
       onClose={onClose}
       kind="form"
+      phoneFull
       title={t('task.series.dlg.title')}
       dirty={JSON.stringify(draft) !== JSON.stringify(initial)}
       footer={
@@ -188,6 +193,7 @@ export function SeriesRuleDialog({
       }
     >
       <div data-series-dialog="">
+        {notice}
         <FormGrid>
           <Field id={`${id}-every`} label={t('task.series.dlg.every')} error={errors.every} full>
             {(control) => (
@@ -221,7 +227,11 @@ export function SeriesRuleDialog({
             )}
           </Field>
           {draft.unit === 'week' ? (
-            <div data-field="" data-full="" className="col-span-full flex min-w-0 flex-col gap-[5px]">
+            <div
+              data-field=""
+              data-full=""
+              className="col-span-full flex min-w-0 flex-col gap-[5px]"
+            >
               <span className="text-[12px] font-semibold tracking-[.01em] text-muted">
                 {t('task.series.dlg.days')}
               </span>
@@ -276,7 +286,9 @@ export function SeriesRuleDialog({
                   data-series-month-mode=""
                   className={`${inputClass()} cursor-pointer`}
                   value={draft.monthMode}
-                  onChange={(e) => set({ monthMode: e.target.value as SeriesMonthMode }, 'monthMode')}
+                  onChange={(e) =>
+                    set({ monthMode: e.target.value as SeriesMonthMode }, 'monthMode')
+                  }
                 >
                   {modes.map((m) => (
                     <option key={m} value={m}>
@@ -318,7 +330,11 @@ export function SeriesRuleDialog({
             <span className="text-[12px] font-semibold tracking-[.01em] text-muted">
               {t('task.series.dlg.end')}
             </span>
-            <div role="radiogroup" aria-label={t('task.series.dlg.end')} className="flex flex-col gap-1.5">
+            <div
+              role="radiogroup"
+              aria-label={t('task.series.dlg.end')}
+              className="flex flex-col gap-1.5"
+            >
               <label className="flex min-h-[38px] cursor-pointer flex-wrap items-center gap-2">
                 <input
                   type="radio"

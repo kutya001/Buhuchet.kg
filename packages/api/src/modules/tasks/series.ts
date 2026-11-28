@@ -171,6 +171,12 @@ export async function seriesInfoOf(
   if (!s) return null;
   const facts = await seriesTaskFacts(tx, s.id, today);
   const refusal = seriesBossRefusal(s.authorEmployeeId, seriesActorOf(subject));
+  // «Все задачи серии · N» — столько, сколько покажет окно: кто видит серию через свою задачу, видит
+  // только задачи своей области (docs/deviations.md п. О-110).
+  const all = s.authorEmployeeId === subject.employeeId || seriesSeeAll(subject);
+  const count = all
+    ? facts.made
+    : (await seriesVisibleTaskIds(tx, s.id, taskAccessOf(subject))).size;
   return {
     id: s.id,
     rule: ruleBody(s.rule),
@@ -181,7 +187,7 @@ export async function seriesInfoOf(
     stopReason: s.stopReason,
     stopText: seriesStopText(s.stopReason),
     next: seriesNext(s, facts, today),
-    count: facts.made,
+    count,
     manage: refusal === null,
     // Постановщик без права видит кнопки неактивными с подсказкой; остальные — без кнопок.
     refusal: refusal === 'series_create_right' ? SERIES_MESSAGES[refusal] : null,
@@ -341,7 +347,7 @@ export function seriesTasksHandler(deps: ApiDeps): RouteHandler<typeof seriesTas
       await requireTasks(tx, orgContextOf(c).orgId);
       const s = await visibleSeries(tx, id, subject);
       const series = (await seriesInfoOf(tx, s.id, subject, todayOf(deps)))!;
-      // ОТКЛОНЕНИЕ: docs/deviations.md#О-109 — кто видит серию только через свою задачу, видит только задачи
+      // ОТКЛОНЕНИЕ: docs/deviations.md#О-110 — кто видит серию только через свою задачу, видит только задачи
       // своей области: «Только эту задачу» может сменить у одной задачи контрагента и исполнителя.
       const all = s.authorEmployeeId === subject.employeeId || seriesSeeAll(subject);
       const list = await seriesTaskList(tx, s.id);
@@ -527,10 +533,11 @@ async function seriesListOptions(
 ): Promise<SeriesListOptions> {
   await requireTasks(tx, orgContextOf(c).orgId);
   const subject = subjectOf(c);
+  const t = await serverTexts(deps);
   return {
-    t: await serverTexts(deps),
+    t,
     today: todayOf(deps),
-    texts: await seriesTexts(tx),
+    texts: await seriesTexts(tx, t),
     authorEmployeeId: seriesSeeAll(subject) ? null : subject.employeeId,
   };
 }

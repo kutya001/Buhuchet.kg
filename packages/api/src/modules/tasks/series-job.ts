@@ -158,18 +158,32 @@ export async function runOrgSeries(tx: Tx, today: IsoDate): Promise<number> {
 
 /**
  * После действия сотрудника («Возобновить», «Изменить повтор») — шаг серии без пользователя (как
- * `tsRun()` прототипа сразу после действия): задача ближайшей даты ставится от имени постановщика.
+ * `tsRun()` прототипа сразу после действия): задача ближайшей даты ставится от имени постановщика, и
+ * исполнитель получает её сразу (прототип `tsMake` → `bellTask`), а не в «Час напоминаний»: ключ
+ * события — номер записи истории, поэтому `tasks.series-notify` её второй раз не отправит.
  */
 export async function stepSeriesAfter(
-  deps: Pick<ApiDeps, 'db' | 'clock'>,
+  deps: ApiDeps,
   orgId: string,
   id: string,
 ): Promise<SeriesStepDone> {
-  const today = bishkekDate(deps.clock.now());
-  return withOrgContext(deps.db, { orgId, kind: 'job' }, async (tx) => {
+  const now = deps.clock.now();
+  const today = bishkekDate(now);
+  let queued: string[] = [];
+  const done = await withOrgContext(deps.db, { orgId, kind: 'job' }, async (tx) => {
     const paused = !(await taskOrgSettings(tx)).tasks;
-    return stepSeries(tx, id, today, { paused, after: true });
+    const step = await stepSeries(tx, id, today, { paused, after: true });
+    if (step === 'made') {
+      queued = await queueTelegramEvents(
+        deps,
+        tx,
+        await seriesNoticeEvents(deps, tx, now, { seriesId: id }),
+      );
+    }
+    return step;
   });
+  await flushEvents(deps, orgId, queued);
+  return done;
 }
 
 export const taskSeriesJob: Job = {
@@ -212,13 +226,17 @@ export async function seriesNoticeEvents(
   deps: ApiDeps,
   tx: Tx,
   now: Date,
+  only?: { seriesId: string },
 ): Promise<TelegramEvent[]> {
   // Вчерашние на случай пропущенного запуска; уже отправленные отсекает ключ события.
   const since = new Date(`${addDays(bishkekDate(now), -1)}T00:00:00+06:00`);
   const out: TelegramEvent[] = [];
   for (const n of await seriesNotices(tx, since)) {
+    // После действия человека — только «поставлена» этой серии: остальное ждёт «Час напоминаний».
+    if (only && n.action !== 'series_make') continue;
     const task = await getTask(tx, n.taskId, undefined);
     if (!task?.seriesId) continue;
+    if (only && task.seriesId !== only.seriesId) continue;
     const s = await getSeries(tx, task.seriesId);
     if (!s) continue;
     const key = seriesNoticeKey(n.auditId);
@@ -230,7 +248,9 @@ export async function seriesNoticeEvents(
     if (n.action === 'series_stop' && n.byUser) continue;
     const end = n.action === 'series_end';
     const template = end ? 'tgSerEnd' : 'tgSerStop';
-    const values: Record<string, string> = end ? { задача: s.title } : { задача: s.title, причина: n.why ?? '' };
+    const values: Record<string, string> = end
+      ? { задача: s.title }
+      : { задача: s.title, причина: n.why ?? '' };
     // Строка колокольчика — то же сообщение без точки в конце (прототип `tsTell`).
     const text = (await botText(deps, template, values, tx)).replace(/\.\s*$/, '');
     out.push({

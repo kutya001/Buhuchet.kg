@@ -460,10 +460,7 @@ export const cancelTaskRoute = createRoute({
 
 export function cancelTaskHandler(deps: ApiDeps): RouteHandler<typeof cancelTaskRoute, AppEnv> {
   return async (c) =>
-    c.json(
-      await runAction(deps, c, c.req.valid('param').id, c.req.valid('query'), cancel),
-      200,
-    );
+    c.json(await runAction(deps, c, c.req.valid('param').id, c.req.valid('query'), cancel), 200);
 }
 
 export const rollbackTaskRoute = createRoute({

@@ -418,6 +418,8 @@ describe.skipIf(!databaseAvailable())(
         return SeriesTasks.parse(await res.json()).items.map((r) => r.id);
       };
       expect(await list('acc-a')).toEqual([first.id]);
+      expect((await card('acc-a', first.id)).series!.count).toBe(1);
+      expect((await card('chief-a', first.id)).series!.count).toBe(2);
       expect(await list('chief-a')).toEqual([second!.id, first.id]);
     });
 
@@ -614,6 +616,38 @@ describe.skipIf(!databaseAvailable())(
           .set({ active: true })
           .where(eq(schema.employees.id, employee('acc-a')));
       }
+
+      // «Возобновить» — задача ближайшей даты исполнителю сразу (прототип `tsResume` → `tsMake`), без
+      // «Часа напоминаний»; запуск сообщений её второй раз не шлёт.
+      deps.clock.set(at('2026-10-22', '10:00').toISOString());
+      tg.sent.length = 0;
+      const sid = task.series!.id;
+      const resumed = await call('hr-a', 'POST', `/api/task-series/${sid}/resume`, {
+        version: (await seriesRow(sid)).version,
+      });
+      expect(resumed.status, JSON.stringify(await resumed.clone().json())).toBe(200);
+      const made = () =>
+        tg.sent.filter((m) => m.chatId === 7202 && m.text.includes('Отчёт по кассе'));
+      expect(made()).toHaveLength(1);
+      expect(made()[0]!.text).toContain('Повтор: Каждую неделю: пн, ср');
+      await notify.run(deps, at('2026-10-22', '10:00'));
+      await notify.run(deps, at('2026-10-23', '09:00'));
+      expect(made()).toHaveLength(1);
+    });
+    it('«Только эту задачу» меняет вид срока одной задачи, правило серии не трогает (прототип `tsAsk`)', async () => {
+      const first = await create('hr-a', { title: 'Вид срока одной задачи' });
+      const res = await call('hr-a', 'PATCH', `/api/tasks/${first.id}`, {
+        ...body({ title: 'Вид срока одной задачи' }),
+        term: 'month',
+        dueDate: '2026-11-01',
+        version: first.version,
+        scope: 'one',
+      });
+      expect(res.status, JSON.stringify(await res.clone().json())).toBe(200);
+      expect(Task.parse(await res.json()).term).toBe('month');
+      const row = await seriesRow(first.series!.id);
+      expect(row.term).toBe('day');
+      expect(row.unit).toBe('week');
     });
     it('«Сменить ответственного»: серии по контрагенту у прежнего переходят новому вместе с открытыми задачами, завершённые — нет (прототип `transferCp`)', async () => {
       const [own] = await f.t.admin.db

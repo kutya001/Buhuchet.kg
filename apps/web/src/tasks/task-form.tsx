@@ -3,6 +3,7 @@
 import {
   bishkekDate,
   formatDateRu,
+  lastDayOf,
   seriesRuleText,
   TASK_DESCRIPTION_MAX,
   TASK_TITLE_MAX,
@@ -271,12 +272,19 @@ export function TaskFormDialog({
       onClose();
       const name = lists.executors.find((e) => e.value === body.executorEmployeeId)?.label ?? '';
       const first = saved.success ? saved.data.dueDate : body.dueDate;
+      // «Начало» повтора — срок в форме, у «На месяц» — последний день месяца (прототип `repStart`):
+      // первая задача сдвинулась на ближайший день правила — дата в уведомлении (прототип `o.date!==d0`).
+      const start = body.term === 'month' ? lastDayOf(body.dueDate.slice(0, 7)) : body.dueDate;
       return toast(
         current
-          ? t(current.series && scope === 'next' ? 'task.series.toast.saved_all' : 'task.saved.toast')
+          ? t(
+              current.series && scope === 'next'
+                ? 'task.series.toast.saved_all'
+                : 'task.saved.toast',
+            )
           : !body.repeat
             ? t('task.created.toast', { name })
-            : first !== body.dueDate && saved.success && saved.data.term === 'day'
+            : first !== start && saved.success
               ? t('task.series.toast.created_first', { name, date: formatDateRu(first) })
               : t('task.series.toast.created', { name }),
         { icon: body.repeat ? 'repeat' : 'task' },

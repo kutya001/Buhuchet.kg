@@ -179,8 +179,7 @@ async function projectOf(
 
 /** Что сделать с повтором при «Изменить»: добавить серию или «Эту и следующие». */
 type SeriesEdit =
-  | { kind: 'add'; rule: SeriesRule }
-  | { kind: 'next'; series: SeriesRecord; rule: SeriesRule };
+  { kind: 'add'; rule: SeriesRule } | { kind: 'next'; series: SeriesRecord; rule: SeriesRule };
 
 /**
  * Повтор при «Изменить» (блок 2, пункт 1; блок 3, пункт 1; прототип `taskDlg`, `tsAsk`): разовой
@@ -204,10 +203,12 @@ async function seriesPlanOfEdit(
   }
   if (series.state === 'finished') return null;
   if (body.scope === 'one') {
+    // Вид срока одной задачи меняется без правила (прототип `taskDlg` → `tsAsk`: «Только эту задачу»
+    // правило не трогает); правило — только «Эту и следующие».
     const changed =
       body.repeat &&
-      !seriesRuleEqual(storedRule(ruleOfBody(body.repeat), fields.term), series.rule);
-    if (changed || fields.term !== series.term) seriesRefuse('series_rule_one');
+      !seriesRuleEqual(storedRule(ruleOfBody(body.repeat), series.term), series.rule);
+    if (changed) seriesRefuse('series_rule_one');
     return null;
   }
   const boss = seriesBossRefusal(series.authorEmployeeId, seriesActorOf(subject));

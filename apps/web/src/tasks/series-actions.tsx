@@ -7,8 +7,15 @@ import {
   type SeriesRuleBody,
   type TaskSeriesInfo,
 } from '@buhuchet/shared';
-import { ConfirmDialog, Modal, Pill, useToast, type ActionEntry } from '@buhuchet/ui';
-import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query';
+import {
+  ConfirmDialog,
+  Modal,
+  Pill,
+  RecordChangedNotice,
+  useToast,
+  type ActionEntry,
+} from '@buhuchet/ui';
+import { queryOptions, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { api, apiFailure, callApi } from '../api-client';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
@@ -71,6 +78,8 @@ export function useSeriesActions(onOpenTask?: (id: string) => void): {
   const [stopAsk, setStopAsk] = useState<SeriesRef | null>(null);
   const [tasks, setTasks] = useState<DialogSlot<SeriesRef> | null>(null);
   const [busy, setBusy] = useState(false);
+  const [ruleChanged, setRuleChanged] = useState(false);
+  const client = useQueryClient();
 
   const refused = (s: SeriesRef) => {
     const why = seriesBossWhy(t, s.info);
@@ -98,7 +107,26 @@ export function useSeriesActions(onOpenTask?: (id: string) => void): {
       }),
     );
     setBusy(false);
+    // Серию изменили в другом окне — правка не сохранена: «Перечитать» над полями, а не тост.
+    if (!res.ok && res.error.code === 'record_changed') {
+      refresh();
+      return setRuleChanged(true);
+    }
     if (done(res, () => t('task.series.toast.edited'))) setRuleDlg(closeSlot);
+  };
+
+  /** «Перечитать»: окно заново по свежей серии (правило, начало, версия). */
+  const reloadRule = async (s: SeriesRef) => {
+    setBusy(true);
+    try {
+      const fresh = await seriesById(client, s.info.id);
+      setRuleChanged(false);
+      setRuleDlg(openSlot({ ...fresh, title: s.title }));
+    } catch {
+      toast(t('err.unknown'), { bad: true });
+    } finally {
+      setBusy(false);
+    }
   };
 
   const stopNow = async (s: SeriesRef) => {
@@ -123,7 +151,9 @@ export function useSeriesActions(onOpenTask?: (id: string) => void): {
   };
 
   const edit = (s: SeriesRef) => {
-    if (!refused(s)) setRuleDlg(openSlot(s));
+    if (refused(s)) return;
+    setRuleChanged(false);
+    setRuleDlg(openSlot(s));
   };
   const stop = (s: SeriesRef) => {
     if (!refused(s)) setStopAsk(s);
@@ -193,6 +223,16 @@ export function useSeriesActions(onOpenTask?: (id: string) => void): {
           start={ruleDlg.data.info.start}
           term={ruleDlg.data.info.term}
           busy={busy}
+          notice={
+            ruleChanged ? (
+              <RecordChangedNotice
+                message={t('err.record_changed')}
+                reloadLabel={t('form.reload')}
+                onReload={() => void reloadRule(ruleDlg.data)}
+                reloading={busy}
+              />
+            ) : null
+          }
           onDone={(rule, start) => void saveRule(ruleDlg.data, rule, start)}
         />
       ) : null}
@@ -306,7 +346,9 @@ export function SeriesCardRow({
           <>
             {' · '}
             <Pill tone={info.state === 'finished' ? 'plain' : 'warn'}>
-              {t(info.state === 'stopped' ? 'task.series.card.stopped' : 'task.series.card.finished')}
+              {t(
+                info.state === 'stopped' ? 'task.series.card.stopped' : 'task.series.card.finished',
+              )}
             </Pill>
             {info.stopText ? <span className="ml-1 text-muted">{info.stopText}</span> : null}
           </>
@@ -364,10 +406,7 @@ export function SeriesCardRow({
 }
 
 /** Серия по номеру — свежая, перед действием из меню вкладки «Повторы». */
-export async function seriesById(
-  client: QueryClient,
-  id: string,
-): Promise<SeriesRef> {
+export async function seriesById(client: QueryClient, id: string): Promise<SeriesRef> {
   const data = await client.fetchQuery({ ...seriesTasksQuery(id), staleTime: 0 });
   return { info: data.series, title: data.title };
 }

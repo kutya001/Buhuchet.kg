@@ -581,23 +581,24 @@ export async function moveContractorSeries(
  * словами считает домен — они приходят в запрос одним параметром (`jsonb_to_recordset`).
  */
 
-/** «До 27.02.2027», «30 повторов», «Никогда» (прототип `tsEndTxt`). */
-export function seriesEndText(rule: SeriesRule): string {
+/** «До 27.02.2027», «30 повторов», «Никогда» (прототип `tsEndTxt`); тексты — словарь (`t`). */
+export function seriesEndText(rule: SeriesRule, t: ListTexts): string {
   const e = rule.end;
-  if (e.kind === 'date' && e.date) return `До ${formatDateRu(e.date)}`;
-  if (e.kind === 'count' && e.count) {
-    const form = { one: 'повтор', few: 'повтора', many: 'повторов' }[pluralForm(e.count)];
-    return `${e.count} ${form}`;
+  if (e.kind === 'date' && e.date) {
+    return t('task.series.end.date').replace('{date}', formatDateRu(e.date));
   }
-  return 'Никогда';
+  if (e.kind === 'count' && e.count) {
+    return t(`task.series.end.count.${pluralForm(e.count)}`).replace('{n}', String(e.count));
+  }
+  return t('task.series.end.never');
 }
 
 /** Правила словами всех серий организации из контекста — для списков задач и серий. */
-export async function seriesTexts(tx: Tx): Promise<SeriesTextRow[]> {
+export async function seriesTexts(tx: Tx, t: ListTexts): Promise<SeriesTextRow[]> {
   const rows = await tx.select(seriesFields).from(taskSeries);
   return rows.map((r) => {
     const s = toSeries(r as SeriesRowData);
-    return { id: s.id, text: seriesTextOf(s), end: seriesEndText(s.rule) };
+    return { id: s.id, text: seriesTextOf(s), end: seriesEndText(s.rule, t) };
   });
 }
 

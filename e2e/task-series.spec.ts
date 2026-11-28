@@ -186,6 +186,16 @@ test.describe('Доработки 28.11: повторяющиеся задачи
     await toast(page, /^Повтор возобновлён/);
     await expect(line).toHaveAttribute('data-task-series', 'active');
 
+    // «Изменить повтор» из строки: окно правила по серии, «Готово» — правило в строке.
+    await line.locator('[data-series-edit]').click();
+    const rule = page.getByRole('dialog', { name: 'Повтор' });
+    await expect(rule.locator('[data-series-day="0"]')).toHaveAttribute('aria-pressed', 'true');
+    await rule.locator('[data-series-day="3"]').click();
+    await expect(rule.locator('[data-series-preview]')).toHaveText('Каждую неделю: пн, чт');
+    await rule.locator('[data-series-done]').click();
+    await toast(page, 'Повтор изменён');
+    await expect(line).toContainText('Повтор: Каждую неделю: пн, чт');
+
     // «Изменить»: правило не меняли — «Только эту задачу» доступна; «Эту и следующие» — для всей серии.
     await cardAction(page, card, 'Изменить');
     const form = page.getByRole('dialog', { name: 'Изменить задачу' });
@@ -213,6 +223,15 @@ test.describe('Доработки 28.11: повторяющиеся задачи
     await search(page, isMobile, title);
     const row = page.locator('[data-grid] [data-id]').filter({ hasText: title });
     await expect(row.locator('[data-series-state="stopped"]')).toContainText('Остановлена');
+    await row.locator('[data-row-menu]').click();
+    await expect(page.getByRole('menuitem', { name: 'Возобновить', exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('menuitem', { name: 'Изменить повтор', exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('menuitem', { name: 'Остановить повтор', exact: true }),
+    ).toHaveCount(0);
+    await page.keyboard.press('Escape');
   });
 
   test('(блок 4) вкладку «Повторы» и методы серий видят только те, кто ставит задачи: у бухгалтера вкладки нет, список — 403', async ({
