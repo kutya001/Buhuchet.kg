@@ -39,6 +39,10 @@ export const KB_EVENT_STEPS = {
   's.new': 'svc',
   'fee.pay': 'feepay',
   't.new': 'mtask',
+  // Повторяющиеся задачи и запросы администратору (прототип v168–v169): события известны, правила
+  // шагов `trep` и `rqbug` добавят этапы 1 и 3 пакета 28.11.2026 (docs/deviations.md п. О-107).
+  't.rep': 'trep',
+  'rq.bug': 'rqbug',
   't.done': 'tdone',
   't.conf': 'tconf',
   'p.new': 'proj',

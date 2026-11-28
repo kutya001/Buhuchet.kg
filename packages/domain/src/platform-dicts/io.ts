@@ -142,8 +142,12 @@ export interface IoContext {
 
 type IoField =
   | { type: 'text' }
-  /** Число; пустая ячейка — оставить как было (`keep`) или «нет» (`null`). */
-  | { type: 'int'; min: number; max: number; empty: 'keep' | 'null' }
+  /**
+   * Число; пустая ячейка — оставить как было (`keep`) или «нет» (`null`). `frac` — можно с дробной
+   * частью (порядок шага урока между соседними: «45,5» в refDB v168–v169; прототип при загрузке
+   * обрезает дробь — ОТКЛОНЕНИЕ: docs/deviations.md#О-107).
+   */
+  | { type: 'int'; min: number; max: number; empty: 'keep' | 'null'; frac?: boolean }
   | { type: 'yesno' }
   /** Одно из значений; пустая ячейка — `empty` (как в прототипе: «Срок считается» — от конца периода). */
   | { type: 'enum'; values: readonly string[]; label: (v: string) => UiTextKey; empty?: string }
@@ -588,7 +592,7 @@ export const IO_COLUMNS: Readonly<Record<IoDict, readonly IoColumn[]>> = {
       enumOf(KB_EVENTS, (v) => `kbadm.ev.${v}`),
       { required: true },
     ),
-    col('ord', 'kbadm.io.col.ord', { type: 'int', min: 1, max: 9999, empty: 'keep' }),
+    col('ord', 'kbadm.io.col.ord', { type: 'int', min: 1, max: 9999, empty: 'keep', frac: true }),
     col('active', 'kbadm.col.active', { type: 'yesno' }),
     col('mod', 'kbadm.io.col.go', enumOf(MENU_MODULE_IDS, moduleTitle, ''), {
       normalize: noDash,
@@ -1112,8 +1116,8 @@ export function parseIoCell(column: IoColumn, text: string, ctx: IoContext): Par
       return { value: s };
     case 'int': {
       if (!s) return { value: f.empty === 'keep' ? undefined : null };
-      const n = Number(s);
-      return Number.isInteger(n) && n >= f.min && n <= f.max
+      const n = Number(f.frac ? s.replace(',', '.') : s);
+      return (f.frac ? Number.isFinite(n) : Number.isInteger(n)) && n >= f.min && n <= f.max
         ? { value: n }
         : bad(ctx, 'pdicts.io.err.int', { min: f.min, max: f.max });
     }

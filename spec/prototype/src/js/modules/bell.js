@@ -13,7 +13,7 @@ const BELL_DAYS=90;
 // Новости и заявки — с появления колокольчика (по умолчанию): уже выпущенные новости остаются в «Новостях», счётчик ими не забит
 const BELL_FROM='2026-11-16';
 // Кнопки-фильтры панели; «Другое» — только во «Все»
-const BELL_KINDS={reports:'Отчёты',tasks:'Задачи',files:'Файлы',money:'Деньги',news:'Новости',other:'Другое'};
+const BELL_KINDS={reports:'Отчёты',tasks:'Задачи',files:'Файлы',money:'Деньги',news:'Новости',req:'Запросы',other:'Другое'};
 const BELL=DB.bell;
 let bellOnChange=null;
 const bellNextId=()=>'b'+(BELL.reduce((a,x)=>Math.max(a,+String(x.id).slice(1)||0),0)+1);
@@ -76,6 +76,7 @@ function bellSees(x){const o=x.open||{},adm=isAdmin();if(adm!==(x.uid==='admin')
   if(o.k==='task')return feat('tasks')&&taskScope().some(t=>t.id===o.id);
   if(o.k==='news')return newsVis().some(n=>n.id===o.id);
   if(o.k==='lead')return adm;
+  if(o.k==='request'){const r=reqById(o.id);return !!r&&(adm||r._cb===S.me&&reqSees(r))}
   if(o.k==='cp_sent')return feat('cppage');
   if(o.k==='cp_fee')return feat('fee')&&can('fee');
   if(o.k==='employee')return can('staffView');

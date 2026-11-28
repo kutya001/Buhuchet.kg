@@ -10,7 +10,7 @@ const steps = refDB.kbSteps as KbStepDef[];
 describe('условие отметки шага (прототип KB_EV, KB_MAP)', () => {
   it('у каждого условия есть подпись в словаре, события истории — по шагам прототипа', () => {
     for (const ev of KB_EVENTS) expect(UI_TEXTS, ev).toHaveProperty(`kbadm.ev.${ev}`);
-    expect(KB_EVENTS).toHaveLength(42);
+    expect(KB_EVENTS).toHaveLength(44);
     expect(KB_EVENT_STEPS['dm.tok']).toBe('dmtok');
     expect(KB_EVENT_STEPS['cp.new']).toBe('cp1');
     expect(KB_EVENT_STEPS['r.sub']).toBe('submit');

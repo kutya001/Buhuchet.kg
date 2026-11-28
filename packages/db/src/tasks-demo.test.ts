@@ -29,7 +29,9 @@ describe.skipIf(!databaseAvailable())('Задачи демо-организац�
 
   it('все задачи с категориями, контрагентами, исполнителями и подтверждением', async () => {
     const all = await db.admin.db.select().from(tasks).where(eq(tasks.orgId, DEMO_ORG_ID));
-    expect(all).toHaveLength(19);
+    // 19 разовых и 5 задач серий повтора (t20–t24, прототип v168): до миграции этапа 0 пакета
+    // 28.11.2026 — обычными задачами, без ссылки на серию (docs/deviations.md п. О-107).
+    expect(all).toHaveLength(24);
     expect(await task('t18')).toMatchObject({
       title: 'Собрать договоры аренды за 2026 год',
       status: 'confirmed',

@@ -121,7 +121,7 @@ function respDlg(cs,done){
 const repUnfinished=r=>!r.superseded&&r.status!=='Не требуется'&&(r.status!=='Сдан'||(feat('taxpay')&&!!tR(r).sum&&r.sum>0&&r.paid<r.sum));
 function transferCp(c,to){const from=c.resp;if(from===to)return;c.resp=to;
   REPORTS.filter(r=>r.cp===c.id&&repUnfinished(r)&&(r.resp===from||!r.resp)).forEach(r=>r.resp=to);
-  TASKS.filter(t=>t.cp===c.id&&t.exec===from&&taskOpen(t)).forEach(t=>t.exec=to);
+  TASKS.filter(t=>t.cp===c.id&&t.exec===from&&taskOpen(t)).forEach(t=>t.exec=to);TSER.filter(s=>s.tpl.cp===c.id&&s.tpl.exec===from&&s.state!=='Завершена').forEach(s=>{s.tpl.exec=to;touch(s)});
   if(c.paysTo==='emp')OPS.filter(o=>o.cp===c.id&&!o.self).forEach(o=>o.holder=to);
   log('cp',c.id,`Ответственный: ${empName(from)||'—'} → ${empName(to)}`,c.id)}
 function archiveDlg(cs,done){

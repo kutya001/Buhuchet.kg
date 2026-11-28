@@ -134,10 +134,8 @@ function renderDmTpl(body){if(isAdmin())return renderDmTplAdm(body);const L=DM_T
     :`<div class="state">${ic('table','lg')}<b>Шаблонов для ваших прав нет</b><span>Шаблон виден, если у роли есть просмотр его модуля. Не хватает отчёта — попросите шаблон.</span></div>`}`;
   $('#dm-ask',body).onclick=dmAskDlg;
   body.onclick=e=>{let b;if(b=e.target.closest('[data-dm-show]')){DMV.tpl=b.dataset.dmShow;DMV.p=null;go('dm','out')}else if(b=e.target.closest('[data-dm-tok]'))dmNewDlg(b.dataset.dmTok)}}
-// «Попросить шаблон» — как «Попросить добавить» в «Справочниках»: запрос администратору платформы, ответ — в «Мои запросы»
-function dmAskDlg(){openModal({form:true,render:()=>({title:'Попросить шаблон',sub:'Запрос уйдёт администратору платформы',body:`<div class="form">${fld('Какого отчёта не хватает',inp('dq-v','','placeholder="Например: Отчёты, сданные с опозданием, по месяцам"'),{req:true,full:true,id:'dq-v'})}${fld('Какие столбцы и за какой период',`<textarea class="inp" id="dq-c" style="min-height:70px" placeholder="Контрагент, отчёт, срок, дата сдачи, на сколько дней опоздали"></textarea>`,{full:true,id:'dq-c'})}</div>`,
-  foot:'<button class="btn ghost" data-close>Отмена</button><button class="btn cta" id="dq-ok">Отправить запрос</button>',mount(el,m){$('#dq-ok',el).onclick=()=>{if(!setErr(el,'dq-v',!val(el,'dq-v')?'Опишите, какого отчёта не хватает':reqHour()>=REQ_HOUR?'Не больше 20 запросов за час. Отправьте этот запрос позже':''))return;
-    REQUESTS.push({_cb:S.me,_ca:nowStamp(),at:TODAY,oid:ORG.id,org:ORG.name,what:val(el,'dq-v'),dict:'Витрина данных',note:val(el,'dq-c'),status:'Новый',answer:''});m.close();toast('Запрос отправлен администратору платформы','send',false,{label:'Мои запросы',run:myReqDlg})}}})})}
+// «Попросить шаблон» — запрос администратору «Добавить в справочник» с формой «Шаблон «Витрины данных»» (доработки 28.11.2026, блок 1, пункт 1; блок 3)
+function dmAskDlg(){reqForm('dict',{fid:'dm'})}
 const dmLive=k=>dmTokSt(k)[0]==='Действует';
 function dmUse(t){const ks=DM_TOK.filter(k=>k.tpl===t.code&&dmLive(k)),from=addDays(TODAY,-30),os=new Set(ks.filter(k=>k.org!=='adm').map(k=>k.org));
   DM_LOG.forEach(x=>{if(x.tpl===t.code&&x.org!=='adm'&&x.at.slice(0,10)>=from)os.add(x.org)});return {toks:ks.length,orgs:t.kind==='adm'?0:os.size,tokOrgs:new Set(ks.map(k=>k.org)).size}}

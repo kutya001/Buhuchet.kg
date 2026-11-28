@@ -12,11 +12,17 @@ import { dictChangeRequests } from '../schema';
 const Stamp = z.string().regex(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
 const stampOf = (value: string) => new Date(`${value.replace(' ', 'T')}:00+06:00`);
 
-/** Статус запроса в demoDB.json — словами, как в прототипе. */
+/**
+ * Статус запроса в demoDB.json — словами, как в прототипе. С прототипа v169 — «Отклонён»; статусы
+ * «В работе», «Решён», «Отозван» и виды кроме «Добавить в справочник» база примет с миграции этапа 0
+ * пакета 28.11.2026 — до неё такие запросы демо не наполняет (docs/deviations.md п. О-107).
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#О-107
 const STATUS: Readonly<Record<string, DictRequestStatus>> = {
   Новый: 'new',
   Добавлено: 'added',
   Отклонено: 'rejected',
+  Отклонён: 'rejected',
 };
 
 /** Справочник запроса в demoDB.json — названием («Виды отчётов»); код — по словарю интерфейса. */
@@ -29,11 +35,20 @@ const DemoRequests = z.object({
     .array(
       z.object({
         oid: z.string().optional(),
-        what: z.string(),
-        dict: z.string(),
+        // До прототипа v169 — `what`, `note`, `answer`; с v169 — вид, тема, форма и переписка.
+        kind: z.string().default('dict'),
+        what: z.string().optional(),
+        topic: z.string().optional(),
+        dict: z.string().nullish(),
         note: z.string().default(''),
+        form: z.object({ note: z.string().optional() }).passthrough().nullish(),
         status: z.string(),
         answer: z.string().default(''),
+        msgs: z
+          .array(
+            z.object({ who: z.string(), k: z.string(), text: z.string().optional() }).passthrough(),
+          )
+          .default([]),
         _cb: z.string(),
         _ca: Stamp,
         _ua: Stamp,
@@ -55,22 +70,24 @@ export async function seedDemoDictRequests(
   ids: { request: (key: string) => string; user: (protoId: string) => string | null },
 ): Promise<void> {
   const rows = DemoRequests.parse(file)
-    .dictRequests.filter((r) => r.oid === 'o1')
+    .dictRequests.filter((r) => r.oid === 'o1' && r.kind === 'dict')
     .flatMap((r) => {
-      const dict = DICT_BY_TITLE.get(r.dict);
+      const dict = r.dict ? DICT_BY_TITLE.get(r.dict) : undefined;
       const status = STATUS[r.status];
       const createdBy = ids.user(r._cb);
-      if (!dict || !status || !createdBy) return [];
+      const what = r.topic ?? r.what;
+      if (!dict || !status || !createdBy || !what) return [];
+      const answer = r.answer || r.msgs.find((m) => m.who === 'admin' && m.k === 'msg')?.text || '';
       const decided = status !== 'new';
       return [
         {
-          id: ids.request(`${r._ca} ${r.what}`),
+          id: ids.request(`${r._ca} ${what}`),
           orgId,
           dict,
-          what: r.what,
-          comment: r.note,
+          what,
+          comment: r.note || r.form?.note || '',
           status,
-          answer: r.answer,
+          answer,
           createdBy,
           decidedAt: decided ? stampOf(r._ua) : null,
           createdAt: stampOf(r._ca),
