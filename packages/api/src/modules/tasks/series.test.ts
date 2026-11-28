@@ -634,6 +634,84 @@ describe.skipIf(!databaseAvailable())(
       await notify.run(deps, at('2026-10-23', '09:00'));
       expect(made()).toHaveLength(1);
     });
+    it('«Изменить повтор»: «Повтор изменён: было → стало», 400 на неверное правило, 403 не постановщику, 409 по версии; повторные «Остановить» и «Возобновить» — 409', async () => {
+      const first = await create('hr-a', { title: 'Правило меняют' });
+      const sid = first.series!.id;
+      const put = (login: string, rule: unknown, version: number) =>
+        call(login, 'PUT', `/api/task-series/${sid}/rule`, { rule, start: '2026-10-19', version });
+      const v = (await seriesRow(sid)).version;
+      const bad = await put('hr-a', { ...WEEKLY, weekDays: [] }, v);
+      expect(bad.status).toBe(400);
+      expect(await failure(bad)).toMatchObject({ code: 'series_week_days' });
+      const notBoss = await put('chief-a', { ...WEEKLY, weekDays: [4] }, v);
+      expect(notBoss.status).toBe(403);
+      expect((await failure(notBoss)).code).toBe('series_author_only');
+      expect((await put('hr-a', { ...WEEKLY, weekDays: [4] }, v - 1)).status).toBe(409);
+      const ok = await put('hr-a', { ...WEEKLY, weekDays: [0, 4] }, v);
+      expect(ok.status, JSON.stringify(await ok.clone().json())).toBe(200);
+      expect((await seriesRow(sid)).weekDays).toEqual([0, 4]);
+      const edit = (await history(first.id)).find((h) => h.action === 'series_edit');
+      expect(edit?.changes).toEqual([
+        { field: 'repeat', from: 'Каждую неделю: пн, ср', to: 'Каждую неделю: пн, пт' },
+      ]);
+      // Повторные действия по состоянию — 409.
+      const v2 = (await seriesRow(sid)).version;
+      const resumeActive = await call('hr-a', 'POST', `/api/task-series/${sid}/resume`, {
+        version: v2,
+      });
+      expect(resumeActive.status).toBe(409);
+      expect((await failure(resumeActive)).code).toBe('series_not_stopped');
+      expect(
+        (await call('hr-a', 'POST', `/api/task-series/${sid}/stop`, { version: v2 })).status,
+      ).toBe(200);
+      const v3 = (await seriesRow(sid)).version;
+      const stopAgain = await call('hr-a', 'POST', `/api/task-series/${sid}/stop`, { version: v3 });
+      expect(stopAgain.status).toBe(409);
+      expect((await failure(stopAgain)).code).toBe('series_not_active');
+      // Остановленные — в конце списка «Повторы» (сортировка по «Следующей», прототип `tsRender`).
+      const list = SeriesList.parse(
+        await (await call('hr-a', 'GET', '/api/task-series?size=100')).json(),
+      ).items;
+      const states = list.map((r) => r.state);
+      expect(states.indexOf('stopped')).toBeGreaterThan(states.lastIndexOf('active'));
+    });
+
+    it('«Повторы» в Excel и значения фильтра: с «Ставить задачи» и «Выгружать в Excel»; без права — 403', async () => {
+      await create('hr-a', { title: 'Серия для выгрузки' });
+      const file = await call('owner-a', 'GET', '/api/task-series/export?cols=title,rule,state');
+      expect(file.status, await file.clone().text()).toBe(200);
+      expect(file.headers.get('content-type')).toContain('spreadsheetml');
+      expect((await call('acc-a', 'GET', '/api/task-series/export?cols=title')).status).toBe(403);
+      const values = await call('owner-a', 'GET', '/api/task-series/values?col=state');
+      expect(values.status).toBe(200);
+      expect((await call('acc-a', 'GET', '/api/task-series/values?col=state')).status).toBe(403);
+    });
+
+    it('«Изменить» разовой задачи с повтором: серия с этой задачей первой и «Повтор настроен»; закрытой задаче — отказ', async () => {
+      const once = await create('hr-a', { title: 'Была разовой', repeat: null });
+      expect(once.series).toBeNull();
+      const res = await call('hr-a', 'PATCH', `/api/tasks/${once.id}`, {
+        ...body({ title: 'Была разовой' }),
+        dueDate: once.dueDate,
+        version: once.version,
+      });
+      expect(res.status, JSON.stringify(await res.clone().json())).toBe(200);
+      const now = Task.parse(await res.json());
+      expect(now.series).toMatchObject({ state: 'active', text: 'Каждую неделю: пн, ср' });
+      expect((await history(once.id)).map((h) => h.action)).toContain('series_set');
+      // Исполнитель (без «Ставить задачи») повтор не добавляет; отменённой задаче — нельзя.
+      const mineOnce = await create('hr-a', { title: 'Отменят', repeat: null });
+      await call('hr-a', 'POST', `/api/tasks/${mineOnce.id}/cancel`);
+      const closed = await card('hr-a', mineOnce.id);
+      const late = await call('hr-a', 'PATCH', `/api/tasks/${mineOnce.id}`, {
+        ...body({ title: 'Отменят' }),
+        dueDate: closed.dueDate,
+        version: closed.version,
+      });
+      // Закрытую задачу «Изменить» не меняет вовсе — повтор ей не добавить.
+      expect((await failure(late)).code).toBe('task_closed');
+    });
+
     it('«Только эту задачу» меняет вид срока одной задачи, правило серии не трогает (прототип `tsAsk`)', async () => {
       const first = await create('hr-a', { title: 'Вид срока одной задачи' });
       const res = await call('hr-a', 'PATCH', `/api/tasks/${first.id}`, {

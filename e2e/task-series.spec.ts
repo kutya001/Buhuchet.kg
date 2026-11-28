@@ -164,6 +164,8 @@ test.describe('Доработки 28.11: повторяющиеся задачи
     baseURL,
     isMobile,
   }) => {
+    // Длинная цепочка окон (остановить, возобновить, изменить повтор, изменить, отменить, вкладка «Повторы»).
+    test.slow();
     const origin = new URL(baseURL!).origin;
     const title = uniqueTitle('Сверка выписки');
     const chief = await apiAs(playwright, baseURL!, 'meerim');
