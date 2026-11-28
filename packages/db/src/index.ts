@@ -66,6 +66,7 @@ export * from './report-list';
 export * from './report-matrix';
 export * from './report-submit';
 export * from './tasks';
+export * from './task-series';
 export * from './roles';
 export * from './org';
 export * from './onboarding';
