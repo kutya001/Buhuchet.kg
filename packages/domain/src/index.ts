@@ -101,6 +101,7 @@ export * from './reports/month-pay';
 export * from './reports/month-plan';
 export * from './reports/month-receive';
 export * from './tasks/rules';
+export * from './tasks/series';
 export * from './money/requisites';
 export * from './money/tax';
 export * from './money/fin-messages';
