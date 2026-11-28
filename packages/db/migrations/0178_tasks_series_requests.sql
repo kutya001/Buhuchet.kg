@@ -7,8 +7,15 @@
 -- отправки, вид «Добавить в справочник», тема — «Что добавить», ответ — первым сообщением администратора.
 -- Политики, функции, триггеры и права — миграция 0179. Таблица запросов маленькая (десятки строк у пилота),
 -- `tasks` — тысячи: ADD COLUMN без значения по умолчанию и ограничения берут ACCESS EXCLUSIVE на доли
--- секунды. Блокировки ждём не дольше 5 с; после `pnpm db:generate` строку SET LOCAL и перенос вернуть руками.
--- Откат: новая миграция, которая убирает новые таблицы и столбцы, — только после отката кода этапов.
+-- секунды. Новые проверки видов `telegram_outbox` (у пилота до ~100 тыс. строк — десятые доли секунды) и
+-- `bell_notifications` (хранится 90 дней, `app.bell_cleanup` — тысячи строк, доли секунды) проходят таблицу
+-- целиком под ACCESS EXCLUSIVE, поэтому они последние. Блокировки ждём не дольше 5 с (и в 0179); после
+-- `pnpm db:generate` строку SET LOCAL и перенос вернуть руками.
+-- Окно выпуска и откат только кода: прежний код «Попросить добавить» темы и формы не передаёт — их ставит
+-- триггер номера (0179) из «Что добавить» и справочника, так что запрос создаётся и прежним кодом.
+-- Откат: новая миграция, которая убирает новые таблицы и столбцы, — только после отката кода этапов. Вернуть
+-- NOT NULL у `dict` и `what` и прежний `status_check` можно только после удаления или пересчёта запросов новых
+-- видов и статусов; лента при этом теряется (кроме ответа в `answer`).
 SET LOCAL lock_timeout = '5s';--> statement-breakpoint
 CREATE TABLE "task_series" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
@@ -173,7 +180,7 @@ UPDATE "dict_change_requests" r SET
     'name', r."what",
     'note', nullif(btrim(r."comment"), ''),
     'dict', CASE WHEN r."dict" = 'forms' THEN 'Формы собственности' END)),
-  "last_at" = coalesce(r."decided_at", r."created_at"),
+  "last_at" = coalesce(r."decided_at", r."updated_at"),
   "closed_at" = CASE WHEN r."status" <> 'new' THEN coalesce(r."decided_at", r."updated_at") END,
   "lead_admin" = r."decided_by"
 FROM (SELECT "id", row_number() OVER (ORDER BY "created_at", "id") AS rn FROM "dict_change_requests") n
@@ -202,7 +209,7 @@ ALTER TABLE "tasks" ADD CONSTRAINT "tasks_series_date_unique" UNIQUE("org_id","s
 ALTER TABLE "dict_change_requests" ADD CONSTRAINT "dict_change_requests_no_unique" UNIQUE("no");--> statement-breakpoint
 ALTER TABLE "tasks" ADD CONSTRAINT "tasks_series_check" CHECK (("tasks"."series_id" is null) = ("tasks"."series_date" is null));--> statement-breakpoint
 ALTER TABLE "dict_change_requests" ADD CONSTRAINT "dict_change_requests_kind_check" CHECK ("dict_change_requests"."kind" in ('q', 'bug', 'typo', 'dict'));--> statement-breakpoint
-ALTER TABLE "dict_change_requests" ADD CONSTRAINT "dict_change_requests_form_id_check" CHECK (case when "dict_change_requests"."kind" = 'dict' then "dict_change_requests"."form_id" in ('type', 'tax', 'ben', 'base', 'gked', 'ugns', 'organ', 'bank', 'cat', 'reason', 'dm', 'other') else "dict_change_requests"."form_id" is null and "dict_change_requests"."dict" is null end);--> statement-breakpoint
+ALTER TABLE "dict_change_requests" ADD CONSTRAINT "dict_change_requests_form_id_check" CHECK (case when "dict_change_requests"."kind" = 'dict' then "dict_change_requests"."form_id" is not null and "dict_change_requests"."form_id" in ('type', 'tax', 'ben', 'base', 'gked', 'ugns', 'organ', 'bank', 'cat', 'reason', 'dm', 'other') else "dict_change_requests"."form_id" is null and "dict_change_requests"."dict" is null end);--> statement-breakpoint
 ALTER TABLE "dict_change_requests" ADD CONSTRAINT "dict_change_requests_no_check" CHECK ("dict_change_requests"."no" >= 1201);--> statement-breakpoint
 ALTER TABLE "dict_change_requests" ADD CONSTRAINT "dict_change_requests_topic_check" CHECK (length(btrim("dict_change_requests"."topic")) between 1 and 700);--> statement-breakpoint
 ALTER TABLE "dict_change_requests" ADD CONSTRAINT "dict_change_requests_form_check" CHECK (jsonb_typeof("dict_change_requests"."form") = 'object' and octet_length("dict_change_requests"."form"::text) <= 40000);--> statement-breakpoint
@@ -228,5 +235,4 @@ ALTER TABLE "telegram_outbox" DROP CONSTRAINT "telegram_outbox_kind_check";--> s
 ALTER TABLE "bell_notifications" DROP CONSTRAINT "bell_notifications_kind_check";--> statement-breakpoint
 ALTER TABLE "telegram_notify_settings" ADD CONSTRAINT "telegram_notify_settings_off_check" CHECK ("telegram_notify_settings"."off" <@ array['before', 'over', 'tasks', 'regtasks', 'week', 'req']::text[]);--> statement-breakpoint
 ALTER TABLE "telegram_outbox" ADD CONSTRAINT "telegram_outbox_kind_check" CHECK ("telegram_outbox"."kind" in ('reminders', 'task_new', 'task_on_confirm', 'task_confirmed', 'task_rework', 'task_cancelled', 'report_fix', 'code', 'linked', 'relinked', 'unlinked', 'pass_changed', 'pass_reset', 'broadcast', 'lead', 'login_locked', 'alert', 'relink_code', 'page_closed', 'bot_test', 'cp_tg_request', 'task_started', 'task_done', 'bot_ask', 'nudge', 'not_me', 'bot_cmd', 'group', 'cp_file', 'setup_link', 'sub', 'sub_check', 'storage_check', 'dm_token', 'task_series_end', 'task_series_stop', 'request', 'request_new', 'request_reply'));--> statement-breakpoint
-ALTER TABLE "bell_notifications" ADD CONSTRAINT "bell_notifications_kind_check" CHECK ("bell_notifications"."kind" in ('reports', 'tasks', 'files', 'money', 'news', 'other', 'req'));--> statement-breakpoint
-SET LOCAL lock_timeout TO DEFAULT;
+ALTER TABLE "bell_notifications" ADD CONSTRAINT "bell_notifications_kind_check" CHECK ("bell_notifications"."kind" in ('reports', 'tasks', 'files', 'money', 'news', 'other', 'req'));

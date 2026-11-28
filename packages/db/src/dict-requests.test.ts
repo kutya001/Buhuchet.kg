@@ -110,8 +110,18 @@ describe.skipIf(!databaseAvailable())('«Попросить добавить»: 
     ).rejects.toThrow(permissionDenied);
     const seenByB = await asOwner(b, (tx) => tx.select().from(dictChangeRequests));
     expect(seenByB).toEqual([]);
+    // Свой запрос — из отправленных выше: условие по номеру, чтобы отказ не зависел от числа строк.
+    const [own] = await asOwner(a, (tx) =>
+      tx.select({ id: dictChangeRequests.id }).from(dictChangeRequests).limit(1),
+    );
+    expect(own).toBeDefined();
     await expect(
-      asOwner(a, (tx) => tx.update(dictChangeRequests).set({ status: 'added' })),
+      asOwner(a, (tx) =>
+        tx
+          .update(dictChangeRequests)
+          .set({ status: 'added' })
+          .where(eq(dictChangeRequests.id, own!.id)),
+      ),
     ).rejects.toThrow(permissionDenied);
     await expect(asOwner(a, (tx) => tx.delete(dictChangeRequests))).rejects.toThrow(
       permissionDenied,

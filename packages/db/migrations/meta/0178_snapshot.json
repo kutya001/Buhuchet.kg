@@ -18270,7 +18270,7 @@
         },
         "dict_change_requests_form_id_check": {
           "name": "dict_change_requests_form_id_check",
-          "value": "case when \"dict_change_requests\".\"kind\" = 'dict' then \"dict_change_requests\".\"form_id\" in ('type', 'tax', 'ben', 'base', 'gked', 'ugns', 'organ', 'bank', 'cat', 'reason', 'dm', 'other') else \"dict_change_requests\".\"form_id\" is null and \"dict_change_requests\".\"dict\" is null end"
+          "value": "case when \"dict_change_requests\".\"kind\" = 'dict' then \"dict_change_requests\".\"form_id\" is not null and \"dict_change_requests\".\"form_id\" in ('type', 'tax', 'ben', 'base', 'gked', 'ugns', 'organ', 'bank', 'cat', 'reason', 'dm', 'other') else \"dict_change_requests\".\"form_id\" is null and \"dict_change_requests\".\"dict\" is null end"
         },
         "dict_change_requests_status_check": {
           "name": "dict_change_requests_status_check",

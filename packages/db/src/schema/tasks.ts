@@ -52,7 +52,7 @@ const employeeRef = (name: string, column: AnyPgColumn, orgId: AnyPgColumn) =>
  * сам ставит следующую задачу. Правило без базы — `@buhuchet/domain` (tasks/series.ts). Серия не
  * удаляется — её останавливают; вместе с контрагентом её удаляет каскад. Ставит серию сотрудник от
  * своего имени; ночной запуск без пользователя меняет только состояние, причину, следующую дату и счёт
- * (миграция 0178, триггер `task_series_job_guard`).
+ * (миграция 0179, триггер `task_series_job_guard`).
  */
 export const taskSeries = pgTable(
   'task_series',

@@ -4,6 +4,9 @@
 -- Задачи серии ставит ночной запуск «Задачи: повторы» без пользователя: вставка задачи без вошедшего
 -- разрешена только с серией этой организации, постановщик — постановщик серии, автор записи пустой.
 -- «Эту и следующие» переносит задачу в серию — роль приложения меняет `series_id`, `series_date`.
+-- Блокировки ждём не дольше 5 с, как в 0178 (та же транзакция выпуска); предел снимается в конце.
+SET LOCAL lock_timeout = '5s';
+--> statement-breakpoint
 GRANT UPDATE (series_id, series_date) ON TABLE tasks TO buhuchet_app;
 --> statement-breakpoint
 DROP POLICY tasks_insert_own ON tasks;
@@ -22,6 +25,10 @@ CREATE POLICY tasks_insert_own ON tasks AS RESTRICTIVE FOR INSERT TO buhuchet_ap
         SELECT 1 FROM task_series s
         WHERE s.id = tasks.series_id AND s.org_id = tasks.org_id AND s.state = 'active'
           AND s.author_employee_id = tasks.author_employee_id
+          AND s.executor_employee_id = tasks.executor_employee_id
+          AND s.contractor_id IS NOT DISTINCT FROM tasks.contractor_id
+          AND s.project_id IS NOT DISTINCT FROM tasks.project_id
+          AND tasks.series_date >= s.start_date
       )
     )
   );
@@ -80,14 +87,26 @@ SELECT CASE WHEN max(no) IS NULL THEN setval('public.request_no_seq', 1201, fals
   ELSE setval('public.request_no_seq', max(no), true) END
 FROM public.dict_change_requests;
 --> statement-breakpoint
-GRANT USAGE ON SEQUENCE public.request_no_seq TO buhuchet_app;
+-- Роли приложения последовательность не выдаётся: номер берёт только триггер (SECURITY DEFINER), так что
+-- организация не «сжигает» общие номера платформы прямым nextval.
+REVOKE ALL ON SEQUENCE public.request_no_seq FROM buhuchet_app;
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION app.dict_change_requests_no() RETURNS trigger
-  LANGUAGE plpgsql
+  LANGUAGE plpgsql SECURITY DEFINER
   SET search_path = pg_catalog, pg_temp
   AS $$
   BEGIN
     NEW.no := nextval('public.request_no_seq');
+    -- Прежний код «Попросить добавить» (окно выпуска, откат только кода) темы и формы не передаёт.
+    IF NEW.kind = 'dict' AND btrim(NEW.topic) = '' AND NEW.what IS NOT NULL THEN
+      NEW.topic := btrim(NEW.what);
+    END IF;
+    IF NEW.kind = 'dict' AND NEW.form_id IS NULL THEN
+      NEW.form_id := CASE NEW.dict
+        WHEN 'types' THEN 'type' WHEN 'regimes' THEN 'tax' WHEN 'organs' THEN 'organ' WHEN 'benefits' THEN 'ben'
+        WHEN 'banks' THEN 'bank' WHEN 'cats' THEN 'cat' WHEN 'reasons' THEN 'reason' WHEN 'ugns' THEN 'ugns'
+        WHEN 'bases' THEN 'base' WHEN 'dm' THEN 'dm' ELSE 'other' END;
+    END IF;
     RETURN NEW;
   END
   $$;
@@ -257,10 +276,65 @@ REVOKE UPDATE, DELETE, TRUNCATE ON TABLE request_shots FROM buhuchet_app;
 --> statement-breakpoint
 REVOKE UPDATE, DELETE, TRUNCATE ON TABLE request_notes FROM buhuchet_app;
 --> statement-breakpoint
+-- Номер сообщения в ленте ставит база: следующий после последнего, под блокировкой строки запроса (свой
+-- номер вставляющий не задаёт — ни дыр, ни переполнения, по которому Админка перестала бы отвечать).
+CREATE OR REPLACE FUNCTION app.request_messages_n() RETURNS trigger
+  LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = pg_catalog, pg_temp
+  AS $$
+  BEGIN
+    -- SECURITY DEFINER: организацию проверяет сам (до политик вставки), чужой запрос не блокирует и не считает.
+    PERFORM 1 FROM public.dict_change_requests r
+      WHERE r.id = NEW.request_id AND r.org_id = NEW.org_id FOR UPDATE;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'request_messages: запрос не найден' USING ERRCODE = '42501';
+    END IF;
+    SELECT coalesce(max(m.n), 0) + 1 INTO NEW.n FROM public.request_messages m
+      WHERE m.request_id = NEW.request_id AND m.org_id = NEW.org_id;
+    RETURN NEW;
+  END
+  $$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION app.request_messages_n() FROM PUBLIC, buhuchet_app;
+--> statement-breakpoint
+CREATE TRIGGER request_messages_n BEFORE INSERT ON request_messages
+  FOR EACH ROW EXECUTE FUNCTION app.request_messages_n();
+--> statement-breakpoint
+-- Строку смены статуса организация пишет только о настоящей смене: запрос уже в этом статусе (метод сначала
+-- меняет статус, потом пишет ленту), иначе в ленте была бы ложная история.
+CREATE POLICY request_messages_st_current ON request_messages AS RESTRICTIVE FOR INSERT TO buhuchet_app
+  WITH CHECK (
+    by_admin OR kind <> 'st' OR EXISTS (
+      SELECT 1 FROM dict_change_requests r
+      WHERE r.id = request_messages.request_id AND r.org_id = request_messages.org_id
+        AND r.status = request_messages.to_status
+    )
+  );
+--> statement-breakpoint
+-- Время последнего движения при отправке — не в будущем (иначе запрос закрепился бы наверху очереди Админки).
+CREATE POLICY dict_change_requests_last_at ON dict_change_requests AS RESTRICTIVE FOR INSERT TO buhuchet_app
+  WITH CHECK (last_at <= now());
+--> statement-breakpoint
+-- Снимок — к сообщению того же запроса и под ключом своей организации (вторая преграда после метода
+-- загрузки этапа 3, как `files_key_check`; точный вид ключа задаёт этап 3).
+CREATE POLICY request_shots_same_request ON request_shots AS RESTRICTIVE FOR INSERT TO buhuchet_app
+  WITH CHECK (
+    storage_key LIKE ('org/' || org_id::text || '/requests/%')
+    AND (message_id IS NULL OR EXISTS (
+      SELECT 1 FROM request_messages m
+      WHERE m.id = request_shots.message_id AND m.request_id = request_shots.request_id
+        AND m.org_id = request_shots.org_id
+    ))
+  );
+--> statement-breakpoint
 -- «Витрина данных» (миграция 0166, `src/datamart-roles.ts`): серии — как задачи, обеим ролям своими
 -- строками; переписка и снимки — только Админке (без ключа хранилища); «Заметки» — никому; новые столбцы
 -- задач и запросов — обеим ролям.
-GRANT SELECT ON TABLE public.task_series TO buhuchet_dm_admin, buhuchet_dm_org;
+-- Права — по столбцам (п. О-62): новый столбец серии закрыт Витрине, пока миграция его не откроет.
+GRANT SELECT (id, org_id, title, description, category_code, contractor_id, project_id, executor_employee_id,
+  author_employee_id, term, need_file, confirm, every, unit, week_days, month_mode, start_date, end_kind, end_date,
+  end_count, state, stop_reason, next_date, made, created_by, updated_by, created_at, updated_at, version)
+  ON TABLE public.task_series TO buhuchet_dm_admin, buhuchet_dm_org;
 --> statement-breakpoint
 CREATE POLICY dm_admin_read ON public.task_series AS PERMISSIVE FOR SELECT TO buhuchet_dm_admin
   USING (EXISTS (SELECT 1 FROM dm.runs r WHERE r.pid = pg_catalog.pg_backend_pid()
@@ -288,3 +362,13 @@ GRANT SELECT (series_id, series_date) ON TABLE public.tasks TO buhuchet_dm_admin
 --> statement-breakpoint
 GRANT SELECT (no, kind, topic, form_id, form, where_info, wait, lead_admin, read_author, read_admin, last_at, closed_at)
   ON TABLE public.dict_change_requests TO buhuchet_dm_admin, buhuchet_dm_org;
+--> statement-breakpoint
+-- Вопрос, ошибку и опечатку видят только автор и владелец (ТЗ, запросы, блок 4 п. 4; блок 7 п. 3): роль
+-- Витрины организации видит только «Добавить в справочник», как до пакета; Админке — все.
+DROP POLICY dm_org_read ON public.dict_change_requests;
+--> statement-breakpoint
+CREATE POLICY dm_org_read ON public.dict_change_requests AS PERMISSIVE FOR SELECT TO buhuchet_dm_org
+  USING (kind = 'dict' AND org_id = (SELECT r.org_id FROM dm.runs r WHERE r.pid = pg_catalog.pg_backend_pid()
+    AND r.xid = pg_catalog.pg_current_xact_id_if_assigned()));
+--> statement-breakpoint
+SET LOCAL lock_timeout TO DEFAULT;

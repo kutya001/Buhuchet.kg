@@ -74,7 +74,7 @@ const oneOf = (values: readonly string[]) => sql.raw(values.map((v) => `'${v}'`)
  * «Вопрос», «Ошибка», «Опечатка», «Добавить в справочник», сквозной номер с 1201, форма, «Где», переписка
  * (`request_messages`) и статусы «В работе», «Решён», «Отозван». Правила без базы — `@buhuchet/domain`
  * (requests/rules.ts). Организация только отправляет, отзывает «Новый», пишет и отмечает прочитанное
- * (миграция 0178, триггер `dict_change_requests_org_guard`); статусы ставит администратор платформы.
+ * (миграция 0179, триггер `dict_change_requests_org_guard`); статусы ставит администратор платформы.
  * Прежние `what`, `answer`, `decided_*` остаются до этапа 2 пакета: на них работают «Мои запросы» и Админка.
  */
 export const dictChangeRequests = pgTable(
@@ -137,7 +137,7 @@ export const dictChangeRequests = pgTable(
     check('dict_change_requests_kind_check', sql`${t.kind} in (${oneOf(REQUEST_KINDS)})`),
     check(
       'dict_change_requests_form_id_check',
-      sql`case when ${t.kind} = 'dict' then ${t.formId} in (${oneOf(REQUEST_DICT_FORMS)}) else ${t.formId} is null and ${t.dict} is null end`,
+      sql`case when ${t.kind} = 'dict' then ${t.formId} is not null and ${t.formId} in (${oneOf(REQUEST_DICT_FORMS)}) else ${t.formId} is null and ${t.dict} is null end`,
     ),
     check('dict_change_requests_status_check', sql`${t.status} in (${oneOf(REQUEST_STATUSES)})`),
     check('dict_change_requests_no_check', sql`${t.no} >= 1201`),

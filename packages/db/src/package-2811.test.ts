@@ -5,7 +5,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withUserContext } from './auth';
 import { withOrgContext } from './context';
 import { adminAnswerDictRequest } from './admin-dict-requests';
-import { createDictRequest } from './dict-requests';
+import { runDmAdmin, runDmOrg } from './datamart-run';
+import { createDictRequest, listDictRequests } from './dict-requests';
 import { createOrganization, type CreatedOrganization } from './organizations';
 import {
   dictChangeRequests,
@@ -216,7 +217,7 @@ describe.skipIf(!databaseAvailable())('Пакет 28.11.2026, этап 0: осн
         permissionDenied,
       );
       const other = await newSeries(b);
-      await expect(seriesTask(a, other, '2026-12-21')).rejects.toBeTruthy();
+      await expect(seriesTask(a, other, '2026-12-21')).rejects.toEqual(permissionDenied);
       // Остановленная серия задач больше не ставит.
       await inOrg(a, undefined, (tx) =>
         tx
@@ -284,6 +285,33 @@ describe.skipIf(!databaseAvailable())('Пакет 28.11.2026, этап 0: осн
       ).rejects.toEqual(permissionDenied);
     });
 
+    it('«Эту и следующие»: задачу не привязать к серии другой организации и к серии без даты', async () => {
+      const own = await newSeries(a);
+      const foreign = await newSeries(b);
+      const [task] = await asOwner(a, (tx) =>
+        tx
+          .insert(tasks)
+          .values({
+            orgId: a.orgId,
+            title: 'Разовая',
+            categoryCode: 'КАТ-001',
+            executorEmployeeId: a.ownerEmployeeId,
+            authorEmployeeId: a.ownerEmployeeId,
+            dueDate: '2026-12-10',
+            confirm: false,
+            createdBy: a.ownerUserId,
+          })
+          .returning({ id: tasks.id }),
+      );
+      const link = (seriesId: string, seriesDate: string | null) =>
+        asOwner(a, (tx) =>
+          tx.update(tasks).set({ seriesId, seriesDate }).where(eq(tasks.id, task!.id)),
+        );
+      await expect(link(foreign, '2026-12-10')).rejects.toEqual(violates('tasks_series_fk'));
+      await expect(link(own, null)).rejects.toEqual(violates('tasks_series_check'));
+      await link(own, '2026-12-10');
+    });
+
     it('проверки правила: интервал, дни недели, «На месяц» — последний день месяца', async () => {
       await expect(newSeries(a, { every: 100 })).rejects.toEqual(
         violates('task_series_every_check'),
@@ -348,7 +376,7 @@ describe.skipIf(!databaseAvailable())('Пакет 28.11.2026, этап 0: осн
         tx.insert(requestShots).values({
           orgId: a.orgId,
           requestId: req.id,
-          storageKey: `requests/${randomUUID()}`,
+          storageKey: `org/${a.orgId}/requests/${randomUUID()}`,
           name: 'снимок.png',
           size: 1024,
           mime: 'image/png',
@@ -357,8 +385,16 @@ describe.skipIf(!databaseAvailable())('Пакет 28.11.2026, этап 0: осн
       for (const table of [requestMessages, requestShots, requestNotes]) {
         expect(await asOwner(b, (tx) => tx.select().from(table))).toEqual([]);
       }
-      expect(await asOwner(a, (tx) => tx.select().from(requestMessages))).toHaveLength(1);
-      expect(await asOwner(a, (tx) => tx.select().from(requestShots))).toHaveLength(1);
+      expect(
+        await asOwner(a, (tx) =>
+          tx.select().from(requestMessages).where(eq(requestMessages.requestId, req.id)),
+        ),
+      ).toHaveLength(1);
+      expect(
+        await asOwner(a, (tx) =>
+          tx.select().from(requestShots).where(eq(requestShots.requestId, req.id)),
+        ),
+      ).toHaveLength(1);
       // Заметку организация не видит и не пишет, даже автор запроса; администратор — видит.
       expect(await asOwner(a, (tx) => tx.select().from(requestNotes))).toEqual([]);
       await expect(
@@ -366,7 +402,11 @@ describe.skipIf(!databaseAvailable())('Пакет 28.11.2026, этап 0: осн
           tx.insert(requestNotes).values({ orgId: a.orgId, requestId: req.id, text: 'Своя' }),
         ),
       ).rejects.toEqual(permissionDenied);
-      expect(await inOrg(a, adminId, (tx) => tx.select().from(requestNotes))).toHaveLength(1);
+      expect(
+        await inOrg(a, adminId, (tx) =>
+          tx.select().from(requestNotes).where(eq(requestNotes.requestId, req.id)),
+        ),
+      ).toHaveLength(1);
       // Ролям «Витрины данных» заметки закрыты, снимки и переписка — только Админке, без ключа.
       const [priv] = (await db.admin.db.execute(sql`
         select has_table_privilege('buhuchet_dm_org', 'public.request_notes', 'select') as org_notes,
@@ -603,6 +643,339 @@ describe.skipIf(!databaseAvailable())('Пакет 28.11.2026, этап 0: осн
         wait: false,
       });
       expect(row!.closedAt).not.toBeNull();
+    });
+  });
+
+  describe('прежние «Попросить добавить» и «Мои запросы» на новой схеме', () => {
+    it('новый запрос — вид «Добавить в справочник», тема, форма по справочнику', async () => {
+      const typed = await inOrg(a, staff.userId, (tx) =>
+        createDictRequest(tx, { dict: 'types', what: ' Форма 2-ИП ', comment: '' }),
+      );
+      const other = await inOrg(a, staff.userId, (tx) =>
+        createDictRequest(tx, { dict: 'forms', what: 'Кооператив', comment: 'Есть два клиента' }),
+      );
+      const rows = await db.admin.db
+        .select({
+          id: dictChangeRequests.id,
+          kind: dictChangeRequests.kind,
+          topic: dictChangeRequests.topic,
+          formId: dictChangeRequests.formId,
+          form: dictChangeRequests.form,
+          status: dictChangeRequests.status,
+        })
+        .from(dictChangeRequests)
+        .where(sql`${dictChangeRequests.id} in (${typed.id}, ${other.id})`);
+      const of = (id: string) => rows.find((r) => r.id === id);
+      expect(of(typed.id)).toEqual({
+        id: typed.id,
+        kind: 'dict',
+        topic: 'Форма 2-ИП',
+        formId: 'type',
+        form: { name: 'Форма 2-ИП' },
+        status: 'new',
+      });
+      expect(of(other.id)).toEqual({
+        id: other.id,
+        kind: 'dict',
+        topic: 'Кооператив',
+        formId: 'other',
+        form: { name: 'Кооператив', dict: 'Формы собственности', note: 'Есть два клиента' },
+        status: 'new',
+      });
+    });
+
+    it('прежний код без темы и формы (окно выпуска) запрос создаёт: тема и форма — из «Что добавить»', async () => {
+      const [row] = await asOwner(a, (tx) =>
+        tx
+          .insert(dictChangeRequests)
+          .values({
+            orgId: a.orgId,
+            no: 0,
+            dict: 'regimes',
+            what: ' Патент на такси ',
+            comment: '',
+            createdBy: a.ownerUserId,
+          })
+          .returning({ topic: dictChangeRequests.topic, formId: dictChangeRequests.formId }),
+      );
+      expect(row).toEqual({ topic: 'Патент на такси', formId: 'tax' });
+    });
+
+    it('«Мои запросы» — без вопросов, ошибок, опечаток и отозванных', async () => {
+      const shown = await inOrg(a, staff.userId, (tx) =>
+        createDictRequest(tx, { dict: 'types', what: 'Видно в списке', comment: '' }),
+      );
+      const gone = await inOrg(a, staff.userId, (tx) =>
+        createDictRequest(tx, { dict: 'types', what: 'Отозван', comment: '' }),
+      );
+      await inOrg(a, staff.userId, (tx) =>
+        tx
+          .update(dictChangeRequests)
+          .set({ status: 'withdrawn' })
+          .where(eq(dictChangeRequests.id, gone.id)),
+      );
+      const [typo] = await db.admin.db
+        .insert(dictChangeRequests)
+        .values({
+          orgId: a.orgId,
+          no: 0,
+          kind: 'typo',
+          topic: '«Отчеты»',
+          form: { was: 'Отчеты', right: 'Отчёты' },
+          createdBy: staff.userId,
+        })
+        .returning({ id: dictChangeRequests.id });
+      const listed = (await inOrg(a, staff.userId, (tx) => listDictRequests(tx))).map((r) => r.id);
+      expect(listed).toContain(shown.id);
+      expect(listed).not.toContain(gone.id);
+      expect(listed).not.toContain(typo!.id);
+    });
+
+    it('Админка не отвечает прежним путём на отозванный запрос и запрос другого вида', async () => {
+      const gone = await newRequest(a, staff.userId, 'Отозван до ответа');
+      await inOrg(a, staff.userId, (tx) =>
+        tx
+          .update(dictChangeRequests)
+          .set({ status: 'withdrawn' })
+          .where(eq(dictChangeRequests.id, gone.id)),
+      );
+      const [q] = await db.admin.db
+        .insert(dictChangeRequests)
+        .values({
+          orgId: a.orgId,
+          no: 0,
+          kind: 'q',
+          topic: 'Как выгрузить отчёты?',
+          form: { text: 'Нужна выгрузка' },
+          createdBy: staff.userId,
+        })
+        .returning({ id: dictChangeRequests.id, version: dictChangeRequests.version });
+      for (const [id, version] of [
+        [gone.id, 2],
+        [q!.id, q!.version],
+      ] as const) {
+        const answered = await withUserContext(db.app.db, adminId, (tx) =>
+          adminAnswerDictRequest(tx, { id, status: 'added', answer: 'Добавили', version }),
+        );
+        expect(answered.ok).toBe(false);
+        const [direct] = await withUserContext(db.app.db, adminId, (tx) =>
+          tx.execute<{ v: number | null }>(
+            sql`select app.admin_answer_dict_request(${id}, 'added', 'Добавили', ${version}) as v`,
+          ),
+        );
+        expect(direct!.v).toBeNull();
+        const feed = await db.admin.db
+          .select({ n: requestMessages.n })
+          .from(requestMessages)
+          .where(and(eq(requestMessages.requestId, id), eq(requestMessages.byAdmin, true)));
+        expect(feed).toEqual([]);
+      }
+      const after = await db.admin.db
+        .select({ status: dictChangeRequests.status })
+        .from(dictChangeRequests)
+        .where(sql`${dictChangeRequests.id} in (${gone.id}, ${q!.id})`);
+      expect(after.map((r) => r.status).sort()).toEqual(['new', 'withdrawn']);
+    });
+  });
+
+  describe('вторая преграда базы', () => {
+    it('чужая организация не создаёт серию, сообщение и снимок у себя от чужого имени и не меняет чужие', async () => {
+      const seriesId = await newSeries(a);
+      const req = await newRequest(a, a.ownerUserId, 'Чужая организация');
+      // Строки с org_id другой организации — отказ политики изоляции.
+      await expect(
+        asOwner(b, (tx) =>
+          tx.insert(taskSeries).values({
+            orgId: a.orgId,
+            title: 'Чужая серия',
+            categoryCode: 'КАТ-001',
+            executorEmployeeId: a.ownerEmployeeId,
+            authorEmployeeId: a.ownerEmployeeId,
+            confirm: false,
+            unit: 'day',
+            startDate: '2026-12-07',
+            createdBy: b.ownerUserId,
+          }),
+        ),
+      ).rejects.toEqual(permissionDenied);
+      await expect(
+        asOwner(b, (tx) =>
+          tx.insert(requestMessages).values({
+            orgId: a.orgId,
+            requestId: req.id,
+            n: 1,
+            kind: 'msg',
+            authorUserId: b.ownerUserId,
+            text: 'Чужое',
+          }),
+        ),
+      ).rejects.toEqual(permissionDenied);
+      // Свой org_id, но запрос другой организации — составной ключ не пускает.
+      await expect(
+        asOwner(b, (tx) =>
+          tx.insert(requestMessages).values({
+            orgId: b.orgId,
+            requestId: req.id,
+            n: 1,
+            kind: 'msg',
+            authorUserId: b.ownerUserId,
+            text: 'Чужое',
+          }),
+        ),
+      ).rejects.toEqual(permissionDenied);
+      await expect(
+        asOwner(b, (tx) =>
+          tx.insert(requestShots).values({
+            orgId: b.orgId,
+            requestId: req.id,
+            storageKey: `org/${b.orgId}/requests/${randomUUID()}`,
+            name: 'снимок.png',
+            size: 1024,
+            mime: 'image/png',
+            createdBy: b.ownerUserId,
+          }),
+        ),
+      ).rejects.toEqual(violates('request_shots_request_fk'));
+      // Изменить серию и запрос другой организации нельзя: строк не находится.
+      expect(
+        await asOwner(b, (tx) =>
+          tx
+            .update(taskSeries)
+            .set({ title: 'Чужая правка' })
+            .where(eq(taskSeries.id, seriesId))
+            .returning({ id: taskSeries.id }),
+        ),
+      ).toEqual([]);
+      expect(
+        await asOwner(b, (tx) =>
+          tx
+            .update(dictChangeRequests)
+            .set({ status: 'withdrawn' })
+            .where(eq(dictChangeRequests.id, req.id))
+            .returning({ id: dictChangeRequests.id }),
+        ),
+      ).toEqual([]);
+    });
+
+    it('ночная задача — с исполнителем серии и не раньше её начала', async () => {
+      const id = await newSeries(a);
+      await expect(
+        seriesTask(a, id, '2026-12-14', { executorEmployeeId: staff.employeeId }),
+      ).rejects.toEqual(permissionDenied);
+      await expect(seriesTask(a, id, '2026-11-30')).rejects.toEqual(permissionDenied);
+      expect(await seriesTask(a, id, '2026-12-14')).toHaveLength(1);
+    });
+
+    it('номер сообщения ставит база: следующий после последнего, свой не задать', async () => {
+      const req = await newRequest(a, staff.userId, 'Номер сообщения');
+      const put = (n: number) =>
+        inOrg(a, staff.userId, (tx) =>
+          tx
+            .insert(requestMessages)
+            .values({ orgId: a.orgId, requestId: req.id, n, kind: 'msg', text: `Сообщение ${n}` })
+            .returning({ n: requestMessages.n }),
+        );
+      expect(await put(2147483647)).toEqual([{ n: 1 }]);
+      expect(await put(1)).toEqual([{ n: 2 }]);
+    });
+
+    it('смену статуса в ленту организация пишет только о настоящей смене', async () => {
+      const req = await newRequest(a, staff.userId, 'Ложная история');
+      const st = () =>
+        inOrg(a, staff.userId, (tx) =>
+          tx.insert(requestMessages).values({
+            orgId: a.orgId,
+            requestId: req.id,
+            n: 1,
+            kind: 'st',
+            text: '',
+            fromStatus: 'new',
+            toStatus: 'withdrawn',
+          }),
+        );
+      await expect(st()).rejects.toEqual(permissionDenied);
+      await inOrg(a, staff.userId, (tx) =>
+        tx
+          .update(dictChangeRequests)
+          .set({ status: 'withdrawn' })
+          .where(eq(dictChangeRequests.id, req.id)),
+      );
+      await st();
+    });
+
+    it('время последнего движения при отправке не в будущем', async () => {
+      await expect(
+        asOwner(a, (tx) =>
+          tx.insert(dictChangeRequests).values({
+            orgId: a.orgId,
+            no: 0,
+            dict: 'types',
+            what: 'Наверх очереди',
+            topic: 'Наверх очереди',
+            formId: 'type',
+            lastAt: new Date(Date.now() + 365 * 24 * 3600 * 1000),
+            createdBy: a.ownerUserId,
+          }),
+        ),
+      ).rejects.toEqual(permissionDenied);
+    });
+
+    it('снимок — под ключом своей организации и к сообщению того же запроса', async () => {
+      const one = await newRequest(a, staff.userId, 'Снимок 1');
+      const two = await newRequest(a, staff.userId, 'Снимок 2');
+      const [msg] = await inOrg(a, staff.userId, (tx) =>
+        tx
+          .insert(requestMessages)
+          .values({ orgId: a.orgId, requestId: one.id, n: 1, kind: 'msg', text: 'Со снимком' })
+          .returning({ id: requestMessages.id }),
+      );
+      const shot = (requestId: string, storageKey: string) =>
+        inOrg(a, staff.userId, (tx) =>
+          tx.insert(requestShots).values({
+            orgId: a.orgId,
+            requestId,
+            messageId: msg!.id,
+            storageKey,
+            name: 'снимок.png',
+            size: 1024,
+            mime: 'image/png',
+            createdBy: staff.userId,
+          }),
+        );
+      await expect(shot(one.id, `org/${b.orgId}/requests/${randomUUID()}`)).rejects.toEqual(
+        permissionDenied,
+      );
+      await expect(shot(two.id, `org/${a.orgId}/requests/${randomUUID()}`)).rejects.toEqual(
+        permissionDenied,
+      );
+      await shot(one.id, `org/${a.orgId}/requests/${randomUUID()}`);
+    });
+
+    it('роль Витрины организации видит только «Добавить в справочник», Админки — все запросы', async () => {
+      const dict = await newRequest(a, staff.userId, 'Видно Витрине');
+      const [q] = await db.admin.db
+        .insert(dictChangeRequests)
+        .values({
+          orgId: a.orgId,
+          no: 0,
+          kind: 'q',
+          topic: 'Личный вопрос сотрудника',
+          form: { text: 'Только автору и владельцу' },
+          createdBy: staff.userId,
+        })
+        .returning({ id: dictChangeRequests.id });
+      const ids = (r: { columns: string[]; rows: unknown[][] }) =>
+        r.rows.map((v) => v[r.columns.indexOf('id')]);
+      const query = { text: 'SELECT id FROM dict_change_requests', params: [], maxRows: 1000 };
+      const org = ids(await runDmOrg(db.app.db, { orgId: a.orgId, userId: a.ownerUserId }, query));
+      expect(org).toContain(dict.id);
+      expect(org).not.toContain(q!.id);
+      const admin = ids(await runDmAdmin(db.app.db, adminId, query));
+      expect(admin).toEqual(expect.arrayContaining([dict.id, q!.id]));
+      const [seq] = (await db.admin.db.execute(sql`
+        select has_sequence_privilege('buhuchet_app', 'public.request_no_seq', 'usage') as usage
+      `)) as unknown as { usage: boolean }[];
+      expect(seq!.usage).toBe(false);
     });
   });
 });
