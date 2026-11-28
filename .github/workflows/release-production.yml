@@ -9,7 +9,10 @@ name: Release production
 # 1. Выпускаемый коммит — из main, по нему зелёный полный CI (ночной прогон или ручной запуск CI на main),
 #    и ветку production можно только сдвинуть вперёд на него (откат версии — Instant Rollback в Vercel).
 # 2. Миграции рабочей базы и роль приложения, справочники без демо-организации, корзина файлов. Миграции
-#    совместимы со старым кодом, поэтому они идут до выкладки.
+#    совместимы со старым кодом, поэтому они идут до выкладки. До миграций — пароль роли сайта: если
+#    PRODUCTION_DATABASE_URL не подходит к базе (разошёлся с DATABASE_URL в Vercel), выпуск
+#    останавливается и ничего не меняет; намеренная смена — отметка «Сменить пароль роли сайта»
+#    (docs/decisions.md п. О-71, docs/deploy.md «Пароль роли сайта»).
 # 3. По отметке — администратор платформы из секретов: пароль временный, в журнал не печатается, уже
 #    созданного команда не трогает.
 # Задание release-publish (после первого):
@@ -34,6 +37,10 @@ on:
         default: ''
       create_admin:
         description: 'Создать администратора платформы PRODUCTION_ADMIN_LOGIN с временным паролем PRODUCTION_ADMIN_PASSWORD (уже созданного не трогает)'
+        type: boolean
+        default: false
+      change_app_password:
+        description: 'Сменить пароль роли сайта на пароль из PRODUCTION_DATABASE_URL (тот же адрес сразу в DATABASE_URL в Vercel и Redeploy)'
         type: boolean
         default: false
 
@@ -134,8 +141,11 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Миграции и роль приложения
-        run: pnpm db:migrate
+        # Пароль из секрета не подходит к базе — стоп до миграций; меняет его только отметка (п. О-71).
+        run: |
+          if [ "$CHANGE_APP_PASSWORD" = true ]; then pnpm db:migrate --change-app-password; else pnpm db:migrate; fi
         env:
+          CHANGE_APP_PASSWORD: ${{ inputs.change_app_password }}
           DATABASE_ADMIN_URL: ${{ secrets.PRODUCTION_DATABASE_ADMIN_URL }}
           DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
           # Корневой сертификат базы (текст PEM): с ним сертификат сервера проверяется (Р-14, читает config);

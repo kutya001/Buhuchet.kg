@@ -14,6 +14,10 @@ on:
         description: 'Сбросить пароль администратора платформы (TEST_ADMIN_LOGIN) на временный из TEST_ADMIN_PASSWORD'
         type: boolean
         default: false
+      change_app_password:
+        description: 'Сменить пароль роли сайта стенда на пароль из TEST_DATABASE_URL (тот же адрес сразу в DATABASE_URL в Vercel и Redeploy)'
+        type: boolean
+        default: false
   push:
     branches: [main]
     paths:
@@ -69,8 +73,11 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Миграции и роль приложения
         if: steps.ready.outputs.ok == 'true'
-        run: pnpm db:migrate
+        # Пароль из секрета не подходит к базе — стоп до миграций; меняет его только отметка (п. О-71).
+        run: |
+          if [ "$CHANGE_APP_PASSWORD" = true ]; then pnpm db:migrate --change-app-password; else pnpm db:migrate; fi
         env:
+          CHANGE_APP_PASSWORD: ${{ inputs.change_app_password }}
           DATABASE_ADMIN_URL: ${{ secrets.TEST_DATABASE_ADMIN_URL }}
           DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
           # Корневой сертификат базы (текст PEM): с ним сертификат сервера проверяется (Р-14, читает config);
