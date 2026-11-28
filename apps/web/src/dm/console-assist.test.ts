@@ -129,6 +129,34 @@ describe('sqlRefs', () => {
     expect(r.cte.has('x')).toBe(true);
   });
 
+  it('запятая в ORDER BY и GROUP BY и FROM внутри функции — не таблица (замечание 28.11.2026)', () => {
+    const sql =
+      'SELECT l.started_at::date AS day, o.name AS org, count(*) AS logins\n' +
+      'FROM session_log l JOIN organizations o ON o.id = l.org_id\n' +
+      'WHERE l.started_at::date BETWEEN :date_from AND :date_to\n' +
+      'GROUP BY 1, 2 ORDER BY day DESC, org';
+    expect(sqlRefs(sql).refs.map((x) => x.table)).toEqual(['session_log', 'organizations']);
+    expect(sqlRefs('SELECT name FROM reports GROUP BY name, kind').refs).toHaveLength(1);
+    expect(
+      sqlRefs('SELECT EXTRACT(YEAR FROM created_at) AS y FROM reports').refs.map((x) => x.table),
+    ).toEqual(['reports']);
+    // Подзапрос в списке таблиц и запятая после него — по-прежнему таблица.
+    expect(
+      sqlRefs('SELECT * FROM (SELECT 1 FROM a, b) s, contractors c ORDER BY 1, 2').refs.map(
+        (x) => x.table,
+      ),
+    ).toEqual(['a', 'b', 'contractors']);
+    expect(
+      sqlRefs('SELECT b.x FROM (reports a JOIN nosuch b ON true) ORDER BY 1, x').refs.map((x) => [
+        x.kw,
+        x.table,
+      ]),
+    ).toEqual([
+      ['from', 'reports'],
+      ['join', 'nosuch'],
+    ]);
+  });
+
   it('подзапрос и функция на месте таблицы — не таблица', () => {
     expect(sqlRefs('SELECT * FROM (SELECT 1) s').refs).toEqual([]);
     expect(sqlRefs('SELECT * FROM generate_series(1, 3) g').refs).toEqual([]);
@@ -211,6 +239,12 @@ describe('schemaMarks', () => {
     );
     expect(schemaMarks('WITH t AS (SELECT 1) SELECT t.a FROM t', index)).toEqual([]);
     expect(schemaMarks('SELECT app.current_org_id(), r.id FROM reports r', index)).toEqual([]);
+  });
+
+  it('псевдоним столбца вывода в ORDER BY и GROUP BY — не «таблицы нет в базе»', () => {
+    const sql =
+      'SELECT r.id AS org, count(*) AS n FROM reports r GROUP BY org, r.id ORDER BY n DESC, org';
+    expect(schemaMarks(sql, index)).toEqual([]);
   });
 });
 

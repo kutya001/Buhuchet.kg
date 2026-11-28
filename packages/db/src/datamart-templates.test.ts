@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import {
   bishkekDate,
   dmBind,
+  dmSqlTables,
   formatText,
   periodLabel,
   revenueRows,
@@ -397,6 +398,18 @@ describe.skipIf(!databaseAvailable())('готовые шаблоны «Витр�
       expect(r.columns, code).toEqual(tpl.columns.map((c) => c.code));
       expect(r.more, code).toBe(false);
     }
+  });
+
+  it('у готовых шаблонов редактор консоли не находит «таблицы нет в базе»: каждое место таблицы — таблица или представление базы (замечание 28.11.2026)', async () => {
+    const rows = await db.admin.db.execute<{ name: string }>(
+      sql`SELECT table_name AS name FROM information_schema.tables WHERE table_schema = 'public'`,
+    );
+    const names = new Set(rows.map((x) => x.name));
+    for (const [code, tpl] of builtin)
+      expect(
+        dmSqlTables(tpl.query).filter((x) => !names.has(x)),
+        code,
+      ).toEqual([]);
   });
 
   it('«Контрагенты»: все, кроме архивных; форма и режим — названиями, ответственный — кратко, обслуживание — статусом', async () => {

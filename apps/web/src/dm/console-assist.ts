@@ -1,6 +1,8 @@
 import {
   DM_SQL_KEYWORDS,
   dmConsoleParamType,
+  dmSqlCteNames,
+  dmSqlFromSlots,
   dmSqlLex,
   dmSqlMoneyName,
   type DmSqlToken,
@@ -186,18 +188,16 @@ export function sqlRefs(sql: string): {
   const sig = significant(dmSqlLex(sql));
   const refs: SqlRef[] = [];
   const aliases = new Map<string, string>();
-  const cte = new Set<string>();
+  // Свои имена запроса из WITH, в том числе со списком столбцов «y (a, b) AS (».
+  const cte = dmSqlCteNames(sig);
   const low = (k: number) => sig[k]?.text.toLowerCase() ?? '';
+  // Запятая — только в списке таблиц после FROM (не «ORDER BY day, org»), docs/typical-mistakes.md № 89.
+  const slots = dmSqlFromSlots(sig);
   for (let k = 0; k < sig.length; k += 1) {
     const w = low(k);
-    // «WITH имя AS (» и «, имя AS (» — свои имена запроса.
-    if ((w === 'with' || w === ',') && sig[k + 1]?.kind === 'word') {
-      let n = k + 1;
-      if (low(n) === 'recursive') n += 1;
-      if (low(n + 1) === 'as' && sig[n + 2]?.text === '(') cte.add(low(n));
-    }
-    const comma = w === ',' && refs.length > 0 && low(k - 1) !== '(';
-    if (w !== 'from' && w !== 'join' && !comma) continue;
+    if (!slots.has(k)) continue;
+    const comma = w === ',';
+    const kw = comma ? 'comma' : w === 'join' ? 'join' : 'from';
     let p = k + 1;
     if (sig[p]?.kind !== 'word') continue;
     const first = sig[p]!;
@@ -220,7 +220,7 @@ export function sqlRefs(sql: string): {
       !DM_SQL_KEYWORDS.has(al.text.toLowerCase())
         ? al.text.toLowerCase()
         : table;
-    refs.push({ kw: comma ? 'comma' : (w as 'from' | 'join'), table, alias, at: first.start, len });
+    refs.push({ kw, table, alias, at: first.start, len });
     aliases.set(alias, table);
     if (!aliases.has(table)) aliases.set(table, table);
   }

@@ -9,6 +9,7 @@ import {
   dmMethodToSelect,
   dmSqlAliasScopes,
   dmSqlFormat,
+  dmSqlFromSlots,
   dmSqlLex,
   dmSqlMoneyName,
   dmSqlNoAliasMarks,
@@ -20,6 +21,7 @@ import {
   type DmRewriteNote,
 } from './console';
 import { formatText, UI_TEXTS } from '../l10n/texts';
+import { DM_CONSOLE_PRESETS } from './presets';
 
 /** Пометки перестройки словами словаря — как их пишет экран. */
 const say = (list: readonly DmRewriteNote[]) =>
@@ -300,7 +302,58 @@ describe('таблицы и столбцы запроса', () => {
       dmSqlTables(
         'with x as (select 1 from a) select * from x join public.b on true left join lateral (select 1 from c) y on true, d',
       ),
-    ).toEqual(['a', 'b', 'c']);
+    ).toEqual(['a', 'b', 'c', 'd']);
+  });
+  it('запятая в ORDER BY и GROUP BY и FROM внутри функции — не таблица (замечание 28.11.2026)', () => {
+    const sql =
+      'SELECT l.started_at::date AS day, o.name AS org, count(*) AS logins FROM session_log l ' +
+      'JOIN organizations o ON o.id = l.org_id GROUP BY 1, 2 ORDER BY day DESC, org';
+    expect(dmSqlTables(sql)).toEqual(['session_log', 'organizations']);
+    expect(
+      dmSqlTables('select extract(year from created_at) y, a from t1, t2 group by y, a'),
+    ).toEqual(['t1', 't2']);
+    const sig = dmSqlLex(sql).filter((t) => t.kind !== 'space' && t.kind !== 'comment');
+    expect([...dmSqlFromSlots(sig)].map((k) => sig[k]!.text)).toEqual(['FROM', 'JOIN']);
+    // Таблицы в скобках без подзапроса: «FROM (a JOIN b ON …), c».
+    expect(dmSqlTables('select b.x from (a join b on true), c order by 1, x')).toEqual([
+      'a',
+      'b',
+      'c',
+    ]);
+    expect(dmSqlTables('select * from (select 1 from a) s, (values (1)) v, b')).toEqual(['a', 'b']);
+    expect(dmSqlTables('select * from a join (b join c on true) on true')).toEqual(['a', 'b', 'c']);
+    expect(dmSqlTables('select * from a where a.x is distinct from a.y')).toEqual(['a']);
+  });
+  it.each([
+    [
+      'подзапрос в WHERE',
+      'select a.x from a where a.y in (select b.y from b, c) order by 1, 2',
+      ['a', 'b', 'c'],
+    ],
+    ['UNION', 'select x from t1 union select y from t2, t3 order by 1, a', ['t1', 't2', 't3']],
+    [
+      'CTE со списком столбцов',
+      'with x as (select 1 from a), y (p, q) as (select 1, 2 from b) select * from x, y, c',
+      ['a', 'b', 'c'],
+    ],
+    ['«, LATERAL»', 'select * from a, lateral (select 1 from b) y, c', ['a', 'b', 'c']],
+    [
+      'CROSS JOIN LATERAL',
+      'select * from a cross join lateral (select 1 from b, d) y, c',
+      ['a', 'b', 'd', 'c'],
+    ],
+    ['DISTINCT ON', 'select distinct on (a.x, a.y) a.x from a order by a.x, a.y', ['a']],
+    ['OVER (ORDER BY …)', 'select count(*) over (partition by a order by b, c) from t', ['t']],
+    ['string_agg с ORDER BY', "select string_agg(x, ',' order by y, z) from t", ['t']],
+    ['USING (…)', 'select * from a join b using (x, y), c', ['a', 'b', 'c']],
+    ['WINDOW', 'select sum(x) over w from t window w as (order by x, y)', ['t']],
+    ['IS DISTINCT FROM в списке вывода', 'select a is distinct from b, c from t', ['t']],
+    ['FROM (a JOIN b), c', 'select 1 from (a join b on true), c', ['a', 'b', 'c']],
+    ['код Drizzle «.select().from(v)»', 'db.select().from(v).where(eq(v.id, id))', []],
+    ['столбец с именем таблицы', 'select id, nosuch as x from nosuch', ['nosuch']],
+    ['AS MATERIALIZED', 'with x as materialized (select 1 from a) select * from x, b', ['a', 'b']],
+  ])('места таблиц: %s', (_, sql, want) => {
+    expect(dmSqlTables(sql)).toEqual(want);
   });
   it('столбцы вывода: псевдоним, иначе последнее имя', () => {
     expect(
@@ -344,6 +397,22 @@ describe('метод API → SELECT на всём снимке (блок 5, пу
   it('таблицы метода — для сборщика этапа 2', () => {
     const m = withSql.find((x) => x.p === '/admin/organizations')!;
     expect(dmMethodTables(m, docs.sql)).toContain('organizations');
+    expect(dmMethodTables(m, docs.sql)).not.toContain('v');
+  });
+  it('места таблиц заготовок консоли — таблицы описания схемы', () => {
+    const names = new Set(schema.tables.map((x) => x.name));
+    for (const p of DM_CONSOLE_PRESETS)
+      expect(
+        dmSqlTables(p.sql).filter((x) => !names.has(x)),
+        p.id,
+      ).toEqual([]);
+  });
+  it('таблицы всех методов — таблицы описания схемы, а не переменные кода Drizzle («.from(v)»)', () => {
+    const names = new Set(schema.tables.map((x) => x.name));
+    const unknown = new Set<string>();
+    for (const m of docs.methods)
+      for (const t of dmMethodTables(m, docs.sql)) if (!names.has(t)) unknown.add(t);
+    expect([...unknown]).toEqual([]);
   });
 });
 
