@@ -110,8 +110,18 @@ describe.skipIf(!databaseAvailable())('«Попросить добавить»: 
     ).rejects.toThrow(permissionDenied);
     const seenByB = await asOwner(b, (tx) => tx.select().from(dictChangeRequests));
     expect(seenByB).toEqual([]);
+    // Свой запрос — из отправленных выше: условие по номеру, чтобы отказ не зависел от числа строк.
+    const [own] = await asOwner(a, (tx) =>
+      tx.select({ id: dictChangeRequests.id }).from(dictChangeRequests).limit(1),
+    );
+    expect(own).toBeDefined();
     await expect(
-      asOwner(a, (tx) => tx.update(dictChangeRequests).set({ status: 'added' })),
+      asOwner(a, (tx) =>
+        tx
+          .update(dictChangeRequests)
+          .set({ status: 'added' })
+          .where(eq(dictChangeRequests.id, own!.id)),
+      ),
     ).rejects.toThrow(permissionDenied);
     await expect(asOwner(a, (tx) => tx.delete(dictChangeRequests))).rejects.toThrow(
       permissionDenied,
@@ -122,11 +132,14 @@ describe.skipIf(!databaseAvailable())('«Попросить добавить»: 
     const base = { orgId: a.orgId, dict: 'types', what: 'Отчёт', createdBy: a.ownerUserId };
     for (const values of [
       { ...base, createdBy: b.ownerUserId },
+      { ...base, leadAdmin: a.ownerUserId },
+      { ...base, closedAt: new Date() },
+      { ...base, readAdmin: 3 },
       { ...base, status: 'added' },
       { ...base, answer: 'Добавили' },
       { ...base, decidedBy: a.ownerUserId },
       { ...base, decidedAt: new Date() },
-    ]) {
+    ] as (typeof dictChangeRequests.$inferInsert)[]) {
       await expect(
         asOwner(a, (tx) => tx.insert(dictChangeRequests).values(values)),
       ).rejects.toThrow(permissionDenied);
@@ -141,7 +154,7 @@ describe.skipIf(!databaseAvailable())('«Попросить добавить»: 
     ).rejects.toThrow(violates('dict_change_requests_dict_check'));
     await expect(
       asOwner(a, (tx) => createDictRequest(tx, { dict: 'types', what: '   ', comment: '' })),
-    ).rejects.toThrow(violates('dict_change_requests_what_check'));
+    ).rejects.toThrow(violates('dict_change_requests_topic_check'));
   });
 
   it('плашка «Запросы на добавление» в Админке: все запросы — только администратору платформы', async () => {

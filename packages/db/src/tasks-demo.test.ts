@@ -2,7 +2,7 @@ import { UI_TEXTS, type ListQuery } from '@buhuchet/domain';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withOrgContext } from './context';
-import { tasks } from './schema';
+import { taskSeries, tasks } from './schema';
 import { DEMO_ORG_ID, demoId, seedAll } from './seed';
 import { readStatusHistory } from './status';
 import { getTask, listTaskComments, listTasksPage, taskTabCounts } from './tasks';
@@ -29,9 +29,22 @@ describe.skipIf(!databaseAvailable())('Задачи демо-организац�
 
   it('все задачи с категориями, контрагентами, исполнителями и подтверждением', async () => {
     const all = await db.admin.db.select().from(tasks).where(eq(tasks.orgId, DEMO_ORG_ID));
-    // 19 разовых и 5 задач серий повтора (t20–t24, прототип v168): до миграции этапа 0 пакета
-    // 28.11.2026 — обычными задачами, без ссылки на серию (docs/deviations.md п. О-107).
+    // 19 разовых и 5 задач серий повтора (t20–t24, прототип v168) — со своей серией и датой по правилу.
     expect(all).toHaveLength(24);
+    expect(
+      all
+        .filter((r) => r.seriesId)
+        .map((r) => [r.seriesId, r.seriesDate === r.dueDate])
+        .sort(),
+    ).toEqual(
+      [
+        [demoId('task_series', 's2'), true],
+        [demoId('task_series', 's2'), true],
+        [demoId('task_series', 's3'), true],
+        [demoId('task_series', 's4'), true],
+        [demoId('task_series', 's5'), true],
+      ].sort(),
+    );
     expect(await task('t18')).toMatchObject({
       title: 'Собрать договоры аренды за 2026 год',
       status: 'confirmed',
@@ -51,6 +64,42 @@ describe.skipIf(!databaseAvailable())('Задачи демо-организац�
       status: 'failed',
       failReason: 'Клиент не передал документы',
     });
+  });
+
+  it('серии повтора: правило, состояние, сколько поставлено (прототип v168)', async () => {
+    const rows = await db.admin.db
+      .select()
+      .from(taskSeries)
+      .where(eq(taskSeries.orgId, DEMO_ORG_ID))
+      .orderBy(taskSeries.createdAt);
+    expect(rows).toHaveLength(5);
+    const by = (id: string) => rows.find((r) => r.id === demoId('task_series', id))!;
+    expect(by('s1')).toMatchObject({
+      unit: 'week',
+      every: 1,
+      weekDays: [0, 1, 2, 3, 4],
+      monthMode: null,
+      endKind: 'never',
+      state: 'active',
+      made: 0,
+      authorEmployeeId: demoId('employee', 'e2'),
+      executorEmployeeId: demoId('employee', 'e3'),
+    });
+    expect(by('s2')).toMatchObject({ made: 2, needFile: true });
+    expect(by('s3')).toMatchObject({
+      unit: 'month',
+      monthMode: 'date',
+      endKind: 'count',
+      endCount: 12,
+    });
+    expect(by('s4')).toMatchObject({ term: 'month', monthMode: null, endDate: '2027-12-31' });
+    expect(by('s5')).toMatchObject({
+      every: 2,
+      state: 'stopped',
+      stopReason: 'manual',
+      nextDate: null,
+    });
+    expect(by('s1').nextDate).not.toBeNull();
   });
 
   it('«История статусов» — как statusHist прототипа; комментарии', async () => {

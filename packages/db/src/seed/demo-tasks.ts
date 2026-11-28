@@ -1,7 +1,18 @@
-import { TASK_TERMS, type TaskStatus } from '@buhuchet/domain';
+import {
+  SERIES_END_KINDS,
+  SERIES_MONTH_MODES,
+  SERIES_UNITS,
+  TASK_TERMS,
+  bishkekDate,
+  seriesUpcoming,
+  type SeriesRule,
+  type SeriesState,
+  type TaskStatus,
+} from '@buhuchet/domain';
+import { and, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../client';
-import { statusHistory, taskCategories, taskComments, tasks } from '../schema';
+import { statusHistory, taskCategories, taskComments, taskSeries, tasks } from '../schema';
 import type { DemoIdOf } from './demo';
 
 const Stamp = z.string().regex(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
@@ -47,6 +58,49 @@ const DemoTask = z.object({
   confAt: Stamp.optional(),
   confNote: z.string().optional(),
   comments: z.array(z.object({ who: z.string(), at: Stamp, text: z.string() })).default([]),
+  /** Серия повтора (прототип v168): задача, которую поставила серия. */
+  ser: z.string().optional(),
+  _cb: z.string(),
+  _ca: Stamp,
+  _ub: z.string(),
+  _ua: Stamp,
+});
+
+/** Состояния серии прототипа словами → коды. */
+const SERIES_STATE_OF: Readonly<Record<string, SeriesState>> = {
+  Действует: 'active',
+  Остановлена: 'stopped',
+  Завершена: 'finished',
+};
+
+/** Повторяющаяся задача демо-организации (`taskSeries` в demoDB.json, прототип v168). */
+const DemoSeries = z.object({
+  id: z.string(),
+  by: z.string(),
+  start: z.iso.date(),
+  state: z.enum(Object.keys(SERIES_STATE_OF) as [string, ...string[]]),
+  rule: z.object({
+    n: z.number().int(),
+    u: z.enum(SERIES_UNITS),
+    wd: z.array(z.number().int()).optional(),
+    mm: z.enum(SERIES_MONTH_MODES).optional(),
+    end: z.object({
+      k: z.enum(SERIES_END_KINDS),
+      date: z.iso.date().optional(),
+      count: z.number().int().optional(),
+    }),
+  }),
+  tpl: z.object({
+    title: z.string(),
+    desc: z.string().default(''),
+    cat: z.string(),
+    cp: z.number().int().nullable(),
+    proj: z.string().nullable().optional(),
+    exec: z.string(),
+    kind: z.enum(TASK_TERMS),
+    needFile: z.boolean(),
+    confirm: z.boolean().default(false),
+  }),
   _cb: z.string(),
   _ca: Stamp,
   _ub: z.string(),
@@ -63,6 +117,7 @@ const DemoHistory = z.object({
 
 const DemoTasks = z.object({
   tasks: z.array(DemoTask.passthrough()).default([]),
+  taskSeries: z.array(DemoSeries.passthrough()).default([]),
   history: z.array(DemoHistory.passthrough()).default([]),
 });
 
@@ -113,8 +168,10 @@ function statusRows(t: z.infer<typeof DemoTask>, history: z.infer<typeof DemoHis
 }
 
 /**
- * Ручные задачи демо-организации (задача 2.23): поля, комментарии и «История статусов» по записям
- * прототипа. Повторный запуск досоздаёт только недостающее: история статусов пишется вместе с новой
+ * Ручные задачи демо-организации (задача 2.23) и серии повтора (прототип v168): поля, комментарии и
+ * «История статусов» по записям прототипа; задача серии получает её номер и дату по правилу (= срок).
+ * Серия остановлена человеком (`why` пустой) — причина `manual`; следующая дата и число поставленных —
+ * по задачам серии и правилу на сегодня по Бишкеку. Повторный запуск досоздаёт только недостающее: история статусов пишется вместе с новой
  * задачей. Файлы задач (результат, акт сверки) добавит задача 2.29 «Файловый менеджер» — с источником
  * `task` они сразу видны в задаче.
  */
@@ -123,7 +180,7 @@ export async function seedDemoTasks(
   file: unknown,
   ids: { orgId: string; demoId: DemoIdOf; employees: readonly string[] },
 ): Promise<number> {
-  const { tasks: demo, history } = DemoTasks.parse(file);
+  const { tasks: demo, taskSeries: series, history } = DemoTasks.parse(file);
   if (demo.length === 0) return 0;
   const { orgId, demoId } = ids;
   const categories = await db
@@ -140,6 +197,58 @@ export async function seedDemoTasks(
   };
   const user = (protoId: string) =>
     ids.employees.includes(protoId) ? demoId('user', protoId) : null;
+
+  const today = bishkekDate(new Date());
+  const seriesRows = series.map((s) => {
+    const made = demo.filter((t) => t.ser === s.id).map((t) => t.date);
+    const isMonth = s.rule.u === 'month' && s.tpl.kind !== 'month';
+    const rule: SeriesRule = {
+      every: s.rule.n,
+      unit: s.rule.u,
+      ...(s.rule.u === 'week' ? { weekDays: s.rule.wd ?? [] } : {}),
+      ...(isMonth ? { monthMode: s.rule.mm ?? 'date' } : {}),
+      end: { kind: s.rule.end.k, date: s.rule.end.date ?? null, count: s.rule.end.count ?? null },
+    };
+    const state = SERIES_STATE_OF[s.state]!;
+    const lastDate = made.length > 0 ? made.reduce((a, b) => (a > b ? a : b)) : null;
+    const facts = { rule, start: s.start, term: s.tpl.kind, state, lastDate, made: made.length };
+    return {
+      id: demoId('task_series', s.id),
+      orgId,
+      title: s.tpl.title,
+      description: s.tpl.desc,
+      categoryCode: categoryOf(s.tpl.cat),
+      contractorId: s.tpl.cp === null ? null : demoId('contractor', String(s.tpl.cp)),
+      projectId: s.tpl.cp !== null && s.tpl.proj ? demoId('project', s.tpl.proj) : null,
+      executorEmployeeId: employee(s.tpl.exec),
+      authorEmployeeId: employee(s.by),
+      term: s.tpl.kind,
+      needFile: s.tpl.needFile,
+      confirm: s.tpl.confirm,
+      every: rule.every,
+      unit: rule.unit,
+      weekDays: rule.weekDays ? [...rule.weekDays] : null,
+      monthMode: rule.monthMode ?? null,
+      startDate: s.start,
+      endKind: rule.end.kind,
+      endDate: rule.end.kind === 'date' ? rule.end.date! : null,
+      endCount: rule.end.kind === 'count' ? rule.end.count! : null,
+      state,
+      stopReason: state === 'stopped' ? ('manual' as const) : null,
+      nextDate: seriesUpcoming(facts, today),
+      made: made.length,
+      createdBy: user(s._cb),
+      updatedBy: user(s._ub),
+      createdAt: stampOf(s._ca),
+      updatedAt: stampOf(s._ua),
+    };
+  });
+  if (seriesRows.length > 0) await db.insert(taskSeries).values(seriesRows).onConflictDoNothing();
+  const seriesIds = new Set(series.map((s) => s.id));
+  const seriesOf = (t: z.infer<typeof DemoTask>) =>
+    t.ser && seriesIds.has(t.ser)
+      ? { seriesId: demoId('task_series', t.ser), seriesDate: t.date }
+      : { seriesId: null, seriesDate: null };
 
   const rows = demo.map((t) => {
     const status = STATUS_OF[t.status]!;
@@ -169,6 +278,7 @@ export async function seedDemoTasks(
       updatedBy: user(t._ub),
       createdAt: stampOf(t._ca),
       updatedAt: stampOf(t._ua),
+      ...seriesOf(t),
     };
   });
   const inserted = await db
@@ -177,6 +287,15 @@ export async function seedDemoTasks(
     .onConflictDoNothing()
     .returning({ id: tasks.id });
   const created = new Set(inserted.map((r) => r.id));
+  // Задачи серий, наполненные до серий (прототип v168 до миграции этапа 0 пакета 28.11.2026), —
+  // ссылкой на свою серию.
+  for (const r of rows) {
+    if (!r.seriesId || created.has(r.id)) continue;
+    await db
+      .update(tasks)
+      .set({ seriesId: r.seriesId, seriesDate: r.seriesDate })
+      .where(and(eq(tasks.id, r.id), eq(tasks.orgId, orgId), isNull(tasks.seriesId)));
+  }
 
   const comments = demo.flatMap((t) =>
     t.comments.map((c, i) => ({

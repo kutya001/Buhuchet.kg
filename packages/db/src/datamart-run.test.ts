@@ -435,19 +435,28 @@ describe.skipIf(!databaseAvailable())('витрина данных: роли б�
       );
       const run =
         /^\(r\.pid = pg_backend_pid\(\)\) AND \(r\.xid = pg_current_xact_id_if_assigned\(\)\)/;
+      // Запросы администратору организации видят только «Добавить в справочник» (пакет 28.11, миграция 0179).
       const kind = (t: string) =>
         t === 'organizations'
           ? 'organizations'
-          : DM_PLATFORM_TABLES.includes(t as never)
-            ? 'platform'
-            : 'org';
+          : t === 'dict_change_requests'
+            ? 'requests'
+            : DM_PLATFORM_TABLES.includes(t as never)
+              ? 'platform'
+              : 'org';
       const forms = new Map<string, Set<string>>();
       for (const r of rows) {
         const key = r.policyname === 'dm_admin_read' ? 'admin' : kind(r.tablename);
         forms.set(key, (forms.get(key) ?? new Set()).add(r.qual));
       }
       // У каждого вида — ровно одна форма условия, и в ней — строка запуска этой транзакции.
-      expect([...forms.keys()].sort()).toEqual(['admin', 'org', 'organizations', 'platform']);
+      expect([...forms.keys()].sort()).toEqual([
+        'admin',
+        'org',
+        'organizations',
+        'platform',
+        'requests',
+      ]);
       const only = (k: string) => [...forms.get(k)!][0]!.replace(/\s+/g, ' ');
       for (const k of forms.keys()) expect(forms.get(k)!.size, k).toBe(1);
       expect(only('admin')).toMatch(
@@ -455,6 +464,9 @@ describe.skipIf(!databaseAvailable())('витрина данных: роли б�
       );
       expect(only('org')).toMatch(
         /^\(org_id = \( SELECT r\.org_id FROM dm\.runs r WHERE \(.*\)\)\)$/,
+      );
+      expect(only('requests')).toMatch(
+        /^\(\(kind = 'dict'::text\) AND \(org_id = \( SELECT r\.org_id FROM dm\.runs r WHERE \(.*\)\)\)\)$/,
       );
       expect(only('organizations')).toMatch(/^\(id = \( SELECT r\.org_id FROM dm\.runs r WHERE /);
       expect(only('platform')).toMatch(

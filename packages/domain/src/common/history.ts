@@ -26,6 +26,9 @@ export const HISTORY_ENTITIES = [
   'assignment',
   'report',
   'task',
+  // Повторяющаяся задача (доработки 28.11.2026: повторяющиеся задачи, блок 3): настроен, изменён,
+  // остановлен, возобновлён. Запросы администратору всех видов — прежний вид `dict_request`.
+  'task_series',
   'file',
   'org_report_type',
   'dict_request',
@@ -168,6 +171,12 @@ export const HISTORY_ACTIONS = [
   // «Запрос консоли»: выполнен на экран или выгружен в Excel — текст, параметры, строк, время, итог.
   'dm_console_run',
   'dm_console_export',
+  // Повтор задачи (доработки 28.11.2026: повторяющиеся задачи, блок 3, пункт 6): «Повтор настроен»,
+  // «Повтор изменён», «Повтор остановлен», «Повтор возобновлён» — в истории задачи и серии.
+  'series_set',
+  'series_edit',
+  'series_stop',
+  'series_resume',
 ] as const;
 export type HistoryAction = (typeof HISTORY_ACTIONS)[number];
 

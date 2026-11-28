@@ -6,6 +6,7 @@ import { eq, inArray } from 'drizzle-orm';
 import {
   banks,
   dictChangeRequests,
+  requestMessages,
   employees,
   gkedItems,
   loginAttempts,
@@ -250,34 +251,83 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
     });
   });
 
-  it('запросы «Попросить добавить» демо-организации из demoDB.json: статус, ответ, автор; повтор не дублирует', async () => {
+  it('запросы администратору демо-организации из demoDB.json: все виды и статусы, номер, ответ, переписка; повтор не дублирует', async () => {
     const rows = await withOrgContext(t.app.db, { orgId: DEMO_ORG_ID }, (tx) =>
       tx
         .select({
+          id: dictChangeRequests.id,
+          no: dictChangeRequests.no,
+          kind: dictChangeRequests.kind,
           dict: dictChangeRequests.dict,
-          what: dictChangeRequests.what,
+          topic: dictChangeRequests.topic,
           status: dictChangeRequests.status,
+          wait: dictChangeRequests.wait,
           answer: dictChangeRequests.answer,
+          readAuthor: dictChangeRequests.readAuthor,
+          where: dictChangeRequests.whereInfo,
+          closed: dictChangeRequests.closedAt,
           comment: dictChangeRequests.comment,
           by: users.login,
           decided: dictChangeRequests.decidedAt,
         })
         .from(dictChangeRequests)
         .innerJoin(users, eq(users.id, dictChangeRequests.createdBy))
-        .orderBy(dictChangeRequests.createdAt),
+        .orderBy(dictChangeRequests.no),
     );
     // Запрос другой организации из demoDB.json в демо-организацию не попадает; seedAll уже запускался дважды.
-    expect(rows.map((r) => [r.dict, r.what, r.status])).toEqual([
-      ['types', 'Форма 1-ИП (Нацстатком)', 'rejected'],
-      ['banks', 'Элдик Банк', 'added'],
-      ['cats', 'Сверка с Соцфондом', 'new'],
+    expect(rows.map((r) => [r.no, r.kind, r.dict, r.status])).toEqual([
+      [1201, 'dict', 'types', 'rejected'],
+      [1202, 'dict', 'banks', 'added'],
+      [1203, 'dict', 'cats', 'new'],
+      [1204, 'dict', 'dm', 'withdrawn'],
+      [1205, 'bug', null, 'in_work'],
+      [1206, 'q', null, 'solved'],
+      [1207, 'typo', null, 'new'],
+      [1208, 'bug', null, 'in_work'],
     ]);
+    expect(rows[0]!.topic).toBe('Форма 1-ИП (Нацстатком)');
     expect(rows[0]!.answer).toContain('В каталоге уже есть формы Нацстаткома для ИП');
     expect(rows[0]!.decided).toEqual(new Date('2026-10-07T04:20:00Z'));
-    expect(rows[2]).toMatchObject({ answer: '', decided: null });
+    expect(rows[2]).toMatchObject({ answer: '', decided: null, closed: null });
     // Комментарий — из `form.note` прототипа v169 (прежнее `note`).
     expect(rows[0]!.comment).toBe('Сдаём за двух клиентов-ИП');
-    expect(new Set(rows.map((r) => r.by)).size).toBe(3);
+    expect(rows[3]).toMatchObject({ decided: null, closed: new Date('2026-11-10T04:02:00Z') });
+    expect(rows[4]).toMatchObject({ wait: true, closed: null });
+    expect(rows[4]!.where).toMatchObject({ hash: '#fin.in', ver: 'v168' });
+    expect(rows[5]!.readAuthor).toBe(0);
+
+    const feed = await withOrgContext(t.app.db, { orgId: DEMO_ORG_ID }, (tx) =>
+      tx
+        .select({
+          n: requestMessages.n,
+          kind: requestMessages.kind,
+          byAdmin: requestMessages.byAdmin,
+          by: requestMessages.authorUserId,
+          from: requestMessages.fromStatus,
+          to: requestMessages.toStatus,
+          why: requestMessages.why,
+        })
+        .from(requestMessages)
+        .where(eq(requestMessages.requestId, rows[7]!.id))
+        .orderBy(requestMessages.n),
+    );
+    // «В работе» и вопрос администратора — без автора, ответ сотрудника — от него.
+    expect(feed.map((m) => [m.n, m.kind, m.byAdmin, m.to])).toEqual([
+      [1, 'st', true, 'in_work'],
+      [2, 'ask', true, null],
+      [3, 'msg', false, null],
+    ]);
+    expect(feed[0]!.by).toBeNull();
+    expect(feed[2]!.by).not.toBeNull();
+    // «Заметка» администратора (k: 'note') в ленту не попадает.
+    const bug = await withOrgContext(t.app.db, { orgId: DEMO_ORG_ID }, (tx) =>
+      tx
+        .select({ n: requestMessages.n })
+        .from(requestMessages)
+        .where(eq(requestMessages.requestId, rows[4]!.id))
+        .orderBy(requestMessages.n),
+    );
+    expect(bug.map((m) => m.n)).toEqual([1, 2]);
   });
 
   it('демо-сотрудники: роли из demoDB.json, вход паролем DEMO_PASSWORD только после --update с паролем', async () => {
