@@ -201,6 +201,7 @@ export function sqlRefs(sql: string): {
     }
     if (!slots.has(k)) continue;
     const comma = w === ',';
+    const kw = comma ? 'comma' : w === 'join' ? 'join' : 'from';
     let p = k + 1;
     if (sig[p]?.kind !== 'word') continue;
     const first = sig[p]!;
@@ -223,7 +224,7 @@ export function sqlRefs(sql: string): {
       !DM_SQL_KEYWORDS.has(al.text.toLowerCase())
         ? al.text.toLowerCase()
         : table;
-    refs.push({ kw: comma ? 'comma' : (w as 'from' | 'join'), table, alias, at: first.start, len });
+    refs.push({ kw, table, alias, at: first.start, len });
     aliases.set(alias, table);
     if (!aliases.has(table)) aliases.set(table, table);
   }

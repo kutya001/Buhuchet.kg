@@ -146,6 +146,15 @@ describe('sqlRefs', () => {
         (x) => x.table,
       ),
     ).toEqual(['a', 'b', 'contractors']);
+    expect(
+      sqlRefs('SELECT b.x FROM (reports a JOIN nosuch b ON true) ORDER BY 1, x').refs.map((x) => [
+        x.kw,
+        x.table,
+      ]),
+    ).toEqual([
+      ['from', 'reports'],
+      ['join', 'nosuch'],
+    ]);
   });
 
   it('подзапрос и функция на месте таблицы — не таблица', () => {

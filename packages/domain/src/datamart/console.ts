@@ -729,6 +729,9 @@ const FROM_LIST_ENDS = new Set([
   'SELECT',
 ]);
 
+/** Слова сразу после «(» на месте таблицы, с которых начинается подзапрос, а не список таблиц. */
+const NOT_TABLE_AFTER_PAREN = new Set(['SELECT', 'WITH', 'VALUES', 'TABLE']);
+
 /**
  * Где в значимых кусках (без пробелов и комментариев) за словом стоит имя таблицы: FROM и JOIN уровня
  * скобок, на котором есть SELECT, и запятая внутри списка таблиц после FROM того же уровня. Иначе
@@ -747,6 +750,16 @@ export function dmSqlFromSlots(sig: readonly DmSqlToken[]): Set<number> {
       depth += 1;
       hasSelect[depth] = false;
       inList[depth] = false;
+      // «FROM (a JOIN b ON …)»: скобка на месте таблицы без подзапроса — внутри тоже список таблиц.
+      const next = sig[k + 1];
+      if (
+        out.has(k - 1) &&
+        next?.kind === 'word' &&
+        !NOT_TABLE_AFTER_PAREN.has(next.text.toUpperCase())
+      ) {
+        inList[depth] = true;
+        out.add(k);
+      }
       continue;
     }
     if (t.text === ')') {
@@ -755,7 +768,8 @@ export function dmSqlFromSlots(sig: readonly DmSqlToken[]): Set<number> {
     }
     const w = t.kind === 'word' ? t.text.toUpperCase() : '';
     if (w === 'SELECT') hasSelect[depth] = true;
-    if ((w === 'FROM' || w === 'JOIN') && hasSelect[depth]) {
+    // JOIN — всегда о таблицах, FROM — только у SELECT своего уровня (не «EXTRACT(YEAR FROM …)»).
+    if (w === 'JOIN' || (w === 'FROM' && hasSelect[depth])) {
       inList[depth] = true;
       out.add(k);
     } else if (FROM_LIST_ENDS.has(w)) inList[depth] = false;

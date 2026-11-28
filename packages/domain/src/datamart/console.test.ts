@@ -313,6 +313,13 @@ describe('таблицы и столбцы запроса', () => {
     ).toEqual(['t1', 't2']);
     const sig = dmSqlLex(sql).filter((t) => t.kind !== 'space' && t.kind !== 'comment');
     expect([...dmSqlFromSlots(sig)].map((k) => sig[k]!.text)).toEqual(['FROM', 'JOIN']);
+    // Таблицы в скобках без подзапроса: «FROM (a JOIN b ON …), c».
+    expect(dmSqlTables('select b.x from (a join b on true), c order by 1, x')).toEqual([
+      'a',
+      'b',
+      'c',
+    ]);
+    expect(dmSqlTables('select * from (select 1 from a) s, (values (1)) v, b')).toEqual(['a', 'b']);
   });
   it('столбцы вывода: псевдоним, иначе последнее имя', () => {
     expect(
