@@ -284,7 +284,11 @@ describe('«Повтор» в форме (доработки 28.11.2026; про�
   });
 
   it('«На месяц»: повтор по дням и неделям становится «каждый месяц», остальное — как было', () => {
-    expect(repeatForTerm(weekly, 'month')).toEqual({ every: 1, unit: 'month', end: { kind: 'never' } });
+    expect(repeatForTerm(weekly, 'month')).toEqual({
+      every: 1,
+      unit: 'month',
+      end: { kind: 'never' },
+    });
     expect(repeatForTerm(daily, 'day')).toBe(daily);
     expect(repeatForTerm(null, 'month')).toBeNull();
   });

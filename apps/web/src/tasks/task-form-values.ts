@@ -204,8 +204,12 @@ export function taskFormBody(v: TaskFormValues): CreateTaskRequest {
 }
 
 /** «Начало» повтора — срок в форме (прототип `repStart`): у «На месяц» — последний день месяца. */
-export function repeatStart(v: Pick<TaskFormValues, 'term' | 'date' | 'month'>, today: IsoDate): IsoDate {
-  if (v.term === 'month') return lastDayOf(/^\d{4}-\d{2}$/.test(v.month) ? v.month : today.slice(0, 7));
+export function repeatStart(
+  v: Pick<TaskFormValues, 'term' | 'date' | 'month'>,
+  today: IsoDate,
+): IsoDate {
+  if (v.term === 'month')
+    return lastDayOf(/^\d{4}-\d{2}$/.test(v.month) ? v.month : today.slice(0, 7));
   return /^\d{4}-\d{2}-\d{2}$/.test(v.date) ? v.date : addDays(today, 1);
 }
 

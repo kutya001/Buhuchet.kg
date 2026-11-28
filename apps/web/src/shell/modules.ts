@@ -306,7 +306,12 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
       { id: 'all', icon: 'list', label: 'tab.tasks.all', when: (a) => a.can('tasksAll') },
       { id: 'overdue', icon: 'alert', label: 'tab.tasks.overdue' },
       // «Повторы» (доработки 28.11.2026, блок 4, пункт 3; прототип `taskTabs`) — тем, кто ставит задачи.
-      { id: 'series', icon: 'repeat', label: 'tab.tasks.series', when: (a) => a.can('tasksCreate') },
+      {
+        id: 'series',
+        icon: 'repeat',
+        label: 'tab.tasks.series',
+        when: (a) => a.can('tasksCreate'),
+      },
     ],
     add: [{ id: 'task', icon: 'task', label: 'add.tasks.task', when: (a) => a.can('tasksCreate') }],
   },

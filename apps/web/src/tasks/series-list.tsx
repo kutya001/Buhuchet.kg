@@ -2,14 +2,7 @@
 
 import { formatDateRu, formatMomentRu, type GridKey, type ListSort } from '@buhuchet/domain';
 import { ListValues, SeriesList as SeriesListPage, type SeriesListRow } from '@buhuchet/shared';
-import {
-  DataGrid,
-  EmptyState,
-  Icon,
-  Pill,
-  type GridColumn,
-  type GridRowTone,
-} from '@buhuchet/ui';
+import { DataGrid, EmptyState, Icon, Pill, type GridColumn, type GridRowTone } from '@buhuchet/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 import { api, apiFailure } from '../api-client';
@@ -95,7 +88,13 @@ export function seriesColumns(t: Translate): GridColumn<SeriesListRow>[] {
         </span>
       ),
     },
-    { key: 'by', label: t('task.col.by'), type: 'enum', width: 120, text: (r) => r.author.shortName },
+    {
+      key: 'by',
+      label: t('task.col.by'),
+      type: 'enum',
+      width: 120,
+      text: (r) => r.author.shortName,
+    },
     {
       key: 'created',
       label: t('task.series.col.created'),
@@ -161,8 +160,7 @@ export function SeriesList() {
   );
   const exporter = useListExport(sendExport);
   const nearest = (r: SeriesListRow) => (r.task ? () => tasks.openById(r.task!) : null);
-  const actions = (r: SeriesListRow) =>
-    series.menu(r, nearest(r), () => seriesById(client, r.id));
+  const actions = (r: SeriesListRow) => series.menu(r, nearest(r), () => seriesById(client, r.id));
 
   return (
     <div className="flex flex-col gap-3.5" data-series-list="">

@@ -254,8 +254,12 @@ describe('ночной запуск', () => {
 
 describe('кто управляет серией и что считается сменой правила', () => {
   it('изменить, остановить и возобновить — владелец или постановщик с «Ставить задачи»', () => {
-    expect(seriesBossRefusal('e1', { employeeId: 'e9', isOwner: true, canCreate: false })).toBeNull();
-    expect(seriesBossRefusal('e1', { employeeId: 'e1', isOwner: false, canCreate: true })).toBeNull();
+    expect(
+      seriesBossRefusal('e1', { employeeId: 'e9', isOwner: true, canCreate: false }),
+    ).toBeNull();
+    expect(
+      seriesBossRefusal('e1', { employeeId: 'e1', isOwner: false, canCreate: true }),
+    ).toBeNull();
     expect(seriesBossRefusal('e1', { employeeId: 'e2', isOwner: false, canCreate: true })).toBe(
       'series_author_only',
     );
@@ -271,7 +275,12 @@ describe('кто управляет серией и что считается с
     expect(seriesRuleEqual(a, { ...a, weekDays: [0] })).toBe(false);
     expect(seriesRuleEqual(a, { ...a, every: 2 })).toBe(false);
     expect(seriesRuleEqual(a, { ...a, end: { kind: 'count', count: 3 } })).toBe(false);
-    const m = { every: 1, unit: 'month', monthMode: 'date', end: { kind: 'date', date: '2027-01-31' } } as const;
+    const m = {
+      every: 1,
+      unit: 'month',
+      monthMode: 'date',
+      end: { kind: 'date', date: '2027-01-31' },
+    } as const;
     expect(seriesRuleEqual(m, { ...m, monthMode: 'nth' })).toBe(false);
     expect(seriesRuleEqual(m, { ...m, end: { kind: 'date', date: '2027-02-28' } })).toBe(false);
     expect(seriesRuleEqual(m, { ...m, unit: 'year' })).toBe(false);
