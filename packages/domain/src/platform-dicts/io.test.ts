@@ -273,6 +273,18 @@ describe('Выгрузка и загрузка справочников: раз�
     ]);
   });
 
+  it('«Порядок» шагов уроков — дробный, как в прототипе v168 (45,5 между 45 и 46); прочие числа — целые', () => {
+    const ord = IO_COLUMNS.kbsteps.find((c) => c.key === 'ord')!;
+    expect(parseIoCell(ord, '45,5', ctx)).toEqual({ value: 45.5 });
+    expect(parseIoCell(ord, '45.5', ctx)).toEqual({ value: 45.5 });
+    expect(parseIoCell(ord, '12', ctx)).toEqual({ value: 12 });
+    for (const text of ['Infinity', 'abc', '0,5', '9999,5', '45,5,5', '1e-400']) {
+      expect(parseIoCell(ord, text, ctx), text).toHaveProperty('error');
+    }
+    const dueDay = IO_COLUMNS.types.find((c) => c.key === 'dueDay')!;
+    expect(parseIoCell(dueDay, '5,5', ctx)).toHaveProperty('error');
+  });
+
   it('пустые ячейки: число срока и «да/нет» — как было, свой срок оплаты — «как срок сдачи», текст и список — пусто; перечисления — как в прототипе', () => {
     const cell = (key: string, text: string) =>
       parseIoCell(
