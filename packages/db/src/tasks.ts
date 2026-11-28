@@ -786,6 +786,18 @@ export async function seriesTaskVisible(
   return Boolean(row);
 }
 
+/** Задачи серии, которые сотрудник может открыть (`where` — область задач), — для «Все задачи серии». */
+export async function seriesVisibleTaskIds(
+  tx: Tx,
+  seriesId: string,
+  where: SQL | undefined,
+): Promise<Set<string>> {
+  const rows = await fromTasks(tx, { id: tasks.id }).where(
+    and(eq(tasks.seriesId, seriesId), where),
+  );
+  return new Set(rows.map((r) => r.id));
+}
+
 export function taskContractorAccess(scope: SQL | undefined): SQL {
   return and(isNotNull(tasks.contractorId), scope)!;
 }

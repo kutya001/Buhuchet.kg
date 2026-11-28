@@ -13,6 +13,7 @@ import {
   seriesTaskFacts,
   seriesTaskList,
   seriesTaskVisible,
+  seriesVisibleTaskIds,
   seriesTextOf,
   seriesTexts,
   setSeriesFacts,
@@ -55,7 +56,7 @@ import {
   SeriesRuleUpdate,
   SeriesTasks,
   SeriesVersionBody,
-  TaskSeriesInfo,
+  type TaskSeriesInfo,
   Uuid,
   type SeriesListRow,
   type SeriesRuleBody,
@@ -306,12 +307,7 @@ const seriesErrors = {
 };
 
 /** Ответ действия: серия после шага без пользователя. */
-async function actionResult(
-  deps: ApiDeps,
-  c: Context<AppEnv>,
-  id: string,
-  done: SeriesStepDone,
-) {
+async function actionResult(deps: ApiDeps, c: Context<AppEnv>, id: string, done: SeriesStepDone) {
   const subject = subjectOf(c);
   const series = await withOrgContext(deps.db, orgContextOf(c), (tx) =>
     seriesInfoOf(tx, id, subject, todayOf(deps)),
@@ -345,7 +341,13 @@ export function seriesTasksHandler(deps: ApiDeps): RouteHandler<typeof seriesTas
       await requireTasks(tx, orgContextOf(c).orgId);
       const s = await visibleSeries(tx, id, subject);
       const series = (await seriesInfoOf(tx, s.id, subject, todayOf(deps)))!;
-      return { title: s.title, text: seriesTextOf(s), series, items: await seriesTaskList(tx, s.id) };
+      // ОТКЛОНЕНИЕ: docs/deviations.md#О-109 — кто видит серию только через свою задачу, видит только задачи
+      // своей области: «Только эту задачу» может сменить у одной задачи контрагента и исполнителя.
+      const all = s.authorEmployeeId === subject.employeeId || seriesSeeAll(subject);
+      const list = await seriesTaskList(tx, s.id);
+      const seen = all ? null : await seriesVisibleTaskIds(tx, s.id, taskAccessOf(subject));
+      const items = seen ? list.filter((t) => seen.has(t.id)) : list;
+      return { title: s.title, text: seriesTextOf(s), series, items };
     });
     return c.json(body, 200);
   };

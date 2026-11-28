@@ -177,10 +177,8 @@ export function seriesRuleColumns(rule: SeriesRule, term: TaskTerm) {
   return {
     every: rule.every,
     unit: rule.unit,
-    weekDays:
-      rule.unit === 'week' ? [...new Set(rule.weekDays ?? [])].sort((a, b) => a - b) : null,
-    monthMode:
-      rule.unit === 'month' && term !== 'month' ? (rule.monthMode ?? 'date') : null,
+    weekDays: rule.unit === 'week' ? [...new Set(rule.weekDays ?? [])].sort((a, b) => a - b) : null,
+    monthMode: rule.unit === 'month' && term !== 'month' ? (rule.monthMode ?? 'date') : null,
     endKind: end.kind,
     endDate: end.kind === 'date' ? (end.date ?? null) : null,
     endCount: end.kind === 'count' ? (end.count ?? null) : null,
@@ -411,10 +409,7 @@ export async function attachTaskToSeries(
   seriesId: string,
   date: IsoDate,
 ): Promise<void> {
-  await tx
-    .update(tasks)
-    .set({ seriesId, seriesDate: date })
-    .where(eq(tasks.id, taskId));
+  await tx.update(tasks).set({ seriesId, seriesDate: date }).where(eq(tasks.id, taskId));
 }
 
 /**
@@ -505,12 +500,7 @@ export async function seriesForRun(tx: Tx, ids?: readonly string[]): Promise<Ser
     .innerJoin(employees, eq(employees.id, taskSeries.executorEmployeeId))
     .leftJoin(contractors, eq(contractors.id, taskSeries.contractorId))
     .leftJoin(projects, eq(projects.id, taskSeries.projectId))
-    .where(
-      and(
-        eq(taskSeries.state, 'active'),
-        ids ? inArray(taskSeries.id, [...ids]) : undefined,
-      ),
-    )
+    .where(and(eq(taskSeries.state, 'active'), ids ? inArray(taskSeries.id, [...ids]) : undefined))
     .orderBy(asc(taskSeries.createdAt), asc(taskSeries.id));
   return rows.map((r) => ({
     series: toSeries(r as unknown as SeriesRowData),
@@ -527,8 +517,12 @@ export async function seriesStopFacts(tx: Tx, s: SeriesRecord) {
   const [row] = await tx
     .select({
       executorActive: employees.active,
-      contractorStatus: sql<string | null>`(select c.service_status from ${contractors} c where c.id = ${s.contractorId ?? null}::uuid)`,
-      projectStatus: sql<string | null>`(select p.status from ${projects} p where p.id = ${s.projectId ?? null}::uuid)`,
+      contractorStatus: sql<
+        string | null
+      >`(select c.service_status from ${contractors} c where c.id = ${s.contractorId ?? null}::uuid)`,
+      projectStatus: sql<
+        string | null
+      >`(select p.status from ${projects} p where p.id = ${s.projectId ?? null}::uuid)`,
     })
     .from(employees)
     .where(eq(employees.id, s.executorEmployeeId));
@@ -713,7 +707,11 @@ export function seriesListColumns(t: ListTexts): ListColumns {
       value: SS.next,
       sort: { value: NEXT_SORT, text: false },
     },
-    end: { type: 'enum', label: 'task.series.col.end', value: sql`coalesce(${st('end_text')}, '')` },
+    end: {
+      type: 'enum',
+      label: 'task.series.col.end',
+      value: sql`coalesce(${st('end_text')}, '')`,
+    },
     state: { type: 'enum', label: 'task.series.col.state', value: SS.state, display: state },
     by: {
       type: 'enum',

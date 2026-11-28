@@ -372,6 +372,55 @@ describe.skipIf(!databaseAvailable())(
       expect((await seriesRow(sid)).state).toBe('active');
     });
 
+    it('серия своей организации, у которой не видно ни одной задачи, — 404 на каждом методе; «Все задачи серии» — только задачи своей области', async () => {
+      const hidden = await create('chief-a', {
+        title: 'Серия не для бухгалтера',
+        executorEmployeeId: employee('chief-a'),
+      });
+      const hid = hidden.series!.id;
+      const hv = (await seriesRow(hid)).version;
+      const paths: ['GET' | 'POST' | 'PUT', string, unknown?][] = [
+        ['GET', `/api/task-series/${hid}/tasks`],
+        ['PUT', `/api/task-series/${hid}/rule`, { rule: WEEKLY, start: '2026-10-19', version: hv }],
+        ['POST', `/api/task-series/${hid}/stop`, { version: hv }],
+        ['POST', `/api/task-series/${hid}/resume`, { version: hv }],
+      ];
+      for (const [method, path, payload] of paths) {
+        for (const login of ['acc-a', 'owner-b']) {
+          const res = await call(login, method, path, payload);
+          expect(res.status, `${login} ${method} ${path}`).toBe(404);
+          expect((await failure(res)).code).toBe('series_not_found');
+        }
+      }
+      // Чужая организация не видит серий и в значениях фильтра и выгрузке.
+      const values = await call('owner-b', 'GET', '/api/task-series/values?col=title');
+      expect(values.status).toBe(200);
+      expect(JSON.stringify(await values.json())).not.toContain('Серия не для бухгалтера');
+
+      // Бухгалтер — исполнитель первой задачи; вторую «Только эту задачу» отдали главному.
+      const first = await create('chief-a', { title: 'Серия с чужой задачей' });
+      const sid = first.series!.id;
+      deps.clock.set('2026-10-20T06:00:00Z');
+      await runNight('2026-10-20');
+      const [, second] = await seriesTasks(sid);
+      const secondCard = await card('chief-a', second!.id);
+      const moved = await call('chief-a', 'PATCH', `/api/tasks/${second!.id}`, {
+        ...body({ title: 'Серия с чужой задачей' }),
+        executorEmployeeId: employee('chief-a'),
+        dueDate: secondCard.dueDate,
+        version: secondCard.version,
+        scope: 'one',
+      });
+      expect(moved.status, JSON.stringify(await moved.clone().json())).toBe(200);
+      const list = async (login: string) => {
+        const res = await call(login, 'GET', `/api/task-series/${sid}/tasks`);
+        expect(res.status).toBe(200);
+        return SeriesTasks.parse(await res.json()).items.map((r) => r.id);
+      };
+      expect(await list('acc-a')).toEqual([first.id]);
+      expect(await list('chief-a')).toEqual([second!.id, first.id]);
+    });
+
     it('«Только эту задачу» правило не меняет; «Эту и следующие» правит серию и открытые следующие задачи; отмена «Эту и следующие» останавливает повтор', async () => {
       const first = await create('hr-a', { title: 'Сверка кассы' });
       const sid = first.series!.id;
