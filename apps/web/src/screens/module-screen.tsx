@@ -47,6 +47,7 @@ import { ReportsList } from '../reports/reports-list';
 import { RolesList } from '../roles/roles-list';
 import { ModuleStub } from '../shell/module-stub';
 import { StaffList } from '../staff/staff-list';
+import { SeriesList } from '../tasks/series-list';
 import { TasksList, type TaskTab } from '../tasks/tasks-list';
 import { RunsScreen } from '../runs/runs-screen';
 import { AdminFilesScreen } from '../afiles/afiles-screen';
@@ -105,6 +106,7 @@ export function ModuleScreen({
     return <ModuleStub moduleId={moduleId} />;
   }
   if (moduleId === 'tasks') {
+    if (tabId === 'series') return <SeriesList />;
     const tab = (tabId ?? 'mine') as TaskTab;
     return <TasksList key={tab} tab={TASK_TABS.includes(tab) ? tab : 'mine'} />;
   }

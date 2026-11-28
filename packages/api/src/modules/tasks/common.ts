@@ -143,6 +143,7 @@ export function rowBody(r: TaskRow | TaskRecord, today: IsoDate): TaskRowBody {
     hasFile: r.hasFile,
     confirmedBy: r.confirmedBy,
     lastStatus: r.lastStatus ? { at: r.lastStatus.at.toISOString(), by: r.lastStatus.by } : null,
+    repeat: r.repeat,
     audit: {
       createdAt: r.audit.createdAt.toISOString(),
       createdBy: r.audit.createdBy,

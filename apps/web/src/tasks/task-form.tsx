@@ -1,13 +1,23 @@
 'use client';
 
-import { bishkekDate, TASK_DESCRIPTION_MAX, TASK_TITLE_MAX } from '@buhuchet/domain';
-import { Task, type TaskFormOptions } from '@buhuchet/shared';
+import {
+  bishkekDate,
+  formatDateRu,
+  lastDayOf,
+  seriesRuleText,
+  TASK_DESCRIPTION_MAX,
+  TASK_TITLE_MAX,
+  taskOpen,
+} from '@buhuchet/domain';
+import { Task, type SeriesScope, type TaskFormOptions } from '@buhuchet/shared';
 import {
   buttonClass,
   Field,
   FormGrid,
   FormMore,
   Hint,
+  Icon,
+  iconButtonClass,
   inputClass,
   Modal,
   RecordChangedNotice,
@@ -21,10 +31,16 @@ import { api, callApi } from '../api-client';
 import { useErrorText, useT } from '../l10n/provider';
 import { ContractorSelect } from '../shell/contractor-select';
 import { taskProjectsQuery } from '../projects/projects-data';
+import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
+import { SeriesRuleDialog, SeriesScopeDialog } from './series-dialog';
 import {
   confirmHint,
   defaultExecutor,
   initialTaskForm,
+  repeatChanged,
+  repeatForTerm,
+  repeatStart,
+  taskEditBody,
   taskFormBody,
   taskFormLists,
   taskFormMoreFilled,
@@ -196,6 +212,11 @@ export function TaskFormDialog({
     values.contractorId ? 'task.form.project_empty' : 'task.form.project_first',
   );
   const filled = taskFormMoreFilled(values, options, current === null);
+  const series = current?.series ?? null;
+  const today = bishkekDate(new Date());
+  const start = repeatStart(values, today);
+  const [ruleDlg, setRuleDlg] = useState<DialogSlot<null> | null>(null);
+  const [ask, setAsk] = useState<DialogSlot<{ oneWhy: string }> | null>(null);
 
   const reload = async () => {
     if (!task) return;
@@ -224,13 +245,23 @@ export function TaskFormDialog({
       if (first) document.getElementById(`${id}-${first}`)?.focus();
       return;
     }
+    // Задача действующей или остановленной серии: «Только эту задачу» или «Эту и следующие».
+    if (current && series && series.state !== 'finished') {
+      return setAsk(
+        openSlot({ oneWhy: repeatChanged(values, current) ? t('err.series_rule_one') : '' }),
+      );
+    }
+    await send('one');
+  };
+
+  const send = async (scope: SeriesScope) => {
     const body = taskFormBody(values);
     setBusy(true);
     const res = await callApi(() =>
       current
         ? api.api.tasks[':id'].$patch({
             param: { id: current.id },
-            json: { ...body, version: current.version },
+            json: { ...taskEditBody(values, current, scope), version: current.version },
           })
         : api.api.tasks.$post({ json: body }),
     );
@@ -240,9 +271,24 @@ export function TaskFormDialog({
       if (saved.success) onDone(saved.data);
       onClose();
       const name = lists.executors.find((e) => e.value === body.executorEmployeeId)?.label ?? '';
-      return toast(current ? t('task.saved.toast') : t('task.created.toast', { name }), {
-        icon: 'task',
-      });
+      const first = saved.success ? saved.data.dueDate : body.dueDate;
+      // «Начало» повтора — срок в форме, у «На месяц» — последний день месяца (прототип `repStart`):
+      // первая задача сдвинулась на ближайший день правила — дата в уведомлении (прототип `o.date!==d0`).
+      const start = body.term === 'month' ? lastDayOf(body.dueDate.slice(0, 7)) : body.dueDate;
+      return toast(
+        current
+          ? t(
+              current.series && scope === 'next'
+                ? 'task.series.toast.saved_all'
+                : 'task.saved.toast',
+            )
+          : !body.repeat
+            ? t('task.created.toast', { name })
+            : first !== start && saved.success
+              ? t('task.series.toast.created_first', { name, date: formatDateRu(first) })
+              : t('task.series.toast.created', { name }),
+        { icon: body.repeat ? 'repeat' : 'task' },
+      );
     }
     if (res.error.code === 'record_changed') return setChanged(true);
     const message = errorText(res.error);
@@ -254,6 +300,76 @@ export function TaskFormDialog({
       return void setTimeout(() => document.getElementById(`${id}-${field}`)?.focus());
     }
     toast(message, { bad: true });
+  };
+
+  /**
+   * Строка «Повтор» рядом со сроком (блок 2, пункт 1; прототип `repRow`): у новой и разовой открытой —
+   * «Не повторять» или правило с «×»; у задачи серии — правило серии (меняется для этой и следующих);
+   * у закончившейся — только текст; закрытой разовой задаче повтор не добавляется.
+   */
+  const repeatRow = () => {
+    if (current && !series && !taskOpen(current.status)) return null;
+    if (series?.state === 'finished') {
+      return (
+        <Field
+          id={`${id}-repeat`}
+          label={t('task.col.repeat')}
+          hint={t('task.series.form.hint_finished')}
+        >
+          {() => (
+            <div data-task-repeat="" className="flex min-h-[35px] items-center gap-1.5 text-muted">
+              <Icon name="repeat" size="sm" />
+              <span>{t('task.series.form.finished', { rule: series.text })}</span>
+            </div>
+          )}
+        </Field>
+      );
+    }
+    const text = values.repeat
+      ? seriesRuleText({ rule: values.repeat, start, term: values.term })
+      : t('task.repeat.none');
+    return (
+      <Field
+        id={`${id}-repeat`}
+        label={t('task.col.repeat')}
+        {...(series
+          ? {
+              hint: t(
+                series.state === 'stopped'
+                  ? 'task.series.form.hint_stopped'
+                  : 'task.series.form.hint_rule',
+              ),
+            }
+          : {})}
+      >
+        {(control) => (
+          <div className="flex flex-nowrap items-center gap-1.5">
+            <button
+              {...control}
+              type="button"
+              data-task-repeat=""
+              className={`${buttonClass()} min-w-0 max-w-full justify-start text-left`}
+              onClick={() => setRuleDlg(openSlot(null))}
+            >
+              <Icon name="repeat" size="sm" />
+              <span className="truncate">{text}</span>
+            </button>
+            {values.repeat && !series ? (
+              <button
+                type="button"
+                data-task-repeat-clear=""
+                className={iconButtonClass('sm')}
+                aria-label={t('task.repeat.none')}
+                title={t('task.repeat.none')}
+                onClick={() => set('repeat', null)}
+              >
+                <Icon name="x" size="sm" />
+              </button>
+            ) : null}
+          </div>
+        )}
+      </Field>
+    );
   };
 
   const field = (
@@ -404,6 +520,7 @@ export function TaskFormDialog({
               ),
               { required: true },
             )}
+        {repeatRow()}
         <FormMore
           data-task-more-fields=""
           label={t('status.fold.more')}
@@ -455,7 +572,10 @@ export function TaskFormDialog({
                   { value: 'day', label: t('task.term.day') },
                   { value: 'month', label: t('task.form.term_month') },
                 ]}
-                onChange={(v) => set('term', v as TaskFormValues['term'])}
+                onChange={(v) => {
+                  const term = v as TaskFormValues['term'];
+                  setValues((s) => ({ ...s, term, repeat: repeatForTerm(s.repeat, term) }));
+                }}
               />
             ))}
             <div
@@ -487,6 +607,36 @@ export function TaskFormDialog({
           </FormGrid>
         </FormMore>
       </FormGrid>
+      {ruleDlg ? (
+        <SeriesRuleDialog
+          key={`rule-${ruleDlg.n}`}
+          open={ruleDlg.open}
+          onClose={() => setRuleDlg(closeSlot)}
+          rule={values.repeat}
+          start={start}
+          term={values.term}
+          onDone={(rule, from) => {
+            setRuleDlg(closeSlot);
+            setValues((v) => ({
+              ...v,
+              repeat: rule,
+              ...(v.term === 'month' ? { month: from.slice(0, 7) } : { date: from }),
+            }));
+            setErrors((e) => ({ ...e, date: undefined, month: undefined }));
+          }}
+        />
+      ) : null}
+      {ask ? (
+        <SeriesScopeDialog
+          key={`ask-${ask.n}`}
+          open={ask.open}
+          onClose={() => setAsk(closeSlot)}
+          title={t('task.series.ask.edit')}
+          ok={t('task.form.save')}
+          oneWhy={ask.data.oneWhy}
+          onPick={(scope) => void send(scope)}
+        />
+      ) : null}
     </Modal>
   );
 }

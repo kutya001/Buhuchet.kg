@@ -124,5 +124,7 @@ export function executorChangeBody(task: Task, executorEmployeeId: string): Upda
     confirm: task.confirm,
     projectId: task.project?.id ?? null,
     version: task.version,
+    // Задача серии: перенос меняет только эту задачу (прототип `taskKanban` — `taskApply` без `tsAsk`).
+    scope: 'one',
   };
 }

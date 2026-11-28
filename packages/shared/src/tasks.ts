@@ -1,4 +1,11 @@
 import {
+  SERIES_COUNT_MAX,
+  SERIES_END_KINDS,
+  SERIES_EVERY_MAX,
+  SERIES_MONTH_MODES,
+  SERIES_STATES,
+  SERIES_STOP_REASONS,
+  SERIES_UNITS,
   TASK_COMMENT_MAX,
   TASK_CONFIRM_NOTE_MAX,
   TASK_DESCRIPTION_MAX,
@@ -28,6 +35,57 @@ const Required = (max: number, message: string) =>
 
 export const TaskStatusCode = z.enum(TASK_STATUSES);
 export const TaskTerm = z.enum(TASK_TERMS);
+
+/**
+ * Правило повтора (доработки 28.11.2026: повторяющиеся задачи, блок 2; прототип `tsDlg`): интервал
+ * 1–99 и единица; дни недели (0 — понедельник … 6 — воскресенье) — у «недели»; «Когда» — у «месяца»;
+ * окончание — «Никогда», дата или число повторов (1–999). Остальные проверки — `seriesRuleProblems`.
+ */
+export const SeriesRuleBody = z.strictObject({
+  every: z.number().int().min(1).max(SERIES_EVERY_MAX),
+  unit: z.enum(SERIES_UNITS),
+  weekDays: z.array(z.number().int().min(0).max(6)).max(7).optional(),
+  monthMode: z.enum(SERIES_MONTH_MODES).optional(),
+  end: z.strictObject({
+    kind: z.enum(SERIES_END_KINDS),
+    date: IsoDate.nullable().optional(),
+    count: z.number().int().min(1).max(SERIES_COUNT_MAX).nullable().optional(),
+  }),
+});
+export type SeriesRuleBody = z.infer<typeof SeriesRuleBody>;
+
+export const SeriesState = z.enum(SERIES_STATES);
+export const SeriesStopReason = z.enum(SERIES_STOP_REASONS);
+
+/** «Только эту задачу» или «Эту и следующие» (прототип `tsAsk`). */
+export const SeriesScope = z.enum(['one', 'next']);
+export type SeriesScope = z.infer<typeof SeriesScope>;
+
+/**
+ * Строка «Повтор» в карточке задачи (блок 4, пункт 2; прототип `tsCardHtml`): правило словами,
+ * следующая дата, состояние и причина; «Изменить повтор», «Остановить», «Возобновить» — постановщику и
+ * владельцу (`refusal` — подсказка неактивной кнопки постановщику без права; null и `manage: false` —
+ * кнопок нет).
+ */
+export const TaskSeriesInfo = z.object({
+  id: Uuid,
+  rule: SeriesRuleBody,
+  start: IsoDate,
+  term: TaskTerm,
+  text: z.string(),
+  state: SeriesState,
+  stopReason: SeriesStopReason.nullable(),
+  /** Причина остановки без человека словами; у ручной и у действующей — пусто. */
+  stopText: z.string(),
+  /** Дата следующей задачи, которую серия ещё поставит; пусто — не поставит. */
+  next: IsoDate.nullable(),
+  /** Сколько задач серии поставлено («Все задачи серии · N»). */
+  count: z.number().int().nonnegative(),
+  manage: z.boolean(),
+  refusal: z.string().nullable(),
+  version: RecordVersion,
+});
+export type TaskSeriesInfo = z.infer<typeof TaskSeriesInfo>;
 
 /** Вкладка списка (прототип `taskTabs`). */
 export const TaskTabParam = z.object({
@@ -60,6 +118,8 @@ export const TaskRow = z.object({
   confirmedBy: Person.nullable(),
   /** Последняя смена статуса: когда и кем (null — система). */
   lastStatus: z.object({ at: z.iso.datetime(), by: z.string().nullable() }).nullable(),
+  /** Задача серии: правило словами (значок «↻» и подсказка, столбец «Повтор»); разовая — null. */
+  repeat: z.string().nullable(),
   audit: RecordAudit,
   version: RecordVersion,
 });
@@ -91,6 +151,8 @@ export const TaskSummary = z.object({
   monthStart: IsoDate,
   /** В организации ещё нет ни одной задачи: пустой список с подсказкой первого входа. */
   empty: z.boolean(),
+  /** Вкладка «Повторы» — действующие серии (только с правом «Ставить задачи», иначе null). */
+  series: z.number().int().nonnegative().nullable(),
 });
 export type TaskSummary = z.infer<typeof TaskSummary>;
 
@@ -137,6 +199,8 @@ export const Task = TaskRow.extend({
   comments: z.array(TaskComment),
   statusHistory: z.array(StatusHistoryEntry),
   history: z.array(TaskHistoryEntry),
+  /** Серия повтора задачи; у разовой — null. */
+  series: TaskSeriesInfo.nullable(),
 });
 export type Task = z.infer<typeof Task>;
 
@@ -157,11 +221,90 @@ export const TaskFieldsBody = z.object({
   confirm: z.boolean(),
 });
 
-export const CreateTaskRequest = TaskFieldsBody.strict();
+/** «Новая задача»: `repeat` — правило повтора, null — «Не повторять». Срок — «Начало» повтора. */
+export const CreateTaskRequest = TaskFieldsBody.extend({
+  repeat: SeriesRuleBody.nullable().default(null),
+}).strict();
 export type CreateTaskRequest = z.infer<typeof CreateTaskRequest>;
 
-export const UpdateTaskRequest = TaskFieldsBody.extend({ version: RecordVersion }).strict();
+/**
+ * «Изменить задачу»: у разовой открытой задачи `repeat` добавляет повтор (срок — начало); у задачи серии
+ * `scope` — «Только эту задачу» или «Эту и следующие», правило (`repeat`) меняется только во втором.
+ * Нет `repeat` — правило не меняется.
+ */
+export const UpdateTaskRequest = TaskFieldsBody.extend({
+  version: RecordVersion,
+  repeat: SeriesRuleBody.nullable().optional(),
+  scope: SeriesScope.default('one'),
+}).strict();
 export type UpdateTaskRequest = z.infer<typeof UpdateTaskRequest>;
+
+/** «Отменить задачу» серии: «Только эту задачу» или «Эту и следующие» (повтор остановлен). */
+export const TaskCancelQuery = z.object({ scope: SeriesScope.default('one') });
+
+/** «Изменить повтор» (карточка задачи и вкладка «Повторы»): правило и начало, версия серии. */
+export const SeriesRuleUpdate = z.strictObject({
+  rule: SeriesRuleBody,
+  start: IsoDate,
+  version: RecordVersion,
+});
+export type SeriesRuleUpdate = z.infer<typeof SeriesRuleUpdate>;
+
+/** Ответ «Изменить повтор», «Остановить», «Возобновить»: серия и поставлена ли задача на ближайшую дату. */
+export const SeriesActionResult = z.object({
+  series: TaskSeriesInfo,
+  made: z.boolean(),
+});
+export type SeriesActionResult = z.infer<typeof SeriesActionResult>;
+
+/** «Остановить повтор», «Возобновить»: версия серии. */
+export const SeriesVersionBody = z.strictObject({ version: RecordVersion });
+
+/**
+ * «Все задачи серии» (прототип `tsListDlg`): срок, исполнитель, статус — новые сверху; `series` — серия
+ * целиком (правило, версия, права): по ней действует меню строки вкладки «Повторы».
+ */
+export const SeriesTasks = z.object({
+  title: z.string(),
+  text: z.string(),
+  series: TaskSeriesInfo,
+  items: z.array(
+    z.object({
+      id: Uuid,
+      dueDate: IsoDate,
+      term: TaskTerm,
+      executor: z.string().nullable(),
+      status: TaskStatusCode,
+    }),
+  ),
+});
+export type SeriesTasks = z.infer<typeof SeriesTasks>;
+
+/**
+ * Строка вкладки «Повторы» (блок 4, пункт 3; прототип `tsRender`): одна строка на серию; `task` —
+ * ближайшая задача серии (клик по строке открывает её).
+ */
+export const SeriesListRow = z.object({
+  id: Uuid,
+  title: z.string(),
+  text: z.string(),
+  executor: z.object({ id: Uuid, shortName: z.string() }),
+  contractor: z.object({ id: Uuid, name: z.string() }).nullable(),
+  next: IsoDate.nullable(),
+  end: z.string(),
+  state: SeriesState,
+  stopText: z.string(),
+  author: z.object({ id: Uuid, shortName: z.string() }),
+  createdAt: z.iso.datetime(),
+  made: z.number().int().nonnegative(),
+  task: Uuid.nullable(),
+  manage: z.boolean(),
+  refusal: z.string().nullable(),
+  version: RecordVersion,
+});
+export type SeriesListRow = z.infer<typeof SeriesListRow>;
+export const SeriesList = listPageSchema(SeriesListRow);
+export type SeriesList = z.infer<typeof SeriesList>;
 
 /** Ответ на создание: номер задачи. */
 export const TaskCreated = z.object({ id: Uuid });

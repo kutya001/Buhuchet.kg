@@ -177,6 +177,9 @@ export const HISTORY_ACTIONS = [
   'series_edit',
   'series_stop',
   'series_resume',
+  // Без человека (ночной запуск «Задачи: повторы»): «Задача поставлена по повтору», «Повтор закончился».
+  'series_make',
+  'series_end',
 ] as const;
 export type HistoryAction = (typeof HISTORY_ACTIONS)[number];
 

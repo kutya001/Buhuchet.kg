@@ -14,6 +14,7 @@ export type CountKey =
   | 'staff.count'
   | 'roles.count'
   | 'task.count'
+  | 'task.series.count'
   | 'fin.j.count'
   | 'fin.r.count'
   | 'fin.b.count'

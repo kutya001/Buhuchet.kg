@@ -1,9 +1,13 @@
-import type { Task, TaskFormOptions } from '@buhuchet/shared';
+import type { SeriesRuleBody, Task, TaskFormOptions } from '@buhuchet/shared';
 import { describe, expect, it } from 'vitest';
 import {
   confirmHint,
   defaultExecutor,
   initialTaskForm,
+  repeatChanged,
+  repeatForTerm,
+  repeatStart,
+  taskEditBody,
   taskFormBody,
   taskFormLists,
   taskFormMoreFilled,
@@ -236,5 +240,71 @@ describe('«Дополнительно» (прототип v136, `st.more` и `n
     expect(taskFormMoreFilled({ ...base, projectId: PROJECT }, options, true)).toBe(0);
     // У изменяемой задачи «нужно подтверждение» — её собственное, с политикой не сравнивается.
     expect(taskFormMoreFilled({ ...base, confirm: false }, options, false)).toBe(0);
+  });
+});
+
+describe('«Повтор» в форме (доработки 28.11.2026; прототип `taskDlg`: `st.rep`, `repStart`, `ruleCh`)', () => {
+  const base = initialTaskForm({ task: null, options, employeeId: ME, today: '2026-10-18' });
+  const weekly: SeriesRuleBody = { every: 1, unit: 'week', weekDays: [0], end: { kind: 'never' } };
+  const daily: SeriesRuleBody = { every: 2, unit: 'day', end: { kind: 'never' } };
+  const seriesTask = (rule: SeriesRuleBody) =>
+    ({
+      title: 'Сверка',
+      description: '',
+      category: { code: 'КАТ-001', name: 'Сбор документов' },
+      contractor: null,
+      executor: { id: ME, shortName: 'Владелец В.' },
+      term: 'day',
+      dueDate: '2026-10-20',
+      needFile: false,
+      confirm: false,
+      status: 'todo',
+      series: { rule, state: 'active' },
+    }) as unknown as Task;
+
+  it('новая — «Не повторять»; у задачи серии — правило серии', () => {
+    expect(base.repeat).toBeNull();
+    const v = initialTaskForm({
+      task: seriesTask(weekly),
+      options,
+      employeeId: ME,
+      today: '2026-10-18',
+    });
+    expect(v.repeat).toEqual(weekly);
+  });
+
+  it('«Начало» — срок формы; у «На месяц» — последний день месяца; без даты — завтра', () => {
+    expect(repeatStart({ term: 'day', date: '2026-10-25', month: '' }, '2026-10-18')).toBe(
+      '2026-10-25',
+    );
+    expect(repeatStart({ term: 'day', date: '', month: '' }, '2026-10-18')).toBe('2026-10-19');
+    expect(repeatStart({ term: 'month', date: '', month: '2026-02' }, '2026-10-18')).toBe(
+      '2026-02-28',
+    );
+  });
+
+  it('«На месяц»: повтор по дням и неделям становится «каждый месяц», остальное — как было', () => {
+    expect(repeatForTerm(weekly, 'month')).toEqual({
+      every: 1,
+      unit: 'month',
+      end: { kind: 'never' },
+    });
+    expect(repeatForTerm(daily, 'day')).toBe(daily);
+    expect(repeatForTerm(null, 'month')).toBeNull();
+  });
+
+  it('тело правки: у серии правило — только «Эту и следующие» и только изменённое; у разовой — добавленный повтор', () => {
+    const task = seriesTask(weekly);
+    const v = initialTaskForm({ task, options, employeeId: ME, today: '2026-10-18' });
+    expect(repeatChanged(v, task)).toBe(false);
+    expect(taskEditBody(v, task, 'next')).not.toHaveProperty('repeat');
+    const changed = { ...v, repeat: daily };
+    expect(repeatChanged(changed, task)).toBe(true);
+    expect(taskEditBody(changed, task, 'next')).toMatchObject({ scope: 'next', repeat: daily });
+    expect(taskEditBody(changed, task, 'one')).not.toHaveProperty('repeat');
+    const one = { ...task, series: null } as Task;
+    expect(taskEditBody({ ...v, repeat: null }, one, 'next')).toMatchObject({ scope: 'one' });
+    expect(taskEditBody({ ...v, repeat: null }, one, 'next')).not.toHaveProperty('repeat');
+    expect(taskEditBody({ ...v, repeat: daily }, one, 'one')).toMatchObject({ repeat: daily });
   });
 });

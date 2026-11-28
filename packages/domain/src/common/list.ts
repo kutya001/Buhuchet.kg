@@ -491,6 +491,8 @@ export const GRID_KEYS = [
   'tasks.byme',
   'tasks.all',
   'tasks.overdue',
+  // «Повторы»: одна строка на серию (доработки 28.11.2026, прототип `'tasks-series'`).
+  'tasks.series',
   'staff.list',
   'staff.roles',
   // «Списания в бонус» (прототип `'bonus'`).

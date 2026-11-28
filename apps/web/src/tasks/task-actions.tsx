@@ -1,7 +1,13 @@
 'use client';
 
 import type { TaskAction, TaskActor } from '@buhuchet/domain';
-import { Task, type TaskFormOptions, type TaskListRow, type TaskRow } from '@buhuchet/shared';
+import {
+  Task,
+  type SeriesScope,
+  type TaskFormOptions,
+  type TaskListRow,
+  type TaskRow,
+} from '@buhuchet/shared';
 import {
   ConfirmDialog,
   RollbackDialog,
@@ -17,6 +23,7 @@ import { useErrorText, useT } from '../l10n/provider';
 import { useShell } from '../shell/context';
 import { rollbackLabels, rollbackTitle, statusName } from '../status/status-view';
 import { executorChangeBody, manualTaskMove } from './task-board';
+import { SeriesScopeDialog } from './series-dialog';
 import { TaskCard } from './task-card';
 import {
   TaskConfirmDialog,
@@ -90,6 +97,8 @@ export function useTaskActions(): {
   const [form, setForm] = useState<DialogSlot<FormData> | null>(null);
   const [dialog, setDialog] = useState<DialogSlot<ActionDialog> | null>(null);
   const [askCancel, setAskCancel] = useState<TaskRow | null>(null);
+  // Отмена задачи действующей серии: «Только эту задачу» или «Эту и следующие» (прототип `taskCancelDlg`).
+  const [askSeries, setAskSeries] = useState<DialogSlot<TaskRow> | null>(null);
   const [back, setBack] = useState<DialogSlot<{ task: Task; to: string }> | null>(null);
   const [backBusy, setBackBusy] = useState(false);
   const [backError, setBackError] = useState<string | undefined>();
@@ -126,18 +135,38 @@ export function useTaskActions(): {
     refresh();
   };
 
-  const simple = async (task: TaskRow, action: 'start' | 'cancel') => {
+  const simple = async (task: TaskRow, action: 'start' | 'cancel', scope: SeriesScope = 'one') => {
     const res = await once(task.id, () =>
-      callApi(() => api.api.tasks[':id'][action].$post({ param: { id: task.id } })),
+      callApi(() =>
+        action === 'start'
+          ? api.api.tasks[':id'].start.$post({ param: { id: task.id } })
+          : api.api.tasks[':id'].cancel.$post({ param: { id: task.id }, query: { scope } }),
+      ),
     );
     if (!res) return;
     refresh();
     if (!res.ok) return toast(errorText(res.error), { bad: true });
     const next = Task.safeParse(res.data);
     if (next.success) client.setQueryData(taskQuery(task.id).queryKey, next.data);
-    toast(t(action === 'start' ? 'task.started' : 'task.cancelled.toast'), {
-      icon: action === 'start' ? 'clock' : 'ban',
-    });
+    toast(
+      t(
+        action === 'start'
+          ? 'task.started'
+          : scope === 'next'
+            ? 'task.series.toast.cancelled_all'
+            : 'task.cancelled.toast',
+      ),
+      { icon: action === 'start' ? 'clock' : 'ban' },
+    );
+  };
+
+  /** «Отменить задачу»: у задачи действующей серии — вопрос «эту / эту и следующие» по свежей карточке. */
+  const askCancelOf = async (task: TaskRow) => {
+    if (!task.repeat) return setAskCancel(task);
+    const full = await load(task.id, () => fresh(task.id));
+    if (!full) return;
+    if (full.series?.state === 'active') setAskSeries(openSlot<TaskRow>(full));
+    else setAskCancel(full);
   };
 
   const openDialog = async (task: TaskRow, kind: ActionDialog['kind']) => {
@@ -166,7 +195,7 @@ export function useTaskActions(): {
     confirm: (task) => void openDialog(task, 'confirm'),
     rework: (task) => void openDialog(task, 'rework'),
     edit: (task) => void edit(task),
-    cancel: setAskCancel,
+    cancel: (task) => void askCancelOf(task),
   };
   const manualActions = actor ? taskMenuEntries({ actor, t, run }) : () => [];
   const cardActions = actor ? taskMenuEntries({ actor, t, run, card: true }) : () => [];
@@ -231,6 +260,11 @@ export function useTaskActions(): {
     onDone: applied,
   });
 
+  const openById = async (id: string) => {
+    const full = await load(id, () => fresh(id));
+    if (full) setCard(openSlot<TaskRow>(full));
+  };
+
   const dialogs = (
     <>
       {card ? (
@@ -247,6 +281,7 @@ export function useTaskActions(): {
             setBackError(undefined);
             setBack(openSlot({ task, to }));
           }}
+          onOpenTask={(id) => void openById(id)}
         />
       ) : null}
       {form && employeeId ? (
@@ -283,6 +318,17 @@ export function useTaskActions(): {
         danger
         onConfirm={() => askCancel && void simple(askCancel, 'cancel')}
       />
+      {askSeries ? (
+        <SeriesScopeDialog
+          key={`series-cancel-${askSeries.n}`}
+          open={askSeries.open}
+          onClose={() => setAskSeries(closeSlot)}
+          title={t('task.series.ask.cancel')}
+          ok={t('task.action.cancel')}
+          danger
+          onPick={(scope) => void simple(askSeries.data, 'cancel', scope)}
+        />
+      ) : null}
       {back ? (
         <RollbackDialog
           key={`back-${back.n}`}
@@ -302,11 +348,6 @@ export function useTaskActions(): {
       ) : null}
     </>
   );
-
-  const openById = async (id: string) => {
-    const full = await load(id, () => fresh(id));
-    if (full) setCard(openSlot<TaskRow>(full));
-  };
 
   return {
     actions,

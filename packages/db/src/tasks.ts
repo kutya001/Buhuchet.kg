@@ -40,6 +40,7 @@ import {
 import { dateLiteral, dictLiteral, textLiteral } from './sql-text';
 import type { AuditRecord } from './staff';
 import { writeStatusChange } from './status';
+import { moveContractorSeries, seriesTextTable, type SeriesTextRow } from './task-series';
 
 /**
  * Модуль «Задачи» (задача 2.23): ручные задачи организации из контекста `withOrgContext` (RLS).
@@ -126,6 +127,7 @@ function rowFields() {
     statusAt: sql<Date | null>`${LAST_STATUS_AT}`.mapWith((v) => (v == null ? null : new Date(v))),
     statusUser: sql<string | null>`${LAST_STATUS_USER}`,
     statusName: sql<string | null>`${LAST_STATUS_NAME}`,
+    seriesId: tasks.seriesId,
     createdAt: tasks.createdAt,
     createdBy: tasks.createdBy,
     createdByName: creator.shortName,
@@ -176,6 +178,10 @@ export interface TaskRow {
   confirmedBy: { id: string; shortName: string } | null;
   /** Последняя смена статуса: когда и кем (null — система). */
   lastStatus: { at: Date; by: string | null } | null;
+  /** Серия повтора (доработки 28.11.2026); разовая — null. */
+  seriesId: string | null;
+  /** Правило серии словами — в списке (у карточки — из серии); разовая — null. */
+  repeat: string | null;
   audit: AuditRecord;
   version: number;
 }
@@ -214,6 +220,8 @@ function toRow(r: RowData): TaskRow {
           by: auditActorName(r.statusUser as string | null, r.statusName as string | null),
         }
       : null,
+    seriesId: (r.seriesId as string | null) ?? null,
+    repeat: ((r as Record<string, unknown>).repeat as string | null | undefined) ?? null,
     audit: {
       createdAt: r.createdAt as Date,
       createdBy: auditActorName(r.createdBy as string | null, r.createdByName as string | null),
@@ -250,6 +258,7 @@ const TL = {
   open: tl('is_open'),
   overdue: tl('is_overdue'),
   hasFile: tl('has_file'),
+  seriesId: tl('series_id'),
   createdAt: tl('created_at'),
   createdBy: tl('created_by'),
   updatedAt: tl('updated_at'),
@@ -260,6 +269,8 @@ const TL = {
 export interface TaskSourceOptions {
   t: ListTexts;
   today: IsoDate;
+  /** Правила серий словами (`seriesTexts`): значок «↻», столбец «Повтор» и его ячейка в Excel. */
+  series?: readonly SeriesTextRow[];
 }
 
 /** Выборка `tl`: ручные задачи с «открыта», «просрочена» и «есть файл». */
@@ -270,6 +281,7 @@ function taskListSource(o: TaskSourceOptions): SQL {
     ${tasks.dueDate} as due_date, ${tasks.needFile} as need_file, ${tasks.confirm} as confirm,
     ${tasks.status}::text as status, ${tasks.doneAt} as done_at, ${tasks.confirmedByEmployeeId} as confirmed_by_id,
     ${OPEN_SQL} as is_open, ${overdueSql(o.today)} as is_overdue, ${HAS_FILE} as has_file,
+    ${tasks.seriesId} as series_id,
     ${tasks.createdAt} as created_at, ${tasks.createdBy} as created_by, ${tasks.updatedAt} as updated_at,
     ${tasks.updatedBy} as updated_by, ${tasks.version} as version
     from ${tasks})`;
@@ -288,8 +300,12 @@ function fromTaskList(tx: Tx, fields: object, o: TaskSourceOptions) {
     .leftJoin(confirmer, sql`${confirmer.id} = ${TL.confirmedById}`)
     .leftJoin(creator, sql`${creator.userId} = ${TL.createdBy}`)
     .leftJoin(updater, sql`${updater.userId} = ${TL.updatedBy}`)
+    .leftJoin(sql`${seriesTextTable(o.series ?? [])} as "st"`, sql`"st"."id" = ${TL.seriesId}`)
     .$dynamic();
 }
+
+/** Правило серии словами из таблицы текстов `st`. */
+const SERIES_TEXT = sql.raw(`"st"."text"`);
 
 const taskListFrom =
   (tx: Tx, o: TaskSourceOptions): ListFrom =>
@@ -330,6 +346,8 @@ function listFields() {
     hasFile: sql<boolean>`${TL.hasFile}`,
     confirmedById: sql<string | null>`${TL.confirmedById}`,
     confirmedByName: confirmer.shortName,
+    seriesId: sql<string | null>`${TL.seriesId}`,
+    repeat: sql<string | null>`${SERIES_TEXT}`,
     open: sql<boolean>`${TL.open}`,
     overdue: sql<boolean>`${TL.overdue}`,
     statusAt: sql<Date | null>`${listLastStatus(sql`${statusHistory.at}`)}`.mapWith(moment),
@@ -493,6 +511,16 @@ export function taskListColumns(t: ListTexts): ListColumns {
       label: 'task.col.term',
       value: TL.term,
       display: sql`case when ${TL.term} = 'month' then ${dictLiteral(t('task.term.month'))} else ${dictLiteral(t('task.term.day'))} end`,
+    },
+    // «Повтор» (доработки 28.11.2026, блок 4, пункт 1; прототип `taskCols`: rep): фильтр и группы —
+    // «Повторяющиеся» и «Разовые», на экране, в поиске и в Excel — правило словами.
+    rep: {
+      type: 'enum',
+      label: 'task.col.repeat',
+      value: sql`case when ${TL.seriesId} is null then 'one' else 'repeat' end`,
+      display: sql`case when ${TL.seriesId} is null then ${dictLiteral(t('task.repeat.one'))} else ${dictLiteral(t('task.repeat.many'))} end`,
+      searchDisplay: sql`coalesce(${SERIES_TEXT}, '')`,
+      exportDisplay: sql`coalesce(${SERIES_TEXT}, '')`,
     },
     open: {
       type: 'enum',
@@ -743,6 +771,33 @@ export async function getTask(
  * задача по контрагенту, который виден в области `scope` (`contractorScope`). Условие ссылается на
  * присоединённого контрагента — только для `getTask` и `contractorTasks`.
  */
+/**
+ * Видит ли сотрудник хоть одну задачу серии (область задач `where`, как у карточки): серию с
+ * её строкой «Повтор», «Все задачи серии» и действиями находят так же, как её задачи (блок 4).
+ */
+export async function seriesTaskVisible(
+  tx: Tx,
+  seriesId: string,
+  where: SQL | undefined,
+): Promise<boolean> {
+  const [row] = await fromTasks(tx, { id: tasks.id })
+    .where(and(eq(tasks.seriesId, seriesId), where))
+    .limit(1);
+  return Boolean(row);
+}
+
+/** Задачи серии, которые сотрудник может открыть (`where` — область задач), — для «Все задачи серии». */
+export async function seriesVisibleTaskIds(
+  tx: Tx,
+  seriesId: string,
+  where: SQL | undefined,
+): Promise<Set<string>> {
+  const rows = await fromTasks(tx, { id: tasks.id }).where(
+    and(eq(tasks.seriesId, seriesId), where),
+  );
+  return new Set(rows.map((r) => r.id as string));
+}
+
 export function taskContractorAccess(scope: SQL | undefined): SQL {
   return and(isNotNull(tasks.contractorId), scope)!;
 }
@@ -1124,6 +1179,8 @@ export async function moveContractorTasks(
       .returning({ id: tasks.id });
     for (const r of rows) changes.push({ id: r.id, contractorId: m.contractorId, from: m.from });
   }
+  // Серии по этим контрагентам — вместе с открытыми задачами (доработки 28.11.2026, блок 3, пункт 6).
+  await moveContractorSeries(tx, moves, to);
   await writeHistory(
     tx,
     ...changes.map((c) => ({

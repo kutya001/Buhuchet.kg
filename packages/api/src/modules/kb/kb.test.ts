@@ -84,7 +84,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
       'home',
       'lists',
     ]);
-    expect(own.progress).toMatchObject({ total: 46, done: 0, pct: 0, level: 0, next: 1, need: 12 });
+    expect(own.progress).toMatchObject({ total: 47, done: 0, pct: 0, level: 0, next: 1, need: 12 });
     expect(own.lessons.find((l) => l.id === 'dm')!.steps.map((x) => x.id)).toEqual([
       'dmshow',
       'dmxl',
@@ -287,7 +287,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     const notMine = KbMarkResult.parse(await ok(await call('POST', '/api/kb/hits/profile', acc)));
     expect(notMine.fresh).toEqual([]);
 
-    // Ещё 12 шагов — 13 из 46 (28 %): уровень «Ученик». «Добавить первого контрагента» (задача 2.09) —
+    // Ещё 12 шагов — 13 из 47 (27 %): уровень «Ученик». «Добавить первого контрагента» (задача 2.09) —
     // по истории создания контрагента, «Закрепить ответственных» (задача 2.10) — ответственный в той же
     // записи, «Загрузка из Excel» (задача 2.16) — запись о загрузке, «Создать уточнённый отчёт»
     // (задача 2.14) — у прежней версии
@@ -358,7 +358,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
       'ver',
     ]);
     expect(second.congrats).toBe('Ученик');
-    expect(second.state.progress).toMatchObject({ done: 13, pct: 28, level: 1 });
+    expect(second.state.progress).toMatchObject({ done: 13, pct: 27, level: 1 });
     // Повтор ничего не меняет.
     const again = KbMarkResult.parse(
       await ok(await call('POST', '/api/kb/sync', owner, { reason: 'open' })),
@@ -477,7 +477,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
       levelName: 'Ученик',
       of: 5,
       done: 14,
-      total: 46,
+      total: 47,
       levelAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
     });
     const accRow = team.items.find((r) => r.fullName === 'Сотрудник acc-a');
@@ -533,7 +533,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     expect(own.items.find((e) => e.login === 'owner-a')?.kb).toEqual({
       level: 1,
       name: 'Ученик',
-      pct: 30,
+      pct: 29,
       of: 5,
     });
     const sorted = await staff(

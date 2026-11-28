@@ -144,6 +144,30 @@ const plural = (n: number, forms: readonly [string, string, string]) =>
 const maxDate = (a: IsoDate, b: IsoDate) => (a > b ? a : b);
 const dayOf = (date: IsoDate) => Number(date.slice(8, 10));
 
+/** Буквы дней недели в окне «Повтор» (прототип `TS_WD_C`): с понедельника. */
+export const SERIES_WEEKDAY_LETTERS = ['П', 'В', 'С', 'Ч', 'П', 'С', 'В'] as const;
+/** Названия дней недели для подсказки и диктора (прототип `TS_WD_F`). */
+export const SERIES_WEEKDAY_NAMES = [
+  'понедельник',
+  'вторник',
+  'среда',
+  'четверг',
+  'пятница',
+  'суббота',
+  'воскресенье',
+] as const;
+
+/** Подпись единицы в окне «Повтор» по интервалу (прототип `tsDlg`: «неделю» → «неделя»). */
+export function seriesUnitLabel(unit: SeriesUnit, every: number): string {
+  const n = Number.isInteger(every) && every > 0 ? every : 1;
+  return plural(n, UNIT_FORMS[unit]).replace('неделю', 'неделя');
+}
+
+/** «5 марта» — день и месяц начала у повтора «каждый год» (подсказка окна «Повтор»). */
+export function seriesDayMonthText(start: IsoDate): string {
+  return `${dayOf(start)} ${MONTHS_GEN[Number(start.slice(5, 7)) - 1]}`;
+}
+
 /** Правило по умолчанию в окне «Повтор» (прототип `tsDef`): каждую неделю в день срока, «На месяц» — каждый месяц. */
 export function defaultSeriesRule(start: IsoDate, term: TaskTerm): SeriesRule {
   return term === 'month'
@@ -383,4 +407,75 @@ export function seriesRuleProblems(
  */
 export function seriesFirstDate(plan: SeriesPlan, today: IsoDate): IsoDate | null {
   return seriesNextDate(plan, maxDate(plan.start, today));
+}
+
+/** Кто действует с серией: тот же, что с задачей (`TaskActor` — сотрудник, владелец, «Ставить задачи»). */
+export interface SeriesActor {
+  employeeId: string;
+  isOwner: boolean;
+  canCreate: boolean;
+}
+
+/** Почему действие с серией недоступно: ключ текста `SERIES_MESSAGES`. */
+export type SeriesRefusal =
+  | 'series_author_only'
+  | 'series_create_right'
+  | 'series_not_active'
+  | 'series_not_stopped'
+  | 'series_resume_blocked'
+  | 'series_finished'
+  | 'series_no_dates'
+  | 'series_rule_one'
+  | 'series_task_closed';
+
+/** Тексты отказов — как подсказки и сообщения прототипа (`taskBossWhy`, `tsEditRule`, `tsResume`). */
+export const SERIES_MESSAGES: Readonly<Record<SeriesRefusal, string>> = {
+  series_author_only: 'Менять повтор может тот, кто его настроил, или владелец',
+  series_create_right: 'Менять и отменять свои задачи можно только с правом «Ставить задачи»',
+  series_not_active: 'Повтор уже остановлен или закончился',
+  series_not_stopped: 'Повтор не остановлен',
+  series_resume_blocked:
+    '{why}: смените это в «Изменить» задачи → «Эту и следующие», затем возобновите',
+  series_finished: 'Повтор закончился: продлить — «Изменить повтор» в карточке задачи',
+  series_no_dates: 'По правилу повтора нет ни одной даты: проверьте «Окончание»',
+  series_rule_one: 'Правило повтора меняется только для этой и следующих задач',
+  series_task_closed: 'Повтор добавляется только незакрытой задаче',
+};
+
+/**
+ * Менять, отменять, останавливать и возобновлять серию (блок 3, пункт 4; прототип `taskBoss`):
+ * постановщик с правом «Ставить задачи» или владелец. null — можно.
+ */
+export function seriesBossRefusal(
+  authorId: string,
+  actor: SeriesActor,
+): 'series_author_only' | 'series_create_right' | null {
+  if (actor.isOwner) return null;
+  if (authorId !== actor.employeeId) return 'series_author_only';
+  return actor.canCreate ? null : 'series_create_right';
+}
+
+/** Одно и то же ли правило: «Только эту задачу» правило не меняет (прототип `ruleCh`). */
+export function seriesRuleEqual(a: SeriesRule, b: SeriesRule): boolean {
+  const days = (r: SeriesRule) =>
+    r.unit === 'week' ? [...(r.weekDays ?? [])].sort((x, y) => x - y).join() : '';
+  const mode = (r: SeriesRule) => (r.unit === 'month' ? (r.monthMode ?? 'date') : '');
+  const end = (r: SeriesRule) =>
+    r.end.kind === 'date'
+      ? `date:${r.end.date ?? ''}`
+      : r.end.kind === 'count'
+        ? `count:${r.end.count ?? ''}`
+        : 'never';
+  return (
+    a.every === b.every &&
+    a.unit === b.unit &&
+    days(a) === days(b) &&
+    mode(a) === mode(b) &&
+    end(a) === end(b)
+  );
+}
+
+/** Причина остановки словами для строки истории и сообщения: у ручной — пусто. */
+export function seriesStopText(reason: SeriesStopReason | null): string {
+  return reason && reason !== 'manual' ? SERIES_STOP_TEXTS[reason] : '';
 }

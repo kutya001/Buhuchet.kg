@@ -96,6 +96,8 @@ export const KB_GO: Readonly<Record<string, KbTarget>> = {
   scale: { module: 'reports', tab: 'all', flash: LIST },
   // Задачи (задача 2.23).
   mtask: { module: 'tasks', tab: 'byme', flash: LIST, open: { add: 'task' } },
+  // «Поставить задачу с повтором» (доработки 28.11.2026): окно новой задачи, строка «Повтор».
+  trep: { module: 'tasks', tab: 'byme', flash: LIST, open: { add: 'task' } },
   daymonth: { module: 'tasks', tab: 'mine', flash: '[data-task-legend]' },
   tdone: { module: 'tasks', tab: 'mine', flash: LIST },
   tconf: { module: 'tasks', tab: 'mine', flash: '[data-plate="pend"], main' },

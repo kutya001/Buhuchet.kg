@@ -42,6 +42,8 @@ export const taskTabCountsQuery = queryOptions({
     mine: s.mine ? { value: s.mine } : undefined,
     byme: s.byme ? { value: s.byme } : undefined,
     overdue: s.overdue ? { value: s.overdue, tone: 'red' } : undefined,
+    // «Повторы» — действующие серии (прототип `taskTabs`: `tsScope()…'Действует'`).
+    series: s.series ? { value: s.series } : undefined,
   }),
 });
 
@@ -82,7 +84,7 @@ export function useTasksRefresh() {
   const client = useQueryClient();
   return useCallback(() => {
     void client.invalidateQueries({ queryKey: ['tasks'] });
-    for (const tab of ['mine', 'byme', 'all', 'overdue'])
+    for (const tab of ['mine', 'byme', 'all', 'overdue', 'series'])
       void client.invalidateQueries({ queryKey: ['list', `tasks.${tab}`] });
     void client.invalidateQueries({ queryKey: ['files', 'task'] });
     // Задачи проекта — в его карточке и в столбце «Задач открыто» (задача 2.26).

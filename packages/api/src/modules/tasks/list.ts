@@ -1,8 +1,10 @@
 import { createRoute, type RouteHandler } from '@hono/zod-openapi';
 import {
+  activeSeriesCount,
   exportTasks,
   listTasksPage,
   listTaskValues,
+  seriesTexts,
   taskBoardExecutors,
   taskPendingStats,
   taskTabCounts,
@@ -12,7 +14,7 @@ import {
   type TaskTab,
   type Tx,
 } from '@buhuchet/db';
-import { monthStart } from '@buhuchet/domain';
+import { hasPermission, monthStart } from '@buhuchet/domain';
 import {
   ListExportParams,
   ListQueryParams,
@@ -31,6 +33,7 @@ import { exportRateResponses, withExportSlot, xlsxContent, xlsxResponse } from '
 import { orgContextOf, requireEmployee, requirePermission } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
 import { error, listRowBody, requireTasks, subjectOf, todayOf, viewerOf } from './common';
+import { seriesSeeAll } from './series';
 
 const off = { description: 'Задачи выключены в учётной политике', content: error };
 
@@ -44,11 +47,13 @@ async function listOptions(
   tab: TaskTab,
 ): Promise<TaskListOptions> {
   await requireTasks(tx, orgContextOf(c).orgId);
+  const t = await serverTexts(deps);
   return {
-    t: await serverTexts(deps),
+    t,
     today: todayOf(deps),
     viewer: viewerOf(subjectOf(c)),
     tab,
+    series: await seriesTexts(tx, t),
   };
 }
 
@@ -128,7 +133,12 @@ export function taskSummaryHandler(deps: ApiDeps): RouteHandler<typeof taskSumma
         taskPendingStats(tx, viewer),
         tasksOrgEmpty(tx, source),
       ]);
-      return { ...counts, ...pending, monthStart: monthStart(today), empty };
+      // Вкладка «Повторы» — тем, кто ставит задачи: действующие серии в видимости (прототип `taskTabs`).
+      const subject = subjectOf(c);
+      const series = hasPermission(subject, 'tasksCreate')
+        ? await activeSeriesCount(tx, seriesSeeAll(subject) ? null : subject.employeeId)
+        : null;
+      return { ...counts, ...pending, monthStart: monthStart(today), empty, series };
     });
     return c.json(body, 200);
   };
@@ -218,15 +228,16 @@ export const exportTasksRoute = createRoute({
 });
 
 /**
- * Выгрузка в Excel: видимые столбцы по порядку экрана и отдельная колонка «Вид задачи», даже если
- * её нет на экране (ТЗ «В выгрузке в Excel — отдельная колонка «Вид задачи»»).
+ * Выгрузка в Excel: видимые столбцы по порядку экрана и отдельные колонки «Вид задачи» и «Повтор», даже
+ * если их нет на экране (ТЗ «В выгрузке в Excel — отдельная колонка «Вид задачи»»; прототип `taskCols`:
+ * у `scope` и `rep` — `xls: true`).
  */
 export function exportTasksHandler(deps: ApiDeps): RouteHandler<typeof exportTasksRoute, AppEnv> {
   return async (c) => {
     const params = c.req.valid('query');
     const query = listQueryOf(params);
     const cols = [...new Set(params.cols.split(','))];
-    const keys = cols.includes('scope') ? cols : [...cols, 'scope'];
+    const keys = [...cols, ...['scope', 'rep'].filter((k) => !cols.includes(k))];
     const t = await serverTexts(deps);
     return withExportSlot(deps, c.get('session')!.userId, async () => {
       const result = await withOrgContext(

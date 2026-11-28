@@ -4,6 +4,16 @@ import {
   employeeActive,
   getTask,
   lockTask,
+  lockSeries,
+  seriesNext,
+  seriesRuleColumns,
+  seriesTaskFacts,
+  seriesTextOf,
+  setSeriesFacts,
+  storedRule,
+  updateLaterSeriesTasks,
+  updateSeries,
+  type SeriesRecord,
   orgMenuSettings,
   taskCategoryActive,
   taskContractorOf,
@@ -12,13 +22,15 @@ import {
   withOrgContext,
   type TaskFields,
   type TaskLock,
-  type TaskRecord,
   type Tx,
 } from '@buhuchet/db';
 import {
-  formatDateRu,
-  formatText,
   monthLastDay,
+  seriesBossRefusal,
+  seriesRuleEqual,
+  taskOpen,
+  type IsoDate,
+  type SeriesRule,
   taskActionRefusal,
   taskConfirmEditable,
   taskStatusAfterEdit,
@@ -32,10 +44,22 @@ import { apiFail, versionedSaveResponses } from '../../errors';
 import { orgContextOf, requireEmployee, requirePermission } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
 import { projectWhere, taskProjectsOn } from '../projects/common';
-import { queueTelegramEvents, taskBell, type TelegramEvent } from '../telegram/events';
+import { queueTelegramEvents } from '../telegram/events';
 import { flushEvents } from '../telegram/outbox';
-import { taskView } from '../telegram/staff-view';
 import { taskOut } from './card';
+import {
+  checkedRule,
+  firstDateOf,
+  logSeries,
+  ruleBody,
+  ruleOfBody,
+  seriesActorOf,
+  seriesRefuse,
+  startSeries,
+  templateOf,
+} from './series';
+import { nextTaskEvent } from './series-job';
+import { newTaskEvent } from './task-events';
 import {
   actorOf,
   cpScopeOf,
@@ -49,7 +73,7 @@ import {
   todayOf,
 } from './common';
 
-type Body = z.infer<typeof CreateTaskRequest>;
+type Body = Omit<z.infer<typeof CreateTaskRequest>, 'repeat'>;
 
 /** Что было у задачи до «Изменить»: неизменённое отключённое значение сохраняется как есть. */
 interface Before {
@@ -153,6 +177,95 @@ async function projectOf(
   return body.projectId;
 }
 
+/** Что сделать с повтором при «Изменить»: добавить серию или «Эту и следующие». */
+type SeriesEdit =
+  { kind: 'add'; rule: SeriesRule } | { kind: 'next'; series: SeriesRecord; rule: SeriesRule };
+
+/**
+ * Повтор при «Изменить» (блок 2, пункт 1; блок 3, пункт 1; прототип `taskDlg`, `tsAsk`): разовой
+ * незакрытой задаче можно добавить повтор (право «Ставить задачи»); у задачи серии «Только эту задачу»
+ * правило не меняет, «Эту и следующие» правит серию — постановщик серии с правом или владелец. У
+ * закончившейся серии меняется только задача.
+ */
+async function seriesPlanOfEdit(
+  tx: Tx,
+  subject: AccessSubject,
+  lock: TaskLock,
+  series: SeriesRecord | null,
+  body: Omit<z.infer<typeof UpdateTaskRequest>, 'version'>,
+  fields: TaskFields,
+): Promise<SeriesEdit | null> {
+  if (!series) {
+    if (!body.repeat) return null;
+    if (!seriesActorOf(subject).canCreate) refuse('task_create_right');
+    if (!taskOpen(lock.status)) seriesRefuse('series_task_closed');
+    return { kind: 'add', rule: checkedRule(body.repeat, fields.dueDate, fields.term) };
+  }
+  if (series.state === 'finished') return null;
+  if (body.scope === 'one') {
+    // Вид срока одной задачи меняется без правила (прототип `taskDlg` → `tsAsk`: «Только эту задачу»
+    // правило не трогает); правило — только «Эту и следующие».
+    const changed =
+      body.repeat &&
+      !seriesRuleEqual(storedRule(ruleOfBody(body.repeat), series.term), series.rule);
+    if (changed) seriesRefuse('series_rule_one');
+    return null;
+  }
+  const boss = seriesBossRefusal(series.authorEmployeeId, seriesActorOf(subject));
+  if (boss) seriesRefuse(boss);
+  const rule = checkedRule(body.repeat ?? ruleBody(series.rule), fields.dueDate, fields.term);
+  return { kind: 'next', series, rule };
+}
+
+/**
+ * Повтор после сохранения задачи: новая серия с этой задачей первой или «Эту и следующие» (прототип
+ * `tsApplyAll`): поля и правило серии, начало — срок этой задачи, открытые следующие задачи — с новыми
+ * полями; в истории — «Повтор изменён: было → стало» или «Изменены эта и следующие задачи серии».
+ */
+async function applySeriesEdit(
+  tx: Tx,
+  plan: SeriesEdit,
+  o: { id: string; fields: TaskFields; today: IsoDate; subject: AccessSubject },
+) {
+  if (plan.kind === 'add') {
+    await startSeries(tx, {
+      fields: o.fields,
+      rule: plan.rule,
+      start: o.fields.dueDate,
+      authorEmployeeId: o.subject.employeeId,
+      today: o.today,
+      taskId: o.id,
+      date: o.fields.dueDate,
+    });
+    return;
+  }
+  const s = plan.series;
+  const tpl = templateOf(o.fields);
+  const after: SeriesRecord = { ...s, ...tpl, rule: plan.rule, start: o.fields.dueDate };
+  await updateSeries(
+    tx,
+    s.id,
+    s.version,
+    { ...tpl, ...seriesRuleColumns(plan.rule, tpl.term), startDate: o.fields.dueDate },
+    s.contractorId,
+  );
+  await updateLaterSeriesTasks(tx, s.id, { id: o.id, dueDate: o.fields.dueDate }, tpl);
+  const was = seriesTextOf(s);
+  const now = seriesTextOf(after);
+  await logSeries(
+    tx,
+    s,
+    o.today,
+    'series_edit',
+    was !== now ? [{ field: 'repeat', from: was, to: now }] : undefined,
+    o.id,
+  );
+  if (s.state === 'active') {
+    const facts = await seriesTaskFacts(tx, s.id, o.today);
+    await setSeriesFacts(tx, s.id, { nextDate: seriesNext(after, facts, o.today) });
+  }
+}
+
 const fieldErrors =
   'Неверные данные; категория, контрагент или исполнитель не найдены, отключены, в архиве или заблокированы';
 
@@ -191,10 +304,31 @@ export function createTaskHandler(deps: ApiDeps): RouteHandler<typeof createTask
       const settings = await requireTasks(tx, orgContextOf(c).orgId);
       const { features } = await orgMenuSettings(tx, orgContextOf(c).orgId);
       const fields = await fieldsOf(tx, subject, body, settings.files, null, features);
-      const id = await createTask(tx, fields, subject.employeeId);
+      // С повтором (доработки 28.11.2026, блок 2): серия и первая задача — одной транзакцией; первая —
+      // на ближайшую дату по правилу не раньше сегодня; в сообщении — строка «Повтор: <правило>».
+      let id: string;
+      let series: SeriesRecord | null = null;
+      if (body.repeat) {
+        const rule = checkedRule(body.repeat, fields.dueDate, fields.term);
+        const first = firstDateOf(rule, fields.dueDate, fields.term, today);
+        const made = await startSeries(tx, {
+          fields,
+          rule,
+          start: fields.dueDate,
+          authorEmployeeId: subject.employeeId,
+          today,
+          first,
+        });
+        id = made.taskId;
+        series = made.series;
+      } else {
+        id = await createTask(tx, fields, subject.employeeId);
+      }
       const task = (await getTask(tx, id, undefined))!;
       queued = await queueTelegramEvents(deps, tx, [
-        await newTaskEvent(deps, tx, task, subject.employeeId, t),
+        series
+          ? await nextTaskEvent(deps, tx, task, series, { by: subject.employeeId })
+          : await newTaskEvent(deps, tx, task, subject.employeeId, t),
       ]);
       return taskOut(tx, task, { today, filesOn: settings.files, subject });
     });
@@ -261,6 +395,8 @@ export function updateTaskHandler(deps: ApiDeps): RouteHandler<typeof updateTask
         { lock, categoryCode: visible.category.code },
         features,
       );
+      const series = visible.seriesId ? await lockSeries(tx, visible.seriesId) : null;
+      const plan = await seriesPlanOfEdit(tx, subject, lock, series, body, fields);
       const to = taskStatusAfterEdit(lock.status, lock.confirm, fields.confirm);
       await updateTask(
         tx,
@@ -270,6 +406,7 @@ export function updateTaskHandler(deps: ApiDeps): RouteHandler<typeof updateTask
         to ? { from: lock.status, to, reason: t('task.hist.confirm_off') } : null,
         lock.contractorId,
       );
+      if (plan) await applySeriesEdit(tx, plan, { id, fields, today, subject });
       const task = (await getTask(tx, id, undefined))!;
       // Задачу передали другому исполнителю — для него это новая задача.
       if (task.executor.id !== visible.executor.id) {
@@ -281,37 +418,5 @@ export function updateTaskHandler(deps: ApiDeps): RouteHandler<typeof updateTask
     });
     await flushEvents(deps, orgContextOf(c).orgId, queued);
     return c.json(out, 200);
-  };
-}
-
-/**
- * Название задачи и «Новая задача от {автор} · срок {срок}» исполнителю (ТЗ: «сообщение о новой
- * задаче … приходит сразу»; прототип v97 `tgTaskMsg`: название — заголовком, под сообщением — кнопки
- * исполнителя); у задачи на месяц срок —
- * «до 31.10.2026».
- */
-async function newTaskEvent(
-  deps: ApiDeps,
-  tx: Tx,
-  task: TaskRecord,
-  by: string,
-  t: (key: string) => string,
-): Promise<TelegramEvent> {
-  const date = formatDateRu(task.dueDate);
-  return {
-    kind: 'task_new',
-    to: task.executor.id,
-    by,
-    template: 'tgTask',
-    heading: task.title,
-    values: {
-      автор: task.author.shortName,
-      задача: task.title,
-      срок: task.term === 'month' ? formatText(t('task.date.month'), { date }) : date,
-    },
-    link: 'tasks',
-    bell: taskBell(task),
-    // Кнопки под сообщением: «Взять в работу», «Выполнена», «Открыть задачу» (поток Т, задача Т2).
-    ...(await taskView(deps, { id: task.id, title: task.title, todo: task.status === 'todo' }, tx)),
   };
 }

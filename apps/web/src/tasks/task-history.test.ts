@@ -10,6 +10,25 @@ const t = makeTranslate(defaultUiTexts());
 const at = '2026-10-18T03:00:00.000Z';
 
 describe('taskHistoryText', () => {
+  it('серия: настроен, изменён, остановлен, возобновлён, поставлена по повтору, закончился', () => {
+    const text = (action: string, changes: { field: string; from?: string; to?: string }[] = []) =>
+      taskHistoryText(t, { at, actor: null, action, changes });
+    expect(text('series_set', [{ field: 'repeat', to: 'Каждую неделю: пн' }])).toBe(
+      'Повтор настроен: Каждую неделю: пн',
+    );
+    expect(
+      text('series_edit', [{ field: 'repeat', from: 'Каждый день', to: 'Каждые 2 дня' }]),
+    ).toBe('Повтор изменён: Каждый день → Каждые 2 дня');
+    expect(text('series_edit')).toBe('Изменены эта и следующие задачи серии');
+    expect(text('series_stop')).toBe('Повтор остановлен');
+    expect(text('series_stop', [{ field: 'why', to: 'Исполнитель заблокирован' }])).toBe(
+      'Повтор остановлен: Исполнитель заблокирован',
+    );
+    expect(text('series_resume')).toBe('Повтор возобновлён');
+    expect(text('series_make')).toBe('Задача поставлена по повтору');
+    expect(text('series_end')).toBe('Повтор закончился');
+  });
+
   it('создание, файлы', () => {
     expect(taskHistoryText(t, { at, actor: 'Т', action: 'create', changes: [] })).toBe(
       'Задача поставлена',

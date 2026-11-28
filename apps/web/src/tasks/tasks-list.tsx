@@ -51,7 +51,7 @@ function rangeText(t: Translate, tab: TaskTab, monthStart: string | undefined): 
 }
 
 /** «+ Добавить» → «Задача» в модуле «Задачи» (прототип `taskAdd`) — на любой вкладке. */
-function useTaskAddRequest(run: () => void) {
+export function useTaskAddRequest(run: () => void) {
   const { addRequest, clearAddRequest } = useShell();
   const request = addRequest?.moduleId === 'tasks' ? addRequest : null;
   const start = useEffectEvent((actionId: string) => {

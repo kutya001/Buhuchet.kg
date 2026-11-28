@@ -52,6 +52,8 @@ export interface TelegramEvent {
     | 'report_fix'
     | 'task_started'
     | 'task_done'
+    | 'task_series_end'
+    | 'task_series_stop'
   >;
   /** Кому (сотрудник). */
   to: string;
@@ -61,6 +63,16 @@ export interface TelegramEvent {
   values: Readonly<Record<string, string | number>>;
   /** Первая строка сообщения: название задачи (в шаблоне «Новой задачи» его нет, прототип v97). */
   heading?: string;
+  /**
+   * Строка под текстом шаблона (доработки 28.11.2026: «Повтор: <правило>» под «Новой задачей» серии,
+   * прототип `tgTaskMsg`: `t`).
+   */
+  extra?: { template: TelegramTemplateKey; values: Readonly<Record<string, string | number>> };
+  /**
+   * Ключ события: повтор с тем же ключом ни сообщения, ни строки колокольчика не добавляет (события
+   * ночного запуска «Задачи: повторы», которые уходят в час напоминаний и могут собраться дважды).
+   */
+  key?: string;
   /**
    * Сообщение с кнопками (поток Т, задача Т2): из заполненного шаблона — описание сообщения. Ссылка
    * «Открыть в Buhuchet.kg» в таком сообщении не дописывается: её заменяет кнопка «Открыть».
@@ -77,6 +89,8 @@ export interface TelegramEvent {
     contractorId: string | null;
     subject: string;
     reason?: string | null;
+    /** Готовая фраза строки (повтор закончился или остановлен — текст шаблона, как в прототипе). */
+    text?: string;
   };
 }
 
@@ -113,7 +127,13 @@ export async function queueTelegramEvents(
     const chat = await telegramChat(tx, target.userId);
     if (!chat) continue;
     const template = templates[e.template] ?? TELEGRAM_TEMPLATE_DEFAULTS[e.template];
-    const filled = fillTemplate(template, e.values);
+    const extra = e.extra
+      ? fillTemplate(
+          templates[e.extra.template] ?? TELEGRAM_TEMPLATE_DEFAULTS[e.extra.template],
+          e.extra.values,
+        )
+      : '';
+    const filled = fillTemplate(template, e.values) + (extra.trim() ? `\n${extra}` : '');
     // Сообщение с кнопками; не собралось (подпись кнопки в шаблоне длиннее предела) — обычным текстом:
     // действие сайта из-за вида сообщения не срывается.
     const message = e.view ? viewOf(e.view(filled), name, chat.shared) : null;
@@ -126,6 +146,7 @@ export async function queueTelegramEvents(
         kind: e.kind,
         text: botPlainText(message),
         message,
+        dedupeKey: e.key ?? null,
       });
       continue;
     }
@@ -140,6 +161,7 @@ export async function queueTelegramEvents(
       chatId: chat.chatId,
       kind: e.kind,
       text: withOrganization(`${body}\n\n${link}`, name, chat.shared),
+      dedupeKey: e.key ?? null,
     });
   }
   return queueEvents(tx, messages, deps.clock.now());
@@ -147,6 +169,8 @@ export async function queueTelegramEvents(
 
 /** Фраза строки колокольчика о событии задачи или отчёта. */
 function bellEventText(e: TelegramEvent, bell: NonNullable<TelegramEvent['bell']>, tr: Translate) {
+  if (bell.text) return bellText(bell.text);
+  if (e.kind === 'task_series_end' || e.kind === 'task_series_stop') return bellText(bell.subject);
   if (e.kind === 'report_fix') {
     const head = tr('bell.line.report_fix', { report: bell.subject });
     return bellText(bell.reason ? head + tr('bell.line.reason', { reason: bell.reason }) : head);
@@ -181,7 +205,7 @@ async function bellEvents(deps: ApiDeps, tx: Tx, events: readonly TelegramEvent[
       need: e.kind === 'report_fix' ? 'repView' : null,
       contractorId: bell.contractorId,
       text: bellEventText(e, bell, tr),
-      eventKey: `${e.kind}:${bell.target.id}:${now.getTime().toString(36)}.${n}`,
+      eventKey: e.key ?? `${e.kind}:${bell.target.id}:${now.getTime().toString(36)}.${n}`,
     });
   }
   await putBell(tx, rows, now);

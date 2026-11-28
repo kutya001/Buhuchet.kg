@@ -1,12 +1,21 @@
 import {
   addDays,
+  lastDayOf,
+  seriesRuleEqual,
   taskConfirmEditable,
   taskPending,
   type IsoDate,
   type TaskTerm,
   type UiTextKey,
 } from '@buhuchet/domain';
-import type { CreateTaskRequest, Task, TaskFormOptions } from '@buhuchet/shared';
+import type {
+  CreateTaskRequest,
+  SeriesRuleBody,
+  SeriesScope,
+  Task,
+  TaskFormOptions,
+  UpdateTaskRequest,
+} from '@buhuchet/shared';
 
 /** Вид задачи — первым полем формы (ТЗ «Ручные задачи»). */
 export type TaskFormScope = 'general' | 'contractor';
@@ -28,6 +37,8 @@ export interface TaskFormValues {
   confirm: boolean;
   /** Проект контрагента (при включённых «Проектах контрагентов»; задача 2.26); пусто — «Без проекта». */
   projectId: string;
+  /** Повтор (доработки 28.11.2026): у новой — «Не повторять»; у задачи серии — правило серии. */
+  repeat: SeriesRuleBody | null;
 }
 
 /**
@@ -100,6 +111,7 @@ export function initialTaskForm({
       // Без поля «Проект» (функция выключена или нет права «Просматривать проекты») проект задачи не
       // отправляется — сервер оставляет его, пока не сменили контрагента.
       projectId: options.projectsOn ? (task.project?.id ?? '') : '',
+      repeat: task.series?.rule ?? null,
     };
   }
   const contractorId = preset?.contractorId ?? '';
@@ -120,6 +132,7 @@ export function initialTaskForm({
     needFile: false,
     confirm: options.confirmDefault,
     projectId: options.projectsOn && contractorId ? (preset?.projectId ?? '') : '',
+    repeat: null,
   };
 }
 
@@ -186,7 +199,54 @@ export function taskFormBody(v: TaskFormValues): CreateTaskRequest {
     needFile: v.needFile,
     confirm: v.confirm,
     projectId: v.scope === 'contractor' && v.projectId ? v.projectId : null,
+    repeat: v.repeat,
   };
+}
+
+/** «Начало» повтора — срок в форме (прототип `repStart`): у «На месяц» — последний день месяца. */
+export function repeatStart(
+  v: Pick<TaskFormValues, 'term' | 'date' | 'month'>,
+  today: IsoDate,
+): IsoDate {
+  if (v.term === 'month')
+    return lastDayOf(/^\d{4}-\d{2}$/.test(v.month) ? v.month : today.slice(0, 7));
+  return /^\d{4}-\d{2}-\d{2}$/.test(v.date) ? v.date : addDays(today, 1);
+}
+
+/**
+ * Смена вида срока на «На месяц» (прототип `tk-kind`): повтор по дням или неделям становится
+ * «каждый месяц».
+ */
+export function repeatForTerm(rule: SeriesRuleBody | null, term: TaskTerm): SeriesRuleBody | null {
+  if (!rule || term !== 'month' || (rule.unit !== 'day' && rule.unit !== 'week')) return rule;
+  const { weekDays: _days, monthMode: _mode, ...rest } = rule;
+  return { ...rest, unit: 'month' };
+}
+
+/** Правило повтора задачи серии изменили в форме (прототип `ruleCh`). */
+export function repeatChanged(v: Pick<TaskFormValues, 'repeat'>, task: Task | null): boolean {
+  const series = task?.series;
+  return !!series && !!v.repeat && !seriesRuleEqual(v.repeat, series.rule);
+}
+
+/**
+ * Тело «Изменить задачу»: у задачи серии — «Только эту» или «Эту и следующие» (правило — только во
+ * втором и только изменённое); у разовой открытой — повтор, если его добавили.
+ */
+export function taskEditBody(
+  v: TaskFormValues,
+  task: Task,
+  scope: SeriesScope,
+): Omit<UpdateTaskRequest, 'version'> {
+  const { repeat, ...fields } = taskFormBody(v);
+  if (task.series) {
+    return {
+      ...fields,
+      scope,
+      ...(scope === 'next' && repeatChanged(v, task) ? { repeat } : {}),
+    };
+  }
+  return { ...fields, scope: 'one', ...(repeat ? { repeat } : {}) };
 }
 
 /**
