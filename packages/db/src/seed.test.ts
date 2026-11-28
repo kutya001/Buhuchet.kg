@@ -266,6 +266,7 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
           readAuthor: dictChangeRequests.readAuthor,
           where: dictChangeRequests.whereInfo,
           closed: dictChangeRequests.closedAt,
+          comment: dictChangeRequests.comment,
           by: users.login,
           decided: dictChangeRequests.decidedAt,
         })
@@ -288,6 +289,8 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
     expect(rows[0]!.answer).toContain('В каталоге уже есть формы Нацстаткома для ИП');
     expect(rows[0]!.decided).toEqual(new Date('2026-10-07T04:20:00Z'));
     expect(rows[2]).toMatchObject({ answer: '', decided: null, closed: null });
+    // Комментарий — из `form.note` прототипа v169 (прежнее `note`).
+    expect(rows[0]!.comment).toBe('Сдаём за двух клиентов-ИП');
     expect(rows[3]).toMatchObject({ decided: null, closed: new Date('2026-11-10T04:02:00Z') });
     expect(rows[4]).toMatchObject({ wait: true, closed: null });
     expect(rows[4]!.where).toMatchObject({ hash: '#fin.in', ver: 'v168' });
