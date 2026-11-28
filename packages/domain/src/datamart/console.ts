@@ -747,7 +747,7 @@ function joinInside(sig: readonly DmSqlToken[], open: number): boolean {
 }
 
 /**
- * Имена из WITH: «WITH имя AS (», «, имя AS (» и со списком столбцов «, имя (a, b) AS (». Значимые куски —
+ * Имена из WITH: «WITH имя AS (», «, имя AS (», «AS MATERIALIZED (» и со списком столбцов «, имя (a, b) AS (». Значимые куски —
  * без пробелов и комментариев.
  */
 export function dmSqlCteNames(sig: readonly DmSqlToken[]): Set<string> {
@@ -766,7 +766,12 @@ export function dmSqlCteNames(sig: readonly DmSqlToken[]): Set<string> {
       }
       a += 1;
     }
-    if (sig[a] && upper(sig[a]!) === 'AS') out.add(n.text.toLowerCase());
+    if (!sig[a] || upper(sig[a]!) !== 'AS') continue;
+    // После AS — скобка запроса, можно через «[NOT] MATERIALIZED» (не «count(*) AS n» списка вывода).
+    let b = a + 1;
+    if (sig[b] && upper(sig[b]!) === 'NOT') b += 1;
+    if (sig[b] && upper(sig[b]!) === 'MATERIALIZED') b += 1;
+    if (sig[b]?.text === '(') out.add(n.text.toLowerCase());
   }
   return out;
 }

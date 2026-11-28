@@ -21,6 +21,7 @@ import {
   type DmRewriteNote,
 } from './console';
 import { formatText, UI_TEXTS } from '../l10n/texts';
+import { DM_CONSOLE_PRESETS } from './presets';
 
 /** Пометки перестройки словами словаря — как их пишет экран. */
 const say = (list: readonly DmRewriteNote[]) =>
@@ -349,6 +350,8 @@ describe('таблицы и столбцы запроса', () => {
     ['IS DISTINCT FROM в списке вывода', 'select a is distinct from b, c from t', ['t']],
     ['FROM (a JOIN b), c', 'select 1 from (a join b on true), c', ['a', 'b', 'c']],
     ['код Drizzle «.select().from(v)»', 'db.select().from(v).where(eq(v.id, id))', []],
+    ['столбец с именем таблицы', 'select id, nosuch as x from nosuch', ['nosuch']],
+    ['AS MATERIALIZED', 'with x as materialized (select 1 from a) select * from x, b', ['a', 'b']],
   ])('места таблиц: %s', (_, sql, want) => {
     expect(dmSqlTables(sql)).toEqual(want);
   });
@@ -395,6 +398,14 @@ describe('метод API → SELECT на всём снимке (блок 5, пу
     const m = withSql.find((x) => x.p === '/admin/organizations')!;
     expect(dmMethodTables(m, docs.sql)).toContain('organizations');
     expect(dmMethodTables(m, docs.sql)).not.toContain('v');
+  });
+  it('места таблиц заготовок консоли — таблицы описания схемы', () => {
+    const names = new Set(schema.tables.map((x) => x.name));
+    for (const p of DM_CONSOLE_PRESETS)
+      expect(
+        dmSqlTables(p.sql).filter((x) => !names.has(x)),
+        p.id,
+      ).toEqual([]);
   });
   it('таблицы всех методов — таблицы описания схемы, а не переменные кода Drizzle («.from(v)»)', () => {
     const names = new Set(schema.tables.map((x) => x.name));
