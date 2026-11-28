@@ -225,6 +225,8 @@ export const KB_ADMIN_TEXTS = {
   'kbadm.ev.s.new': { ru: 'создана разовая услуга', section: S },
   'kbadm.ev.fee.pay': { ru: 'принята оплата за обслуживание', section: S },
   'kbadm.ev.t.new': { ru: 'поставлена ручная задача', section: S },
+  'kbadm.ev.t.rep': { ru: 'поставлена задача с повтором', section: S },
+  'kbadm.ev.rq.bug': { ru: 'отправлен запрос об ошибке или опечатке', section: S },
   'kbadm.ev.t.done': { ru: 'задача выполнена или не выполнена', section: S },
   'kbadm.ev.t.conf': { ru: 'задача подтверждена или возвращена на доработку', section: S },
   'kbadm.ev.p.new': { ru: 'создан проект', section: S },

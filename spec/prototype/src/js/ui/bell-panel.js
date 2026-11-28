@@ -2,9 +2,9 @@
 // Колокольчик в верхней панели: значок, счётчик и панель «Уведомления» (пакет 16.11.2026, блок 3; поток И).
 // Строки берутся только из bell.js потока Т (bellItems, bellUnseen, bellSeenAll, bellRead, bellReadAll); в продукте — /api/bell.
 const BELL_PAGE=30;
-const BELL_TABS=[['all','Все'],['reports','Отчёты'],['tasks','Задачи'],['files','Файлы'],['money','Деньги'],['news','Новости']];
+const BELL_TABS=[['all','Все'],['reports','Отчёты'],['tasks','Задачи'],['files','Файлы'],['money','Деньги'],['news','Новости'],['req','Запросы']];
 // Значок строки — по виду (фильтру панели), у отдельных событий — свой (по умолчанию)
-const BELL_IC={reports:'file',tasks:'task',files:'folder',money:'wallet',news:'grad',other:'info'};
+const BELL_IC={reports:'file',tasks:'task',files:'folder',money:'wallet',news:'grad',req:'msg',other:'info'};
 const BELL_EV_IC={login_locked:'lock',lead:'user',broadcast:'send',cp_tg_request:'tg',cp_question:'chat',page_closed:'ban',nudge:'clock',day_dues:'calendar',week:'calendar'};
 const BP={tab:'all',n:BELL_PAGE};
 const bellBtn=()=>$('#bell');
@@ -18,7 +18,7 @@ function bellAgo(at){const d=String(at).slice(0,10),hm=String(at).slice(11,16),n
 const bellGroup=at=>{const d=String(at).slice(0,10);return d===TODAY?'Сегодня':d===addDays(TODAY,-1)?'Вчера':'Раньше'};
 
 // Значок: есть непросмотренные — цветной с красным счётчиком (1–99, дальше «99+»), иначе серый; до входа — скрыт
-function bellPaint(){const b=bellBtn();if(!b)return;clearTimeout(bellPaint.t);const off=S.loggedIn===false;b.hidden=off;if(off){if(bellIsOpen())closePop();return}
+function bellPaint(){reqPaint();const b=bellBtn();if(!b)return;clearTimeout(bellPaint.t);const off=S.loggedIn===false;b.hidden=off;if(off){if(bellIsOpen())closePop();return}
   if(bellIsOpen())bellSeenAll(S.me);const n=bellUnseen(S.me),nn=n?0:bellNewsUnseen(S.me);
   b.classList.toggle('on',n>0);b.innerHTML=ic('bell')+(n?`<span class="badge red bell-n">${bellCount(n)}</span>`:nn?'<span class="bell-nd"></span>':'');
   const t=n?`Уведомления: непросмотренных ${n}`:nn?'Уведомления: есть новости':'Уведомления';b.title=t;b.setAttribute('aria-label',t);b.setAttribute('aria-expanded',String(bellIsOpen()));
@@ -70,6 +70,7 @@ function bellGo(x){const o=x.open;bellRead(x.id);closePop();bellPaint();if(!o)re
     case 'sub':case 'sub_check':return subBellGo(o);
     case 'dm_token':return dmBellGo(o);
     case 'news':{const n=NEWS.find(y=>y.id===id);return n?newsOpen(n):gone()}
+    case 'request':{const r=reqById(id);return r?reqCard(r):gone()}
     case 'lead':{const l=LEADS.find(y=>String(y.id)===String(id));return l?openLead(l):gone()}
   }}
 

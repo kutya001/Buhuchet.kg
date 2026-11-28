@@ -14,7 +14,7 @@ function gst(cfg){let s=GS[cfg.id];if(!s){const sv=store.get('g5.'+cfg.id,{});s=
 /* Сортировка по умолчанию во всех списках — от новых к старым по «Создано» */
 /* Видимые по умолчанию столбцы по спискам (ТЗ, «Столбцы, видимые по умолчанию»); остальные — в меню «Столбцы» */
 const SHOW={'rep-months':['type','act','period','due','status','sum','paydue','paid','resp'],'cp-rep':['type','act','period','due','status','sum','got','paid','resp'],'rep-':['cp','type','act','period','due','status','wait','sum','got','paid','resp'],
- 'cps-debtors':['name','debt','resp','over','svc'],'cps-':['name','inn','regime','resp','over','svc'],'tasks-':['title','cp','exec','date','status'],'staff':['fio','role','phone','cps','over','active','kb'],
+ 'cps-debtors':['name','debt','resp','over','svc'],'cps-':['name','inn','regime','resp','over','svc'],'tasks-series':['title','rule','exec','cp','next','end','state'],'tasks-':['title','cp','exec','date','status'],'staff':['fio','role','phone','cps','over','active','kb'],
  'fin-journal':['date','cp','total','dist','adv','files'],'cp-fin':['date','cat','what','amount','acc'],'fin-svc':null,'fin-':['date','cp','cat','what','amount','acc'],
  'proj-':['name','cp','from','to','resps','status','paid'],'files':['name','cp','src','by','date','desc'],'dict-types':['on','name','act','pays','organ','per','rule','file','rcpt','used'],
  'bonus':['month','emp','cp','sum'],'an-cps':['cp','feeCh','fee','debt','total'],'adm-users':['login','fio','org','role','last','active'],'adm-orgs':['name','inn','owner','cps','staff','active']};
@@ -112,7 +112,7 @@ function grid(host,cfg){
     }
     h+=`</div>`;
     const gc=kb?[]:gcols();if(fk.length||gc.length||(S.search&&cfg.search!==false))h+=`<div class="chips">${gc.length?`<span class="chip"><span><b>Группировка:</b> ${gc.map(c=>esc(c.label)).join(' → ')}</span><button data-a="ungrp" aria-label="Убрать группировку">${ic('x','sm')}</button></span>${mob?fold:''}`:''}${S.search&&cfg.search!==false?`<span class="chip"><span><b>Поиск:</b> «${esc(S.search)}»</span><button data-a="clrq" aria-label="Очистить поиск">${ic('x','sm')}</button></span>`:''}${fk.map(k=>{const c=ac.find(x=>x.key===k);return `<span class="chip"><span><b>${esc(c.label)}:</b> ${esc(chipText(c,s.filters[k]))}</span><button data-clr="${k}" aria-label="Убрать фильтр">${ic('x','sm')}</button></span>`}).join('')}<button class="linkbtn" data-a="clrall" style="font-size:12.5px">Сбросить всё</button></div>`;
-    if(cfg.error)h+=`<div class="state">${ic('alert','lg')}<b>Не удалось загрузить список</b><span>Проверьте подключение к интернету и попробуйте ещё раз.</span><button class="btn cta" data-a="retry">${ic('refresh','sm')}Повторить</button></div>`;
+    if(cfg.error)h+=`<div class="state">${ic('alert','lg')}<b>Не удалось загрузить список</b><span>Проверьте подключение к интернету и попробуйте ещё раз.</span><button class="btn cta" data-a="retry">${ic('refresh','sm')}Повторить</button>${isAdmin()||DEMO.on?'':`<button class="linkbtn" data-a="reqbug">${ic('alert','sm')}Сообщить об ошибке</button>`}</div>`;
     else if(cfg.loading)h+=skel();
     else if(!total)h+=emptyHtml(all.length||fk.length||(S.search&&cfg.search!==false));
     else h+=kb?kanbanHtml(vc,rows,ac):view==='table'?tableHtml(pr,vc,rows,gt):cardsHtml(pr,vc,rows,gt);
@@ -127,7 +127,7 @@ function grid(host,cfg){
   }
   function skel(){return `<div class="gscroll" style="padding:14px;display:flex;flex-direction:column;gap:14px">${Array.from({length:6},(_,i)=>`<div style="display:flex;gap:16px">${[30,18,14,16,12].map(w=>`<div class="skel" style="width:${w+(i*7)%9}%"></div>`).join('')}</div>`).join('')}</div>`}
   function emptyHtml(any){
-    if(!any){const fe=cfg.firstRun===false?null:firstEmpty();g.fe=fe;if(fe)return feHtml(fe);const e=cfg.empty||{};return `<div class="state">${ic(e.icon||'list','lg')}<b>${esc(e.title||'Здесь пока пусто')}</b>${e.text?`<span>${esc(e.text)}</span>`:''}${e.add?`<button class="btn cta" data-a="emptyadd">${ic('plus')}Добавить</button>`:''}</div>`}
+    if(!any){const fe=cfg.firstRun===false?null:firstEmpty();g.fe=fe;if(fe)return feHtml(fe);const e=cfg.empty||{};return `<div class="state">${ic(e.icon||'list','lg')}<b>${esc(e.title||'Здесь пока пусто')}</b>${e.text?`<span>${esc(e.text)}</span>`:''}${e.add?`<button class="btn cta" data-a="emptyadd">${ic(e.addIcon||'plus')}${esc(e.addLabel||'Добавить')}</button>`:''}</div>`}
     return `<div class="state">${ic('search','lg')}<b>Ничего не найдено</b><button class="linkbtn" data-a="clrall">Сбросить фильтры</button></div>`}
   function W(c){return s.widths[c.key]||c.w||140}
   function tableHtml(pr,vc,rows,gt){
@@ -284,6 +284,7 @@ function grid(host,cfg){
           if(!framed)toast(cut||`Скачан файл «${nm}»: ${cnt}`,cut?'alert':'download');
           else{const tsv=[vc.map(c=>c.label).join('\t'),...xr.map(r=>vc.map(c=>{const v=c.val(r);if(isN(c))return v==null?'':String(v).replace('.',',');return colTxt(c,r).replace(/[\t\n]/g,' ')}).join('\t'))].join('\n');
             const m1=cut?cut+'.':`Файл «${nm}» скачивается (${cnt}).`,ico=cut?'alert':'download',msg=`${m1} Если здесь скачивание запрещено, строки скопированы — вставьте их в Excel`;try{navigator.clipboard.writeText(tsv).then(()=>toast(msg,ico),()=>toast(m1,ico))}catch(e){toast(m1,ico)}}}
+        if(a==='reqbug'){reqForm('bug',{what:'Не удалось загрузить список'});return}
         if(a==='retry'){cfg.error=false;cfg.loading=true;refresh();setTimeout(()=>{cfg.loading=false;if(host.isConnected)refresh()},400);return}
         if(a==='clrall'){s.filters={};s.page=0;if(S.search){clearSearch();ACTIVE.forEach(x=>x.refresh())}else refresh()}
         if(a==='clrq'){clearSearch();ACTIVE.forEach(x=>x.refresh())}

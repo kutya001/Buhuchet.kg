@@ -10,6 +10,9 @@ const fpAdv=f=>Math.max(0,Math.round((f.amount-fpAlloc(f).reduce((s,x)=>s+x.a,0)
 function feeAdvSplit(c,adv,paidOf){const use={};feeMonths(c).forEach(m=>{const need=feeCharge(c,m)-paidOf(m);if(adv>0.001&&need>0){const x=Math.min(need,adv);use[m]=x;adv-=x}});return {use,left:Math.round(adv*100)/100}}
 const feeGot=(c,m)=>(c.feePaid[m]||0)+((c.feeAdvUse||{})[m]||0);
 function derive(){
+  // Повторы задач: следующая задача серии ставится после срока предыдущей (в продукте — ночной запуск, в прототипе — при открытии и смене дня)
+  if(typeof reqNormAll==='function')reqNormAll();
+  if(typeof tsRun==='function')tsRun();
   kpiIndex();enNorm();
   CPS.forEach(c=>{c.overdue=0;c.avail=0;c.free=0;c.status=cpStatus(c);c.paused=c.status==='Приостановлен'});
   const recv={},selfP={};OPS.forEach(o=>{if(o.kind==='in')(o.alloc||[]).forEach(x=>{recv[x.r]=(recv[x.r]||0)+x.a});if(o.kind==='pay'&&o.self&&o.report)selfP[o.report]=(selfP[o.report]||0)+o.amount});

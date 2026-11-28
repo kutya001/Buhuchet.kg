@@ -31,7 +31,7 @@ function tgMornMsg(o,at){const HEAD=['Контрагент','Отчёт','Сро
 
 // Идея 8. Сводка недели руководителю (владелец и главный бухгалтер, у кого включена «Сводка за неделю по понедельникам»): по сотрудникам — сколько сдать до конца недели,
 // сколько просрочено (сдача и оплата налога) и сколько сдач ждут подтверждения. Отчёты — в области получателя; сотрудники с просроченным — первыми.
-const tgNotifyOn=(u,k)=>{const n=notifyOf(u);return !n.off[k]&&(n.mode==='all'||(n.mode==='digest'&&['over','tasks','week'].includes(k))||(n.mode==='manual'&&k==='tasks'))};
+const tgNotifyOn=(u,k)=>{const n=notifyOf(u);return !n.off[k]&&(k==='req'||n.mode==='all'||(n.mode==='digest'&&['over','tasks','week'].includes(k))||(n.mode==='manual'&&k==='tasks'))};
 const tgIsBoss=u=>u.role==='owner'||u.role==='chief';
 // Просроченное сотрудника: несданные отчёты со сроком в прошлом и неоплаченные налоги с прошедшим сроком оплаты
 function tgOverOf(id){const L=[];REPORTS.forEach(r=>{if(r.superseded||r.resp!==id||CPM[r.cp].archived)return;

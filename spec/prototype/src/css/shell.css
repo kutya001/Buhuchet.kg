@@ -85,7 +85,8 @@
 #wide.on{color:var(--text);background:var(--btn);box-shadow:inset 0 0 0 1px var(--border-strong)}
 @media (max-width:767px){#wide{display:none}}
 /* Колокольчик и панель «Уведомления» (пакет 16.11.2026, блок 3; src/js/ui/bell-panel.js) */
-.icon-btn.tb-bell{position:relative}
+.icon-btn.tb-bell,.icon-btn.tb-req{position:relative}
+.tb-req .bell-n{position:absolute;top:-3px;right:-5px;min-width:17px;padding:0 4px;font-size:10px;line-height:16px;box-shadow:0 0 0 2px var(--pane);pointer-events:none}
 .tb-bell.on{color:var(--yellow)}
 .tb-bell .bell-nd{position:absolute;top:5px;right:5px;width:8px;height:8px;border-radius:50%;background:var(--faint);box-shadow:0 0 0 2px var(--pane);pointer-events:none}
 .tb-bell .bell-n{position:absolute;top:-3px;right:-5px;min-width:17px;padding:0 4px;font-size:10px;line-height:16px;box-shadow:0 0 0 2px var(--pane);pointer-events:none}
@@ -109,7 +110,7 @@
 .bell-empty{display:flex;flex-direction:column;align-items:center;gap:8px;padding:40px 16px;color:var(--muted);text-align:center}.bell-empty .ic{color:var(--faint)}
 .bell-more{display:flex;align-items:center;gap:10px;padding:8px 8px 2px}.bell-more .muted{font-size:12px}
 @media (max-width:767px){
-  .icon-btn.tb-bell{width:44px;height:44px;margin:-6px -2px}
+  .icon-btn.tb-bell,.icon-btn.tb-req{width:44px;height:44px;margin:-6px -2px}
   .pop.bell-pop{left:0!important;top:0!important;right:0;bottom:0;width:100%;height:100dvh;max-height:none;border-radius:0;border:0;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);animation:bellUp .25s cubic-bezier(.2,.8,.2,1)}
   .bell-pop .grabber{margin:8px auto 0}
   .bell-h{padding:8px 12px}

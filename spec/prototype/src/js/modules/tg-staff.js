@@ -48,7 +48,7 @@ tgAct('repFile',{change:true,perm:'changeStatus',scope:tgRepIn,stale:(u,id)=>!tg
 // Задачи (идея 3). Сообщение о новой задаче приходит исполнителю; нажимает исполнитель, постановщик получает сообщение о каждом нажатии
 const tgTaskOf=id=>TASKS.find(x=>x.id===id);
 const tgTaskIn=(u,id)=>{const t=tgTaskOf(id);return feat('tasks')&&!!t&&t.exec===u.id};
-function tgTaskMsg(t,at){return {h:t.title,sub:tplFill('tgTask',{автор:empName(t.by)||'—',задача:t.title,срок:fmtD(t.date)}),at,
+function tgTaskMsg(t,at){const s=tsOf(t);return {h:t.title,sub:tplFill('tgTask',{автор:empName(t.by)||'—',задача:t.title,срок:fmtD(t.date)}),t:s?tplFill('tgTaskRep',{правило:tsTextS(s)}):undefined,at,
   btns:[[...(t.status==='К выполнению'?[{t:tgBtnT('tgBtnTaskWork','Взять в работу'),act:'taskWork',arg:t.id}]:[]),{t:tgBtnT('tgBtnTaskDone','Выполнена'),act:'taskDone',arg:t.id}],
     [{t:tgBtnT('tgBtnTaskOpen','Открыть задачу'),url:`${TG_SITE}/tasks/mine?task=${t.id}`,go:()=>openTask(t)}]]}}
 // Сообщение постановщику: в макете — строка журнала «Телеграм» (чат постановщика здесь не показан)

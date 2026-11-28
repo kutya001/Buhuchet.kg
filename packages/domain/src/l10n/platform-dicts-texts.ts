@@ -146,6 +146,12 @@ const SYSTEM_TEXTS = {
   'pdicts.tpl.label.tg_week': { ru: 'Telegram: еженедельная сводка', section: S },
   'pdicts.tpl.label.tg_code': { ru: 'Telegram: код восстановления пароля', section: S },
   'pdicts.tpl.label.tg_task': { ru: 'Telegram: новая задача', section: S },
+  'pdicts.tpl.label.tg_task_rep': { ru: 'Telegram о новой задаче: строка повтора', section: S },
+  'pdicts.tpl.label.tg_ser_end': { ru: 'Telegram постановщику: повтор закончился', section: S },
+  'pdicts.tpl.label.tg_ser_stop': {
+    ru: 'Telegram постановщику: повтор остановлен без человека',
+    section: S,
+  },
   'pdicts.tpl.label.tg_linked': { ru: 'Telegram: привязан', section: S },
   'pdicts.tpl.label.tg_pass_changed': { ru: 'Telegram: пароль изменён', section: S },
   'pdicts.tpl.label.tg_pass_reset': { ru: 'Telegram: пароль сброшен', section: S },
@@ -335,6 +341,19 @@ const SYSTEM_TEXTS = {
   'pdicts.tpl.label.tg_dm_tok_new': { ru: 'Telegram: API-токен создан', section: S },
   'pdicts.tpl.label.tg_dm_tok_revoked': { ru: 'Telegram: API-токен отозван', section: S },
   'pdicts.tpl.label.tg_dm_tok_soon': { ru: 'Telegram: API-токен истекает', section: S },
+  'pdicts.tpl.label.tg_req_ans': { ru: 'Telegram: ответ администратора на запрос', section: S },
+  'pdicts.tpl.label.tg_req_ask': {
+    ru: 'Telegram: администратор спрашивает автора запроса',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_req_done': { ru: 'Telegram: запрос решён', section: S },
+  'pdicts.tpl.label.tg_req_added': { ru: 'Telegram: запрос в справочник — добавлено', section: S },
+  'pdicts.tpl.label.tg_req_rej': { ru: 'Telegram: запрос отклонён', section: S },
+  'pdicts.tpl.label.tg_req_new': { ru: 'Telegram администраторам: новый запрос', section: S },
+  'pdicts.tpl.label.tg_req_reply': {
+    ru: 'Telegram администраторам: ответ автора в запросе',
+    section: S,
+  },
   'pdicts.tpl.label.tg_act_no_link': {
     ru: 'Telegram: скрытый ответ — Telegram не привязан',
     section: S,

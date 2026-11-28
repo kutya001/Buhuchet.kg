@@ -33,7 +33,7 @@ function renderDicts(body,tab,fresh){
     <section class="dg-grp"><h3 class="dg-gh">Поиск по всем значениям</h3><div id="dpg"></div></section>`;
   body.querySelectorAll('[data-dg]').forEach(b=>b.onclick=()=>{const [gi,ti]=b.dataset.dg.split('.').map(Number);const t=Object.assign({group:gs[gi].group},gs[gi].tabs[ti]);if(t.go){location.hash='#dicts.'+t.go;return}orgDictDlg(t)});
   grid($('#dpg',body),{id:'dict-platform',rid:x=>x.d+'|'+x.name,audit:x=>x.o,cols:[{key:'d',label:'Справочник',type:'enum',w:230,val:x=>x.d},{key:'name',label:'Значение',type:'text',w:340,val:x=>x.name,html:x=>`<span class="strong">${esc(x.name)}</span>`}],rows,title:'name',noun:['значение','значения','значений'],sort:{key:'d',dir:1},simulateLoad:fresh});
-  $('#req',body).onclick=requestDlg;
+  $('#req',body).onclick=reqDictPick;
 }
 // Форма просмотра вида отчёта: описание и налоги, к которым он относится (dict-guide.js), отдельным блоком — настройки организации
 /* Массовые изменения видов отчётов (v84): отметьте виды галочками — «Подключить», «Отключить» и «Настроить» (файл при сдаче, квитанция о приёме, дни напоминаний) для всех выбранных сразу.
@@ -74,21 +74,6 @@ function typeSettingsDlg(t){const o=ORG.types[t.id];const on=!!(o&&o.on);const e
     mount(el){if(!ed)return;$$('[data-rm]',el).forEach(b=>b.onclick=()=>{st.days.splice(+b.dataset.rm,1);m.draw()});const a=$('#ts-add',el);a.onkeydown=e=>{if(e.key==='Enter'){const n=+a.value;if(n>0&&n<=60&&!st.days.includes(n)){st.days.push(n);m.draw()}}};
       $('#ts-ok',el).onclick=()=>{const n=+a.value;if(n>0&&n<=60&&!st.days.includes(n))st.days.push(n);o.days=st.days.sort((x,y)=>y-x);o.needFile=$('#ts-file',el).checked;o.needReceipt=$('#ts-rcpt',el).checked;log('org',t.id,`Настройки «${t.short}»: напоминать за ${o.days.join(', ')||'—'} дн.`);m.close();refreshAll();toast('Настройки вида сохранены')}}})});
 }
-// Не больше 20 запросов «Попросить добавить» в час от организации (решение заказчика 30.10.2026, Д-4)
-const REQ_HOUR=20,reqHour=()=>{const now=Date.parse(nowStamp().replace(' ','T'));return REQUESTS.filter(r=>r.oid===ORG.id&&r._ca&&now-Date.parse(r._ca.replace(' ','T'))<3600*1000).length};
-function requestDlg(){openModal({form:true,render:()=>({title:'Попросить добавить',sub:'Запрос уйдёт администратору платформы',body:`<div class="form">${fld('Справочник',sel('rq-d',[['types','Виды отчётов'],...Object.entries(DICT).map(([k,d])=>[k,d.title])],'types'),{id:'rq-d'})}${fld('Что добавить',inp('rq-v','','placeholder="Например: Отчёт по НДС на импорт услуг"'),{req:true,id:'rq-v'})}${fld('Комментарий',`<textarea class="inp" id="rq-c" style="min-height:60px"></textarea>`,{full:true,id:'rq-c'})}</div>`,
-  foot:'<button class="btn ghost" data-close>Отмена</button><button class="btn cta" id="rq-ok">Отправить запрос</button>',mount(el,m){$('#rq-ok',el).onclick=()=>{if(!setErr(el,'rq-v',!val(el,'rq-v')?'Опишите, что добавить':reqHour()>=REQ_HOUR?'Не больше 20 запросов за час. Отправьте этот запрос позже':''))return;REQUESTS.push({_cb:S.me,_ca:nowStamp(),at:TODAY,oid:ORG.id,org:ORG.name,what:val(el,'rq-v'),dict:$('#rq-d',el).selectedOptions[0].text,note:val(el,'rq-c').trim(),status:'Новый',answer:''});m.close();toast('Запрос отправлен администратору платформы','send',false,{label:'Мои запросы',run:myReqDlg})}}})})}
-// «Мои запросы» (решение заказчика 27.10.2026, п. 46 расхождений продукта): запросы «Попросить добавить» всей организации, от новых к старым, только просмотр; ответ администратора виден здесь, отдельного уведомления нет
-const REQ_ST={Новый:['yellow','circle'],Добавлено:['green','check'],Отклонено:['faint','ban']};
-const myReqs=()=>REQUESTS.filter(r=>r.oid?r.oid===ORG.id:r.org===ORG.name);
-// Кто отправил запрос: сотрудник своей организации или пользователь другой организации платформы (для «Админки»)
-const reqBy=r=>empName(r._cb)||((typeof OTHER_USERS!=='undefined'?OTHER_USERS:[]).find(u=>u.login===r._cb)||{}).fio||whoName(r._cb);
-const reqCols=()=>[{key:'dict',label:'Справочник',type:'enum',w:150,val:r=>r.dict},{key:'what',label:'Что добавить',type:'text',w:180,val:r=>r.what,html:r=>`<span class="strong">${esc(r.what)}</span>`},{key:'note',label:'Комментарий',type:'text',w:150,val:r=>r.note||'',html:r=>r.note?esc(r.note):'<span class="faint">—</span>'},{key:'by',label:'Отправил',type:'enum',w:120,val:reqBy},
-  {key:'st',label:'Статус',type:'enum',w:125,val:r=>r.status,html:r=>pill(r.status,REQ_ST)},{key:'answer',label:'Ответ',type:'text',w:210,val:r=>r.answer||'',html:r=>r.answer?esc(r.answer):'<span class="faint">—</span>'}];
-// Запрос целиком (только просмотр): длинный комментарий и ответ видны полностью, в том числе на телефоне
-function reqViewDlg(r){openModal({render:()=>({title:esc(r.what),sub:`${esc(r.org)} · ${esc(r.dict)} · ${fmtD(r.at)}`,body:`<div class="kv">${[['Статус',pill(r.status,REQ_ST)],['Отправил',esc(reqBy(r))],['Комментарий',r.note?esc(r.note):'—',1],['Ответ',r.answer?esc(r.answer):'Ответа пока нет',1]].map(([k,v,w])=>`<div${w?' style="grid-column:1/-1"':''}><span class="k">${k}</span><span class="v">${v}</span></div>`).join('')}</div>`,foot:'<div class="grow"></div><button class="btn cta" data-close>Готово</button>'})})}
-function myReqDlg(){openModal({size:'wide',render:()=>({title:'Мои запросы',sub:'Запросы организации администратору платформы: что просили и что он ответил',body:'<div id="mrq"></div>',foot:'<div class="grow"></div><button class="btn cta" data-close>Готово</button>',
-  mount(el){grid($('#mrq',el),{id:'my-req',rid:r=>r._ca+r.what,cols:[{key:'at',label:'Дата',type:'date',w:100,val:r=>r.at},...reqCols()],
-    rows:myReqs,title:'what',open:reqViewDlg,noun:['запрос','запроса','запросов'],sort:{key:'at',dir:-1},empty:{icon:'send',title:'Запросов пока нет',text:'Если нужного значения нет в справочнике, нажмите «Попросить добавить».'}})}})})}
+// Запросы администратору — requests.js (доработки 28.11.2026)
 const REQUESTS=DB.dictRequests;
 

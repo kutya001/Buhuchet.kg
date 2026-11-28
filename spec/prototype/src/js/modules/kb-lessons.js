@@ -137,6 +137,8 @@ const KB_EV={
  's.new':['создана разовая услуга',h=>h.ent==='s'&&/^Разовая услуга «/.test(h.what)],
  'fee.pay':['принята оплата за обслуживание',h=>(h.ent==='cp'||h.ent==='fp')&&/^Оплата за обслуживание/.test(h.what)],
  't.new':['поставлена ручная задача',h=>h.ent==='t'&&h.what==='Задача поставлена'],
+ 't.rep':['поставлена задача с повтором',h=>h.ent==='t'&&/^Повтор настроен: /.test(h.what)],
+ 'rq.bug':['отправлен запрос об ошибке или опечатке',h=>h.ent==='rq'&&/^Запрос № \d+ отправлен: (Ошибка|Опечатка)$/.test(h.what)],
  't.done':['задача выполнена или не выполнена',h=>h.ent==='t'&&(/^(Задача выполнена|Не выполнена)/.test(h.what)||/^Статус: .+ → На подтверждении/.test(h.what))],
  't.conf':['задача подтверждена или возвращена на доработку',h=>h.ent==='t'&&/^Статус: На подтверждении → (Подтверждена|На доработке)/.test(h.what)],
  'p.new':['создан проект',h=>h.ent==='p'&&/^Проект «.*» создан$/.test(h.what)],
@@ -150,7 +152,7 @@ const KB_EV={
  'f.upload':['загружен файл вручную',h=>h.ent==='cp'&&/^Загружены файлы/.test(h.what)],
  'dm.tok':['выпущен API-токен',h=>h.ent==='org'&&h.id==='api'&&/^(Выпущен|Перевыпущен) API-токен/.test(h.what)],
  'open':['«Перейти» и 3 секунды на экране шага, показ «Показать как» до конца или статья шага (Посмотреть)'],'use':['первое использование функции (раздел «Работа со списками»)'],'state':['выполнено условие в данных пользователя'],'hand':['только показом или статьёй']};
-const KB_MAP={profile:'org.main',accs:'org.acc',policy:'org.policy',settings:'org.settings',nmode:'emp.notify',types:'type.on',typecfg:'type.cfg',roles:'role.save',emps:'emp.new',cp1:'cp.new',import:'cp.import',resp:'cp.resp',tariff:'cp.tariff',oneoff:'cp.oneoff',cppage:'cp.page',assign:'r.assign',submit:'r.sub',accept:'r.acc',ver:'r.ver',na:'r.na',in:'in.new',split:'in.split',pay:'r.pay',svc:'s.new',feepay:'fee.pay',mtask:'t.new',tdone:'t.done',tconf:'t.conf',proj:'p.new',works:'p.work',tranche:'p.pay',kset:'k.setup',kwho:'k.who',kval:'k.val',kxls:'k.xls',kchk:'k.check',upload:'f.upload',dmtok:'dm.tok'};
+const KB_MAP={rqbug:'rq.bug',profile:'org.main',accs:'org.acc',policy:'org.policy',settings:'org.settings',nmode:'emp.notify',types:'type.on',typecfg:'type.cfg',roles:'role.save',emps:'emp.new',cp1:'cp.new',import:'cp.import',resp:'cp.resp',tariff:'cp.tariff',oneoff:'cp.oneoff',cppage:'cp.page',assign:'r.assign',submit:'r.sub',accept:'r.acc',ver:'r.ver',na:'r.na',in:'in.new',split:'in.split',pay:'r.pay',svc:'s.new',feepay:'fee.pay',mtask:'t.new',trep:'t.rep',tdone:'t.done',tconf:'t.conf',proj:'p.new',works:'p.work',tranche:'p.pay',kset:'k.setup',kwho:'k.who',kval:'k.val',kxls:'k.xls',kchk:'k.check',upload:'f.upload',dmtok:'dm.tok'};
 const KB_KEEP={profile:1,resp:1}; // the data condition stays in addition to the event
 const KB_FEAT={money:'taxpay',fee:'fee',tasks:'tasks',projects:'projects',kpi:'indicators',files:'files'},KB_IFEAT={tariff:'fee',bonus:'accounts',journal:'finops',svc:'finops',anl:'fee'};
 const KBG=DB.ref.kbGroups;
