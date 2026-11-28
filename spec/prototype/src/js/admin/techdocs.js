@@ -36,6 +36,8 @@ addEventListener('message',e=>{const f=TDOC.frame;if(!f||!f.contentWindow||e.sou
   // окно метода, открытое из схемы, забирает фокус у рамки — Esc и Tab работают в окне
   if(d.open){tdMethod(d.open);const m=MODALS[MODALS.length-1];if(m&&m.el){const box=m.el.querySelector('.modal')||m.el;if(!box.hasAttribute('tabindex'))box.tabIndex=-1;box.focus({preventScroll:true})}}
   if('full' in d)tdFull(d.full);
+  // «Собрать запрос» на схеме (блок 6, пункт 1): отмеченные таблицы — в сборщик консоли; имена — только строки, не больше пяти
+  if(Array.isArray(d.build)&&d.build.length&&d.build.length<=DMC_BUILD_MAX&&d.build.every(x=>typeof x==='string'&&/^[a-z_][a-z0-9_]{0,62}$/.test(x)))dmcBuild(d.build);
   // Esc, который схема не обработала: закрывает верхнее окно, без окон — полноэкранный режим
   if(d.esc){const m=MODALS[MODALS.length-1];if(m)m.close();else if(TDOC.full)tdFull(false)}});
 new MutationObserver(()=>{if(TDOC.frame&&TDOC.ready)tdPost({theme:tdTheme()})}).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
@@ -138,10 +140,10 @@ function tdMethod(id,tab){const a=tdApi();const m=a&&a.methods.find(x=>x.id===id
     const b=st.tab==='req'?tdReqHtml(m):st.tab==='res'?tdResHtml(m):st.tab==='tbl'?tdTblHtml(m):st.tab==='sql'?tdSqlHtml(m):tdCodeHtml(m);
     return {title:`${tdMth(m.m)} <span class="mono td-tp">${esc(m.p)}</span>`,sub:esc(m.sum),
       body:`<div class="kv td-kv"><div><span class="k">Раздел</span><span class="v">${esc(tdSec(m))}</span></div><div><span class="k">Доступ</span><span class="v">${esc(acc)}</span></div>${m.rate?`<div><span class="k">Предел запросов</span><span class="v">${esc(m.rate)}</span></div>`:''}${m.desc?`<div class="full"><span class="k">Описание</span><span class="v">${esc(m.desc)}</span></div>`:''}</div>${cardTabs(tabs,st.tab,'tdt')}<div class="td-b">${b}</div>`,
-      foot:`<span class="hint" style="margin:0">Только просмотр: из Админки метод не вызывается${dmcMethodSql(m)?'; кнопки передают запрос в «Витрину данных»':''}</span><div class="grow"></div>${dmcMethodSql(m)?`<button class="btn" id="td-con">${ic('code','sm')}Открыть в консоли</button><button class="btn" id="td-tpl">${ic('layers','sm')}Создать шаблон на основе</button>`:''}<button class="btn cta" data-close>Готово</button>`,
+      foot:`<span class="hint" style="margin:0">Только просмотр: из Админки метод не вызывается${m.m==='GET'?'; кнопки передают запрос в «Витрину данных»':''}</span><div class="grow"></div>${dmcMethodSql(m)?`<button class="btn" id="td-con">${ic('code','sm')}Открыть в консоли</button><button class="btn" id="td-tpl">${ic('layers','sm')}Создать шаблон на основе</button>`:m.m==='GET'?`<button class="btn" id="td-bld">${ic('layers','sm')}Собрать запрос по таблицам метода</button>`:''}<button class="btn cta" data-close>Готово</button>`,
       mount(el){bindCardTabs(el,'tdt',k=>{st.tab=k;mm.draw();const x=el.querySelector('.mb');if(x)x.scrollTop=0});
         // Методы API → консоль и шаблон (доработки 27.11.2026: консоль запросов, блок 5, пункт 1): только методы чтения с точным SQL
-        const tc=el.querySelector('#td-con'),tt=el.querySelector('#td-tpl');if(tc)tc.onclick=()=>dmcFromMethod(m,false);if(tt)tt.onclick=()=>dmcFromMethod(m,true);
+        const tc=el.querySelector('#td-con'),tt=el.querySelector('#td-tpl');const tb=el.querySelector('#td-bld');if(tb)tb.onclick=()=>dmcMethodBuild(m);if(tc)tc.onclick=()=>dmcFromMethod(m,false);if(tt)tt.onclick=()=>dmcFromMethod(m,true);
         $$('[data-tdtb]',el).forEach(x=>x.onclick=()=>tdShowTable(x.dataset.tdtb));
         $$('[data-tdshow]',el).forEach(x=>x.onclick=()=>tdShowMethod(m.id));
         $$('[data-tdfn]',el).forEach(x=>x.onclick=()=>tdShowFn(x.dataset.tdfn));

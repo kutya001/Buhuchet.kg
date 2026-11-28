@@ -85,10 +85,21 @@
 .dmc-card p{margin:0;color:var(--muted)}.dmc-rel{font-size:12px}
 .dmc-pars:empty{display:none}.dmc-from{margin:0}
 .dmc-pm{display:flex;flex-direction:column;gap:6px}.dmc-pi{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:8px;border:1px solid var(--border);border-radius:var(--r-m);background:var(--pane);color:var(--text);font:inherit;text-align:left;cursor:pointer;min-width:0}
-.dmc-pi.on{border-color:var(--blue)}.dmc-ro{position:static;white-space:pre-wrap;padding:10px;max-height:200px;overflow:auto;font-size:12px}
+.dmc-pi.on{border-color:var(--blue)}
+/* Этап 2 (v167): «Выполнять как», отметка таблиц, сборщик «Собрать запрос» */
+.dmc-asr{gap:8px;flex-wrap:wrap;align-items:center}.dmc-as{font-size:13px;color:var(--muted)}.dmc-asr select{width:auto;max-width:320px}
+.dmc-pick{margin:0;flex-direction:column;align-items:stretch}.dmc-pick .row{gap:6px}.dmc-pkr{margin-left:8px;font-size:13px}
+.dmb{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:12px;align-items:start}.dmb>.note{grid-column:1/-1;margin:0}
+.dmb-l,.dmb-r{display:flex;flex-direction:column;gap:10px;min-width:0}.dmb-t{margin:0;display:flex;flex-direction:column;gap:6px}
+.dmb-h{gap:6px;align-items:baseline;flex-wrap:wrap}.dmb-f{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:2px 10px;max-height:180px;overflow:auto;font-size:12.5px}
+.dmb-f .check-row{gap:6px;align-items:baseline}.dmb-f .faint{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dmb-sql{position:static;white-space:pre-wrap;padding:10px;max-height:360px;overflow:auto;font-size:12px;margin:0}
+.dmb-dbl{margin:0;flex-wrap:wrap}.dmb-dbl>span{flex:1 1 calc(100% - 30px)}.dmb-dbl>.btn{margin-left:28px}
+.dmc-ro{position:static;white-space:pre-wrap;padding:10px;max-height:200px;overflow:auto;font-size:12px}
 @media (max-width:768px){
   .dmc{grid-template-columns:minmax(0,1fr)}
   .dmc-side{position:static;max-height:none}
+  .dmb{grid-template-columns:minmax(0,1fr)}.dmb-f{grid-template-columns:minmax(0,1fr)}
   .dm-ask-note{flex-wrap:wrap}
   .dm-ask-note>span{flex:1 1 calc(100% - 30px)}
   .dm-ask-note>.btn{margin-left:28px}
