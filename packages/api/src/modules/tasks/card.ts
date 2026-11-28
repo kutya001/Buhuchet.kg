@@ -85,8 +85,13 @@ export async function taskOut(
     taskHistory(tx, r.id),
   ]);
   const filesVisible = taskFilesVisible(options.subject, r, options.filesOn);
+  // Строка «Повтор» (доработки 28.11.2026, блок 4, пункт 2); правило словами — и в `repeat`, как у строки списка.
+  const series = r.seriesId
+    ? await seriesInfoOf(tx, r.seriesId, options.subject, options.today)
+    : null;
   return {
     ...rowBody(r, options.today),
+    repeat: series?.text ?? null,
     description: r.description,
     executorFullName: r.executorFullName,
     executorActive: r.executorActive,
@@ -107,10 +112,7 @@ export async function taskOut(
     history: history
       .filter((h) => filesVisible || !FILE_ACTIONS.has(h.action))
       .map((h) => ({ ...h, at: h.at.toISOString() })),
-    // Строка «Повтор» (доработки 28.11.2026, блок 4, пункт 2).
-    series: r.seriesId
-      ? await seriesInfoOf(tx, r.seriesId, options.subject, options.today)
-      : null,
+    series,
   };
 }
 
