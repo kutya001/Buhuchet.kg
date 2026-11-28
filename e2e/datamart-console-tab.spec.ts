@@ -440,6 +440,45 @@ test.describe('Витрина данных: консоль запросов, э�
     await expect(page.locator('[data-dm-b]')).toHaveCount(0);
   });
 
+  // Отметка на холсте вкладки «Схема» (замечание заказчика 28.11.2026): холст захватывает указатель, и
+  // нажатие раньше доставалось ему, а не таблице. Только настоящие нажатия (`click()`), без force и событий.
+  test('(консоль, этап 2, блок 6, пункт 1) «Схема базы» → вкладка «Схема» → «Собрать запрос» → нажатия на таблицы на схеме отмечают их и снимают отметку → «Собрать» — окно сборщика с этими таблицами', async ({
+    page,
+    baseURL,
+    isMobile,
+  }) => {
+    test.skip(isMobile, 'сборщик — на ПК');
+    const origin = new URL(baseURL!).origin;
+    await platformAdmin(page.request, origin);
+
+    await page.goto('/app/tdocs/db');
+    const schema = page.frameLocator('iframe.td-frame');
+    // Вид «таблица и соседи»: около дюжины таблиц, схема показывает их целиком.
+    await schema.locator('.tcard[data-t="reports"]').click();
+    await schema.locator('[data-diag="=reports"]').click();
+    const node = (n: string) => schema.locator(`#nodes .node[data-n="${n}"]`);
+    await expect(node('contractors')).toBeVisible();
+    // Режим сборки — после того, как схема нарисована: смена вида снимает рамки отметки.
+    await schema.locator('#emb-build').click();
+    const names = ['reports', 'contractors', 'employees'];
+    for (const n of names) {
+      await node(n).locator('.nt').click();
+      await expect(node(n)).toHaveClass(/(^|\s)pk(\s|$)/);
+    }
+    await expect(schema.locator('#bld-txt')).toContainText(names.join(', '));
+    await node('contractors').locator('.nt').click();
+    await expect(node('contractors')).not.toHaveClass(/(^|\s)pk(\s|$)/);
+    await expect(schema.locator('#bld-txt')).toContainText('reports, employees');
+    await node('contractors').locator('.nt').click();
+    await expect(schema.locator('#bld-txt')).toContainText('reports, employees, contractors');
+    await schema.locator('#bld-go').click();
+
+    const win = page.locator('[data-dm-b]');
+    await expect(win).toBeVisible();
+    await expect(win.locator('[data-dm-b-table]')).toHaveCount(3);
+    await expect(win.locator('[data-dm-b-none]')).toHaveCount(0);
+  });
+
   test('(консоль, этап 2, блок 5, пункт 3) метод API без SQL → «Собрать запрос по таблицам метода» → окно сборщика с таблицами метода → «Открыть в консоли» — пометка «Собрано по таблицам метода»', async ({
     page,
     baseURL,

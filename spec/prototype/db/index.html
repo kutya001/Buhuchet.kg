@@ -404,6 +404,8 @@ main:has(#tab-d:not([hidden])){padding-bottom:14px}
 #emb-build[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 2px var(--yellow-bg)}
 .picking .tcard,.picking .node{cursor:copy}
 .picking .tcard.pk,.picking .node.pk{outline:3px solid var(--accent);outline-offset:1px}
+/* на схеме — та же толщина отметки при любом масштабе (--zs — масштаб холста) */
+.picking .node.pk{outline-width:calc(3px / var(--zs,1));outline-offset:calc(1px / var(--zs,1))}
 #bld-bar{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:50;display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:calc(100% - 32px);background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--r);box-shadow:var(--shadow);padding:8px 12px;font-size:13.5px}
 #bld-bar[hidden]{display:none}#bld-bar #bld-txt{flex:1 1 220px;min-width:0}
 @media (max-width:600px){#bld-bar{left:8px;right:8px;bottom:8px;transform:none;max-width:none}#bld-bar #bld-txt{flex-basis:100%}}
@@ -548,9 +550,11 @@ function bldDraw(msg){const bar=document.getElementById('bld-bar');if(!bar||!EMB
 if(EMB){document.getElementById('emb-build').onclick=()=>{BLD.on=!BLD.on;BLD.L=[];bldDraw()};
   document.getElementById('bld-x').onclick=()=>{BLD.on=false;BLD.L=[];bldDraw()};
   document.getElementById('bld-go').onclick=()=>{const L=BLD.L.slice();BLD.on=false;BLD.L=[];bldDraw();if(L.length)toHost({build:L})};
-  document.addEventListener('click',e=>{if(!BLD.on)return;const x=e.target.closest&&e.target.closest('.tcard[data-t],.node[data-n]');if(!x||e.target.closest('[data-act]'))return;e.preventDefault();e.stopPropagation();
-    const n=x.dataset.t||x.dataset.n,t=DB&&DB.tables.find(y=>y.name===n);if(!t||t.status!=='actual')return bldDraw(`«${n}» ещё нет в базе: по ней запрос не собрать`);
-    const i=BLD.L.indexOf(n);if(i>=0)BLD.L.splice(i,1);else if(BLD.L.length<BLD_MAX)BLD.L.push(n);else return bldDraw(`Не больше ${BLD_MAX} таблиц: снимите отметку с лишней`);bldDraw()},true)}
+  // Карточки списка — по нажатию; таблицы на схеме — из tap(): холст схемы захватывает указатель, и click
+  // приходит холсту, а не таблице — поэтому раньше нажатие на схеме ничего не отмечало
+  document.addEventListener('click',e=>{if(!BLD.on)return;const x=e.target.closest&&e.target.closest('.tcard[data-t]');if(!x||e.target.closest('[data-act]'))return;e.preventDefault();e.stopPropagation();bldPick(x.dataset.t)},true)}
+function bldPick(n){const t=DB&&DB.tables.find(y=>y.name===n);if(!t||t.status!=='actual')return bldDraw(`«${n}» ещё нет в базе: по ней запрос не собрать`);
+  const i=BLD.L.indexOf(n);if(i>=0)BLD.L.splice(i,1);else if(BLD.L.length<BLD_MAX)BLD.L.push(n);else return bldDraw(`Не больше ${BLD_MAX} таблиц: снимите отметку с лишней`);bldDraw()}
 const API_T=EMB&&EMB.api?EMB.api.t||{}:{},API_M=EMB&&EMB.api?EMB.api.m||{}:{};
 const RW={r:'чтение',w:'запись',rw:'чтение и запись'};
 function apiUse(name,sm){const l=API_T[name]||[];if(!l.length)return '<p class="faint" style="margin:0">Методов API, которые читают или меняют эту таблицу, в описании API нет.</p>';
@@ -1004,6 +1008,7 @@ function drawFrames(){
 function applyView(){
   const v=E.v,st=$('#stage');
   $('#world').style.transform=`translate(${v.x}px,${v.y}px) scale(${v.s})`;
+  st.style.setProperty('--zs',String(v.s));
   const g=24*v.s;st.style.backgroundSize=`${g}px ${g}px`;st.style.backgroundPosition=`${v.x}px ${v.y}px`;
   $('#z-val').textContent=Math.round(v.s*100)+'%';
   miniSoon();
@@ -1087,6 +1092,7 @@ function tap(el){
   if(!el||!el.closest)return;
   const nd=el.closest('.node');
   if(nd){
+    if(BLD.on)return bldPick(nd.dataset.n); // «Собрать запрос»: нажатие на таблицу отмечает её
     const n=nd.dataset.n,r=el.closest('.nr'),hdr=el.closest('.nh'),now=Date.now();
     // двойное нажатие на заголовок — свернуть или развернуть
     if(hdr&&lastTap.n===n&&now-lastTap.t<380){lastTap={n:'',t:0};toggleMode(n);return}
