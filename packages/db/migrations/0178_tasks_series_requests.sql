@@ -64,7 +64,7 @@ CREATE TABLE "request_messages" (
 	"n" integer NOT NULL,
 	"kind" text NOT NULL,
 	"by_admin" boolean DEFAULT false NOT NULL,
-	"author_user_id" uuid DEFAULT app.current_user_id() NOT NULL,
+	"author_user_id" uuid DEFAULT app.current_user_id(),
 	"text" text DEFAULT '' NOT NULL,
 	"from_status" text,
 	"to_status" text,
@@ -77,7 +77,8 @@ CREATE TABLE "request_messages" (
 	CONSTRAINT "request_messages_text_check" CHECK (length("request_messages"."text") <= 4000),
 	CONSTRAINT "request_messages_why_check" CHECK (length("request_messages"."why") <= 4000),
 	CONSTRAINT "request_messages_st_check" CHECK (case when "request_messages"."kind" = 'st' then "request_messages"."to_status" in ('new', 'in_work', 'solved', 'added', 'rejected', 'withdrawn') and "request_messages"."from_status" in ('new', 'in_work', 'solved', 'added', 'rejected', 'withdrawn') and "request_messages"."from_status" <> "request_messages"."to_status" else "request_messages"."to_status" is null and "request_messages"."from_status" is null and "request_messages"."why" = '' end),
-	CONSTRAINT "request_messages_ask_check" CHECK ("request_messages"."kind" <> 'ask' or "request_messages"."by_admin")
+	CONSTRAINT "request_messages_ask_check" CHECK ("request_messages"."kind" <> 'ask' or "request_messages"."by_admin"),
+	CONSTRAINT "request_messages_author_check" CHECK ("request_messages"."author_user_id" is not null or "request_messages"."by_admin")
 );
 --> statement-breakpoint
 ALTER TABLE "request_messages" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
@@ -177,18 +178,19 @@ UPDATE "dict_change_requests" r SET
   "lead_admin" = r."decided_by"
 FROM (SELECT "id", row_number() OVER (ORDER BY "created_at", "id") AS rn FROM "dict_change_requests") n
 WHERE n."id" = r."id";--> statement-breakpoint
--- Ответ администратора — первым сообщением ленты, решение — сменой статуса «Новый» → «Добавлено» / «Отклонён».
+-- Ответ администратора — первым сообщением ленты, решение — сменой статуса «Новый» → «Добавлено» / «Отклонён»
+-- (текст ответа — только сообщением, без повтора в причине). Автор — кто ответил; у ответа без автора
+-- (демо-организация) — пусто: «Администратор платформы».
 INSERT INTO "request_messages" ("org_id", "request_id", "n", "kind", "by_admin", "author_user_id", "text", "created_at")
 SELECT r."org_id", r."id", 1, 'msg', true, r."decided_by", left(r."answer", 4000), coalesce(r."decided_at", r."updated_at")
 FROM "dict_change_requests" r
-WHERE r."answer" <> '' AND r."decided_by" IS NOT NULL;--> statement-breakpoint
+WHERE r."answer" <> '';--> statement-breakpoint
 INSERT INTO "request_messages" ("org_id", "request_id", "n", "kind", "by_admin", "author_user_id", "from_status", "to_status", "why", "created_at")
 SELECT r."org_id", r."id",
-  CASE WHEN r."answer" <> '' THEN 2 ELSE 1 END, 'st', true, r."decided_by", 'new', r."status",
-  CASE WHEN r."status" = 'rejected' THEN left(r."answer", 4000) ELSE '' END,
+  CASE WHEN r."answer" <> '' THEN 2 ELSE 1 END, 'st', true, r."decided_by", 'new', r."status", '',
   coalesce(r."decided_at", r."updated_at")
 FROM "dict_change_requests" r
-WHERE r."status" <> 'new' AND r."decided_by" IS NOT NULL;--> statement-breakpoint
+WHERE r."status" <> 'new';--> statement-breakpoint
 -- Перенесённое прочитано и автором, и администраторами (как в прототипе).
 UPDATE "dict_change_requests" r SET
   "read_author" = m.cnt,
@@ -219,4 +221,12 @@ CREATE POLICY "request_notes_admin_only" ON "request_notes" AS RESTRICTIVE FOR A
 CREATE POLICY "request_shots_isolation" ON "request_shots" AS PERMISSIVE FOR ALL TO "buhuchet_app" USING ("request_shots"."org_id" = app.current_org_id()) WITH CHECK ("request_shots"."org_id" = app.current_org_id());--> statement-breakpoint
 CREATE POLICY "request_shots_insert_own" ON "request_shots" AS RESTRICTIVE FOR INSERT TO "buhuchet_app" WITH CHECK ("request_shots"."created_by" = app.current_user_id() and "request_shots"."created_at" = now());--> statement-breakpoint
 ALTER POLICY "dict_change_requests_insert_guard" ON "dict_change_requests" TO buhuchet_app WITH CHECK ("dict_change_requests"."created_by" = app.current_user_id() and "dict_change_requests"."status" = 'new' and "dict_change_requests"."answer" = '' and "dict_change_requests"."decided_by" is null and "dict_change_requests"."decided_at" is null and "dict_change_requests"."lead_admin" is null and not "dict_change_requests"."wait" and "dict_change_requests"."closed_at" is null and "dict_change_requests"."read_admin" = 0);--> statement-breakpoint
+-- Новые виды: «отключённые» уведомления `req`, очередь Telegram (повторы задач, запросы), колокольчик `req`.
+-- Последними: очередь Telegram и колокольчик берутся после таблиц задач и запросов.
+ALTER TABLE "telegram_notify_settings" DROP CONSTRAINT "telegram_notify_settings_off_check";--> statement-breakpoint
+ALTER TABLE "telegram_outbox" DROP CONSTRAINT "telegram_outbox_kind_check";--> statement-breakpoint
+ALTER TABLE "bell_notifications" DROP CONSTRAINT "bell_notifications_kind_check";--> statement-breakpoint
+ALTER TABLE "telegram_notify_settings" ADD CONSTRAINT "telegram_notify_settings_off_check" CHECK ("telegram_notify_settings"."off" <@ array['before', 'over', 'tasks', 'regtasks', 'week', 'req']::text[]);--> statement-breakpoint
+ALTER TABLE "telegram_outbox" ADD CONSTRAINT "telegram_outbox_kind_check" CHECK ("telegram_outbox"."kind" in ('reminders', 'task_new', 'task_on_confirm', 'task_confirmed', 'task_rework', 'task_cancelled', 'report_fix', 'code', 'linked', 'relinked', 'unlinked', 'pass_changed', 'pass_reset', 'broadcast', 'lead', 'login_locked', 'alert', 'relink_code', 'page_closed', 'bot_test', 'cp_tg_request', 'task_started', 'task_done', 'bot_ask', 'nudge', 'not_me', 'bot_cmd', 'group', 'cp_file', 'setup_link', 'sub', 'sub_check', 'storage_check', 'dm_token', 'task_series_end', 'task_series_stop', 'request', 'request_new', 'request_reply'));--> statement-breakpoint
+ALTER TABLE "bell_notifications" ADD CONSTRAINT "bell_notifications_kind_check" CHECK ("bell_notifications"."kind" in ('reports', 'tasks', 'files', 'money', 'news', 'other', 'req'));--> statement-breakpoint
 SET LOCAL lock_timeout TO DEFAULT;

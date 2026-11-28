@@ -11126,7 +11126,7 @@
         },
         "telegram_notify_settings_off_check": {
           "name": "telegram_notify_settings_off_check",
-          "value": "\"telegram_notify_settings\".\"off\" <@ array['before', 'over', 'tasks', 'regtasks', 'week']::text[]"
+          "value": "\"telegram_notify_settings\".\"off\" <@ array['before', 'over', 'tasks', 'regtasks', 'week', 'req']::text[]"
         }
       },
       "isRLSEnabled": true
@@ -11402,7 +11402,7 @@
       "checkConstraints": {
         "telegram_outbox_kind_check": {
           "name": "telegram_outbox_kind_check",
-          "value": "\"telegram_outbox\".\"kind\" in ('reminders', 'task_new', 'task_on_confirm', 'task_confirmed', 'task_rework', 'task_cancelled', 'report_fix', 'code', 'linked', 'relinked', 'unlinked', 'pass_changed', 'pass_reset', 'broadcast', 'lead', 'login_locked', 'alert', 'relink_code', 'page_closed', 'bot_test', 'cp_tg_request', 'task_started', 'task_done', 'bot_ask', 'nudge', 'not_me', 'bot_cmd', 'group', 'cp_file', 'setup_link', 'sub', 'sub_check', 'storage_check', 'dm_token')"
+          "value": "\"telegram_outbox\".\"kind\" in ('reminders', 'task_new', 'task_on_confirm', 'task_confirmed', 'task_rework', 'task_cancelled', 'report_fix', 'code', 'linked', 'relinked', 'unlinked', 'pass_changed', 'pass_reset', 'broadcast', 'lead', 'login_locked', 'alert', 'relink_code', 'page_closed', 'bot_test', 'cp_tg_request', 'task_started', 'task_done', 'bot_ask', 'nudge', 'not_me', 'bot_cmd', 'group', 'cp_file', 'setup_link', 'sub', 'sub_check', 'storage_check', 'dm_token', 'task_series_end', 'task_series_stop', 'request', 'request_new', 'request_reply')"
         },
         "telegram_outbox_status_check": {
           "name": "telegram_outbox_status_check",
@@ -12043,7 +12043,7 @@
       "checkConstraints": {
         "bell_notifications_kind_check": {
           "name": "bell_notifications_kind_check",
-          "value": "\"bell_notifications\".\"kind\" in ('reports', 'tasks', 'files', 'money', 'news', 'other')"
+          "value": "\"bell_notifications\".\"kind\" in ('reports', 'tasks', 'files', 'money', 'news', 'other', 'req')"
         },
         "bell_notifications_event_check": {
           "name": "bell_notifications_event_check",
@@ -18539,7 +18539,7 @@
           "name": "author_user_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "default": "app.current_user_id()"
         },
         "text": {
@@ -18706,6 +18706,10 @@
         "request_messages_ask_check": {
           "name": "request_messages_ask_check",
           "value": "\"request_messages\".\"kind\" <> 'ask' or \"request_messages\".\"by_admin\""
+        },
+        "request_messages_author_check": {
+          "name": "request_messages_author_check",
+          "value": "\"request_messages\".\"author_user_id\" is not null or \"request_messages\".\"by_admin\""
         }
       },
       "isRLSEnabled": true

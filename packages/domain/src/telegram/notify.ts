@@ -71,6 +71,15 @@ export const OUTBOX_KINDS = [
   // «Витрина данных» (Витрина данных, блок 5, пункт 10; общий план 20.11, этап 3, П5): владельцам —
   // API-токен создан, отозван, до конца срока 7 дней.
   'dm_token',
+  // Повторяющиеся задачи (доработки 28.11.2026, блок 6, пункт 4): постановщику — «Повтор закончился»
+  // и «Повтор остановлен» (прототип `task-series.js`).
+  'task_series_end',
+  'task_series_stop',
+  // Запросы администратору (доработки 28.11.2026, блок 5): автору — «Ответ на запрос»;
+  // администраторам платформы — «Новый запрос» и «Ответ автора в запросе» (прототип `requests.js`).
+  'request',
+  'request_new',
+  'request_reply',
 ] as const;
 export type OutboxKind = (typeof OUTBOX_KINDS)[number];
 
@@ -159,6 +168,13 @@ export type NotifyMode = (typeof NOTIFY_MODES)[number];
  */
 export const NOTIFY_KINDS = ['before', 'over', 'tasks', 'regtasks', 'week'] as const;
 export type NotifyKind = (typeof NOTIFY_KINDS)[number];
+
+/**
+ * Что база принимает в «отключённых» (`telegram_notify_settings_off_check`): переключатели и `req` —
+ * «Ответы на мои запросы администратору» (доработки 28.11.2026: запросы, блок 5, пункт 5). Переключатель
+ * `req` появится в «Мой профиль» с методами запросов (этап 2 пакета); до него база его уже принимает.
+ */
+export const NOTIFY_STORED_KINDS = [...NOTIFY_KINDS, 'req'] as const;
 
 /** Переключатели сотрудника без режима (прототип: `boss || !['week','before','over'].includes(k)`). */
 export const STAFF_NOTIFY_KINDS: readonly NotifyKind[] = ['tasks', 'regtasks'];

@@ -3,6 +3,7 @@ import {
   REQUEST_DICT_FORMS,
   REQUEST_KINDS,
   REQUEST_STATUSES,
+  type RequestWhere,
 } from '@buhuchet/domain';
 import { sql } from 'drizzle-orm';
 import {
@@ -95,7 +96,7 @@ export const dictChangeRequests = pgTable(
     /** Значения полей формы (без пустых). */
     form: jsonb('form').$type<Record<string, string>>().notNull().default({}),
     /** «Где»: модуль → вкладка → окно, адрес экрана, версия, браузер, размер, время — без значений полей. */
-    whereInfo: jsonb('where_info').$type<Record<string, string>>(),
+    whereInfo: jsonb('where_info').$type<RequestWhere>(),
     /** Справочник продукта у прежних запросов «Попросить добавить»; у новых форм без своего кода — пусто. */
     dict: text('dict'),
     /** Прежнее «Что добавить» (до этапа 2 пакета 28.11.2026). */
@@ -138,10 +139,7 @@ export const dictChangeRequests = pgTable(
       'dict_change_requests_form_id_check',
       sql`case when ${t.kind} = 'dict' then ${t.formId} in (${oneOf(REQUEST_DICT_FORMS)}) else ${t.formId} is null and ${t.dict} is null end`,
     ),
-    check(
-      'dict_change_requests_status_check',
-      sql`${t.status} in (${oneOf(REQUEST_STATUSES)})`,
-    ),
+    check('dict_change_requests_status_check', sql`${t.status} in (${oneOf(REQUEST_STATUSES)})`),
     check('dict_change_requests_no_check', sql`${t.no} >= 1201`),
     check('dict_change_requests_topic_check', sql`length(btrim(${t.topic})) between 1 and 700`),
     check(
@@ -162,10 +160,7 @@ export const dictChangeRequests = pgTable(
       'dict_change_requests_closed_check',
       sql`(${t.closedAt} is null) = (${t.status} in ('new', 'in_work'))`,
     ),
-    check(
-      'dict_change_requests_read_check',
-      sql`${t.readAuthor} >= 0 and ${t.readAdmin} >= 0`,
-    ),
+    check('dict_change_requests_read_check', sql`${t.readAuthor} >= 0 and ${t.readAdmin} >= 0`),
     orgIsolation('dict_change_requests_isolation', t.orgId),
     // Организация только отправляет запрос: автор — текущий пользователь, статус «Новый», без ответа.
     pgPolicy('dict_change_requests_insert_guard', {
@@ -198,8 +193,8 @@ export const requestMessages = pgTable(
     n: integer('n').notNull(),
     kind: text('kind', { enum: REQUEST_MESSAGE_KINDS }).notNull(),
     byAdmin: boolean('by_admin').notNull().default(false),
+    /** Автор; пусто — только у ответа администратора, перенесённого из прежних запросов без автора. */
     authorUserId: uuid('author_user_id')
-      .notNull()
       .default(sql`app.current_user_id()`)
       .references(() => users.id),
     text: text('text').notNull().default(''),
@@ -226,6 +221,7 @@ export const requestMessages = pgTable(
       sql`case when ${t.kind} = 'st' then ${t.toStatus} in (${oneOf(REQUEST_STATUSES)}) and ${t.fromStatus} in (${oneOf(REQUEST_STATUSES)}) and ${t.fromStatus} <> ${t.toStatus} else ${t.toStatus} is null and ${t.fromStatus} is null and ${t.why} = '' end`,
     ),
     check('request_messages_ask_check', sql`${t.kind} <> 'ask' or ${t.byAdmin}`),
+    check('request_messages_author_check', sql`${t.authorUserId} is not null or ${t.byAdmin}`),
     orgIsolation('request_messages_isolation', t.orgId),
     // От своего имени и с настоящим временем; «от администратора» — только администратор платформы.
     // Организация пишет сообщение и смену статуса только «Отозван» и «В работе» (ответ в закрытый).

@@ -122,6 +122,11 @@ export const TELEGRAM_TEXTS = {
   'telegram.kind.sub_check': { ru: 'Чек подписки на проверку', section: S },
   'telegram.kind.storage_check': { ru: 'Сверка хранилища', section: S },
   'telegram.kind.dm_token': { ru: 'API-токен Витрины данных', section: S },
+  'telegram.kind.task_series_end': { ru: 'Повтор закончился', section: S },
+  'telegram.kind.task_series_stop': { ru: 'Повтор остановлен', section: S },
+  'telegram.kind.request': { ru: 'Ответ на запрос', section: S },
+  'telegram.kind.request_new': { ru: 'Новый запрос', section: S },
+  'telegram.kind.request_reply': { ru: 'Ответ автора в запросе', section: S },
   // {что} сообщения «Новый чек на проверку» (прототип SUB_WHAT строчными) и сверка хранилища (поток Т,
   // этап 1, П12–П13; в прототипе сообщения о сверке нет — docs/deviations.md п. Т-24).
   'telegram.sub.what.renew': { ru: 'продление', section: S },

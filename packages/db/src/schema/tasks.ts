@@ -117,7 +117,10 @@ export const taskSeries = pgTable(
       .on(t.orgId, t.nextDate)
       .where(sql`${t.state} = 'active'`),
     check('task_series_title_check', sql`char_length(btrim(${t.title})) > 0`),
-    check('task_series_project_check', sql`${t.projectId} is null or ${t.contractorId} is not null`),
+    check(
+      'task_series_project_check',
+      sql`${t.projectId} is null or ${t.contractorId} is not null`,
+    ),
     check('task_series_term_check', oneOf(t.term, TASK_TERMS)),
     check('task_series_every_check', sql`${t.every} between 1 and 99`),
     check('task_series_unit_check', oneOf(t.unit, SERIES_UNITS)),

@@ -187,8 +187,7 @@ CREATE OR REPLACE FUNCTION app.admin_answer_dict_request(p_id uuid, p_status tex
       k := k + 1;
       INSERT INTO public.request_messages
           (org_id, request_id, n, kind, by_admin, author_user_id, from_status, to_status, why)
-        VALUES (r.org_id, r.id, k, 'st', true, app.current_user_id(), r.status, p_status,
-          CASE WHEN p_status = 'rejected' THEN a ELSE '' END);
+        VALUES (r.org_id, r.id, k, 'st', true, app.current_user_id(), r.status, p_status, '');
     END IF;
     UPDATE public.dict_change_requests
       SET status = p_status,

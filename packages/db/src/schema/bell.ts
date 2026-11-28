@@ -17,8 +17,12 @@ import { users } from './users';
 
 const currentUserId = sql`app.current_user_id()`;
 
-/** Кнопки-фильтры панели «Уведомления»: строка вида `other` (заявки и прочее) — только во «Все». */
-export const BELL_KINDS = ['reports', 'tasks', 'files', 'money', 'news', 'other'] as const;
+/**
+ * Кнопки-фильтры панели «Уведомления»: строка вида `other` (заявки и прочее) — только во «Все»; `req` —
+ * запросы администратору (доработки 28.11.2026: запросы, блок 5, пункт 5; кнопку «Запросы» и строки
+ * кладёт этап 2 пакета, в домене вид появится вместе с ними).
+ */
+export const BELL_KINDS = ['reports', 'tasks', 'files', 'money', 'news', 'other', 'req'] as const;
 export type BellKind = (typeof BELL_KINDS)[number];
 
 const inList = (values: readonly string[]) => sql.raw(values.map((v) => `'${v}'`).join(', '));

@@ -8,7 +8,7 @@ import {
   INBOX_TEXT_MAX,
   JOURNAL_CHAT_KINDS,
   JOURNAL_HIDES,
-  NOTIFY_KINDS,
+  NOTIFY_STORED_KINDS,
   NOTIFY_MODES,
   OUTBOX_KINDS,
   OUTBOX_STATUSES,
@@ -300,7 +300,7 @@ export const telegramNotifySettings = pgTable(
     check('telegram_notify_settings_mode_check', sql`${t.mode} in (${inList(NOTIFY_MODES)})`),
     check(
       'telegram_notify_settings_off_check',
-      sql`${t.off} <@ array[${inList(NOTIFY_KINDS)}]::text[]`,
+      sql`${t.off} <@ array[${inList(NOTIFY_STORED_KINDS)}]::text[]`,
     ),
     orgIsolation('telegram_notify_settings_isolation', t.orgId),
   ],
