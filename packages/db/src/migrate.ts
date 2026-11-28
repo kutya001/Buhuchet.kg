@@ -39,7 +39,41 @@ export async function runMigrations(
 
 /** Имя роли из строки подключения; у пула Supabase оно вида `роль.проект`. */
 export function roleFromUrl(url: string): string {
-  return decodeURIComponent(new URL(url).username).split('.')[0] ?? '';
+  return decodeURIComponent(parseDbUrl(url).username).split('.')[0] ?? '';
+}
+
+/** Разбор строки подключения без самой строки в ошибке: `TypeError` Node кладёт её целиком в `input`,
+ *  и необработанное исключение напечатало бы пароль в журнал выпуска. */
+function parseDbUrl(url: string): URL {
+  try {
+    return new URL(url);
+  } catch {
+    throw new Error(
+      'Строка подключения к базе (DATABASE_URL или DATABASE_ADMIN_URL) — не адрес postgres://…',
+    );
+  }
+}
+
+/**
+ * Роль и пароль приложения из DATABASE_URL с проверками до любого подключения: имя `buhuchet_…`
+ * (миграции не тронут чужие роли), не владелец схемы (иначе RLS не работает), пароль есть.
+ */
+function appLogin(adminUrl: string, appUrl: string): { role: string; password: string } {
+  const role = roleFromUrl(appUrl);
+  const password = decodeURIComponent(parseDbUrl(appUrl).password);
+  if (!/^buhuchet_[a-z0-9_]{1,54}$/.test(role)) {
+    throw new Error(
+      `Имя роли приложения «${role}» должно начинаться с buhuchet_ и состоять из a-z, 0-9 и _: ` +
+        'так миграции не тронут чужие роли (на Supabase — anon, authenticated и т. п.)',
+    );
+  }
+  if (role === roleFromUrl(adminUrl)) {
+    throw new Error(
+      'DATABASE_URL должен подключаться отдельной ролью, а не владельцем схемы: иначе RLS не работает',
+    );
+  }
+  if (!password) throw new Error('В DATABASE_URL нет пароля роли приложения');
+  return { role, password };
 }
 
 /**
@@ -72,30 +106,81 @@ async function retryConcurrent<T>(action: () => PromiseLike<T>, attempts = 5): P
 }
 
 /**
+ * Пароль роли приложения против базы (docs/decisions.md п. О-71): `new` — роли ещё нет, `same` — роль
+ * входит с паролем из строки подключения, `differs` — база отвечает «неверный пароль». Рабочий сайт
+ * (Vercel) входит своим `DATABASE_URL`, миграции выпуска — секретом GitHub: если они разошлись, смена
+ * пароля в базе отрезает сайт от базы, а его неудачные входы приводят к блокировке адреса пула
+ * Supabase (выпуск 28.11.2026). Роль есть, но вход ей запрещён (NOLOGIN) — тоже `new`: сайт ею всё
+ * равно не входит, миграции дают ей вход и пароль. Другая ошибка входа (сеть, пул) — исключение:
+ * выпуск не идёт вслепую. Имя роли и «не владелец» проверяются до первого подключения.
+ */
+export type AppPasswordState = 'new' | 'same' | 'differs';
+
+/** Что делать с паролем роли: `stop` — миграции не запускать, `keep` — не трогать, `set` — поставить
+ *  из строки подключения. `change` — смену просили явно (`--change-app-password`): вход не проверяем,
+ *  чтобы ответ пула на неверный пароль (не всегда `28P01`) не мешал намеренной смене. */
+export function appPasswordPlan(state: AppPasswordState | 'change'): 'stop' | 'keep' | 'set' {
+  if (state === 'differs') return 'stop';
+  if (state === 'same') return 'keep';
+  return 'set';
+}
+
+/** Код PostgreSQL «неверный пароль» (`invalid_password`). */
+const INVALID_PASSWORD = '28P01';
+
+export async function appPasswordState(
+  adminUrl: string,
+  appUrl: string,
+  caCert?: string,
+): Promise<AppPasswordState> {
+  const { role } = appLogin(adminUrl, appUrl);
+  const admin = createDb(adminUrl, { max: 1, applicationName: 'buhuchet-migrate', caCert });
+  try {
+    const [found] = await admin.sql<{ login: boolean }[]>`
+      select rolcanlogin as login from pg_roles where rolname = ${role}`;
+    if (!found?.login) return 'new';
+  } finally {
+    await admin.close();
+  }
+  const app = createDb(appUrl, { max: 1, applicationName: 'buhuchet-migrate', caCert });
+  try {
+    await app.sql`select 1`;
+    return 'same';
+  } catch (error) {
+    if ((error as { code?: string }).code === INVALID_PASSWORD) return 'differs';
+    throw error;
+  } finally {
+    await app.close();
+  }
+}
+
+/** Что сказать, когда пароль роли приложения в строке подключения не подходит к базе. */
+export function appPasswordDiffersMessage(role: string): string {
+  return (
+    `Пароль роли «${role}» в DATABASE_URL не подходит к базе, а миграции поставили бы базе этот пароль: ` +
+    'сайт, который входит со своим паролем, потерял бы базу. Миграции не запускались. ' +
+    'Если пароль менять не нужно — поставьте в строку подключения (на выпуске — секрет ' +
+    'PRODUCTION_DATABASE_URL, на стенде — TEST_DATABASE_URL) тот же пароль, что в DATABASE_URL сайта ' +
+    'в Vercel, и только потом запустите снова: каждый запуск с неверным паролем — ещё одна неудачная ' +
+    'попытка входа, после нескольких Supabase блокирует адрес общего пула для всех. Если пароль меняете намеренно — запуск с отметкой «Сменить пароль ' +
+    'роли сайта» (локально `pnpm db:migrate --change-app-password`) и сразу тот же адрес в DATABASE_URL ' +
+    'в Vercel с повторной выкладкой (docs/deploy.md, «Пароль роли сайта»).'
+  );
+}
+
+/**
  * Роль входа приложения (пользователь из DATABASE_URL): создаётся, если её нет, получает пароль из
  * строки подключения и членство в `buhuchet_app`. Она не владелец таблиц, не обходит RLS и не
- * получает прав владельца через членство в других ролях.
+ * получает прав владельца через членство в других ролях. `keepPassword` — пароль уже подходит
+ * (`appPasswordState` = `same`): его не перезаписываем, чтобы не менять соль SCRAM под работающим сайтом.
  */
 export async function ensureAppLoginRole(
   adminUrl: string,
   appUrl: string,
   caCert?: string,
+  options: { keepPassword?: boolean } = {},
 ): Promise<string> {
-  const role = roleFromUrl(appUrl);
-  const password = decodeURIComponent(new URL(appUrl).password);
-  if (!/^buhuchet_[a-z0-9_]{1,54}$/.test(role)) {
-    throw new Error(
-      `Имя роли приложения «${role}» должно начинаться с buhuchet_ и состоять из a-z, 0-9 и _: ` +
-        'так миграции не тронут чужие роли (на Supabase — anon, authenticated и т. п.)',
-    );
-  }
-  if (role === roleFromUrl(adminUrl)) {
-    throw new Error(
-      'DATABASE_URL должен подключаться отдельной ролью, а не владельцем схемы: иначе RLS не работает',
-    );
-  }
-  if (!password) throw new Error('В DATABASE_URL нет пароля роли приложения');
-
+  const { role, password } = appLogin(adminUrl, appUrl);
   const { sql, close } = createDb(adminUrl, {
     max: 1,
     applicationName: 'buhuchet-migrate',
@@ -119,9 +204,11 @@ export async function ensureAppLoginRole(
             'приложению такая роль запрещена',
         );
       }
-      await retryConcurrent(() =>
-        sql.unsafe(`alter role "${role}" with login password ${verifier}`),
-      );
+      if (!options.keepPassword) {
+        await retryConcurrent(() =>
+          sql.unsafe(`alter role "${role}" with login password ${verifier}`),
+        );
+      }
     }
     await retryConcurrent(() => sql.unsafe(`grant "${APP_GROUP_ROLE}" to "${role}"`));
     return role;
