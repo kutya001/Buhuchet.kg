@@ -417,6 +417,7 @@ export function requestWhereClean(raw: unknown): RequestWhere | null {
   const str = (k: keyof RequestWhere) =>
     typeof r[k] === 'string'
       ? (r[k] as string)
+          // eslint-disable-next-line no-control-regex -- управляющие знаки в «Где» заменяются пробелом
           .replace(/[\u0000-\u001f\u007f]/g, ' ')
           .replace(/\s+/g, ' ')
           .trim()
