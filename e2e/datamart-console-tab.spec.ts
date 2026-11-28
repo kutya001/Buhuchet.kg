@@ -377,7 +377,8 @@ test.describe('Витрина данных: консоль запросов, э�
     await expect(win.locator('[data-dm-b-dbl]')).toContainText(texts['dm.b.dbl']!);
     await win.locator('[data-dm-b-sep]').click();
     await expect(sql).toContainText('WITH');
-    await win.locator('[data-dm-b-go]').click();
+    // «Открыть в консоли» — в подвале окна, рядом с телом `[data-dm-b]`, а не внутри него.
+    await page.locator('[data-dm-b-go]').click();
     await expect(win).toBeHidden();
 
     const current = pc.locator('[data-dm-con-tab][aria-current="true"]');
