@@ -711,6 +711,59 @@ export function dmMethodToSelect(
   return res;
 }
 
+/** Слова, которыми кончается список таблиц после FROM своего уровня скобок. */
+const FROM_LIST_ENDS = new Set([
+  'WHERE',
+  'GROUP',
+  'ORDER',
+  'HAVING',
+  'LIMIT',
+  'OFFSET',
+  'FETCH',
+  'FOR',
+  'WINDOW',
+  'UNION',
+  'EXCEPT',
+  'INTERSECT',
+  'RETURNING',
+  'SELECT',
+]);
+
+/**
+ * Где в значимых кусках (без пробелов и комментариев) за словом стоит имя таблицы: FROM и JOIN уровня
+ * скобок, на котором есть SELECT, и запятая внутри списка таблиц после FROM того же уровня. Иначе
+ * запятая в ORDER BY и GROUP BY («ORDER BY day DESC, org») давала имя столбца вывода за таблицу, а FROM
+ * внутри функции («EXTRACT(YEAR FROM created_at)») — имя поля (замечание заказчика 28.11.2026,
+ * docs/typical-mistakes.md № 89). Ответ — номера кусков FROM, JOIN и запятой перед именем.
+ */
+export function dmSqlFromSlots(sig: readonly DmSqlToken[]): Set<number> {
+  const out = new Set<number>();
+  const hasSelect: boolean[] = [false];
+  const inList: boolean[] = [false];
+  let depth = 0;
+  for (let k = 0; k < sig.length; k += 1) {
+    const t = sig[k]!;
+    if (t.text === '(') {
+      depth += 1;
+      hasSelect[depth] = false;
+      inList[depth] = false;
+      continue;
+    }
+    if (t.text === ')') {
+      if (depth > 0) depth -= 1;
+      continue;
+    }
+    const w = t.kind === 'word' ? t.text.toUpperCase() : '';
+    if (w === 'SELECT') hasSelect[depth] = true;
+    if ((w === 'FROM' || w === 'JOIN') && hasSelect[depth]) {
+      inList[depth] = true;
+      out.add(k);
+    } else if (FROM_LIST_ENDS.has(w)) inList[depth] = false;
+    else if (t.text === ',' && inList[depth]) out.add(k);
+  }
+  return out;
+}
+
 /** Таблицы после FROM и JOIN (без схемы `public.`; подзапросы и функции пропускаются, имена CTE — тоже). */
 export function dmSqlTables(sql: string): string[] {
   const sig = dmSqlLex(sql).filter((t) => t.kind !== 'space' && t.kind !== 'comment');
@@ -725,9 +778,9 @@ export function dmSqlTables(sql: string): string[] {
     }
   }
   const out: string[] = [];
+  const slots = dmSqlFromSlots(sig);
   for (let k = 0; k < sig.length; k += 1) {
-    const w = upper(sig[k]!);
-    if (w !== 'FROM' && w !== 'JOIN') continue;
+    if (!slots.has(k)) continue;
     let p = k + 1;
     if (upper(sig[p] ?? sig[k]!) === 'LATERAL') p += 1;
     const t = sig[p];
@@ -810,10 +863,10 @@ export function dmSqlAliasScopes(sql: string): (at: number, alias: string) => st
     if (!decl.has(b)) decl.set(b, new Map());
     decl.get(b)!.set(name, table);
   };
+  const slots = dmSqlFromSlots(sig);
   for (let k = 0; k < sig.length; k += 1) {
-    const w = upper(sig[k]!);
     const b = blockOf[k]!;
-    if (w !== 'FROM' && w !== 'JOIN' && !(sig[k]!.text === ',' && decl.has(b))) continue;
+    if (!slots.has(k)) continue;
     let p = k + 1;
     if (sig[p]?.kind !== 'word') continue;
     let table = sig[p]!.text.toLowerCase();

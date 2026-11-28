@@ -1,6 +1,7 @@
 import {
   DM_SQL_KEYWORDS,
   dmConsoleParamType,
+  dmSqlFromSlots,
   dmSqlLex,
   dmSqlMoneyName,
   type DmSqlToken,
@@ -188,6 +189,8 @@ export function sqlRefs(sql: string): {
   const aliases = new Map<string, string>();
   const cte = new Set<string>();
   const low = (k: number) => sig[k]?.text.toLowerCase() ?? '';
+  // Запятая — только в списке таблиц после FROM (не «ORDER BY day, org»), docs/typical-mistakes.md № 89.
+  const slots = dmSqlFromSlots(sig);
   for (let k = 0; k < sig.length; k += 1) {
     const w = low(k);
     // «WITH имя AS (» и «, имя AS (» — свои имена запроса.
@@ -196,8 +199,8 @@ export function sqlRefs(sql: string): {
       if (low(n) === 'recursive') n += 1;
       if (low(n + 1) === 'as' && sig[n + 2]?.text === '(') cte.add(low(n));
     }
-    const comma = w === ',' && refs.length > 0 && low(k - 1) !== '(';
-    if (w !== 'from' && w !== 'join' && !comma) continue;
+    if (!slots.has(k)) continue;
+    const comma = w === ',';
     let p = k + 1;
     if (sig[p]?.kind !== 'word') continue;
     const first = sig[p]!;

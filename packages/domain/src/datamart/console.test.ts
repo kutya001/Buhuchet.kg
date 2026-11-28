@@ -9,6 +9,7 @@ import {
   dmMethodToSelect,
   dmSqlAliasScopes,
   dmSqlFormat,
+  dmSqlFromSlots,
   dmSqlLex,
   dmSqlMoneyName,
   dmSqlNoAliasMarks,
@@ -300,7 +301,18 @@ describe('таблицы и столбцы запроса', () => {
       dmSqlTables(
         'with x as (select 1 from a) select * from x join public.b on true left join lateral (select 1 from c) y on true, d',
       ),
-    ).toEqual(['a', 'b', 'c']);
+    ).toEqual(['a', 'b', 'c', 'd']);
+  });
+  it('запятая в ORDER BY и GROUP BY и FROM внутри функции — не таблица (замечание 28.11.2026)', () => {
+    const sql =
+      'SELECT l.started_at::date AS day, o.name AS org, count(*) AS logins FROM session_log l ' +
+      'JOIN organizations o ON o.id = l.org_id GROUP BY 1, 2 ORDER BY day DESC, org';
+    expect(dmSqlTables(sql)).toEqual(['session_log', 'organizations']);
+    expect(
+      dmSqlTables('select extract(year from created_at) y, a from t1, t2 group by y, a'),
+    ).toEqual(['t1', 't2']);
+    const sig = dmSqlLex(sql).filter((t) => t.kind !== 'space' && t.kind !== 'comment');
+    expect([...dmSqlFromSlots(sig)].map((k) => sig[k]!.text)).toEqual(['FROM', 'JOIN']);
   });
   it('столбцы вывода: псевдоним, иначе последнее имя', () => {
     expect(
