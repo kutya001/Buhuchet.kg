@@ -66,6 +66,7 @@ export * from './dicts/tax-pick';
 export * from './dicts/org-report-types';
 export * from './dicts/platform-dicts';
 export * from './dicts/value-guide';
+export * from './requests/rules';
 export * from './common/months';
 export * from './contractors/rules';
 export * from './contractors/import';
