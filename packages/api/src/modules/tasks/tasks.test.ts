@@ -492,7 +492,7 @@ describe.skipIf(!databaseAvailable())('Задачи: методы API', () => {
     expect((await act(hr, task.id, 'comments', { text: 'чужая' })).status).toBe(404);
   });
 
-  it('список: «Общие задачи» первым в фильтре контрагента, «Вид задачи» в Excel', async () => {
+  it('список: «Общие задачи» первым в фильтре контрагента, «Вид задачи» и «Повтор» в Excel', async () => {
     const values = ListValues.parse(
       await (await call('GET', '/api/tasks/values?col=cp&tab=all', chief)).json(),
     );
@@ -503,6 +503,7 @@ describe.skipIf(!databaseAvailable())('Задачи: методы API', () => {
     const sheet = Object.entries(files).find(([name]) => name.includes('sheet1'))?.[1] ?? '';
     const strings = files['xl/sharedStrings.xml'] ?? '';
     expect(`${sheet}${strings}`).toContain('Вид задачи');
+    expect(`${sheet}${strings}`).toContain('Повтор');
     expect(`${sheet}${strings}`).toContain('Общая');
   });
 

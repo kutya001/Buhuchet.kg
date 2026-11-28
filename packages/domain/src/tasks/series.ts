@@ -144,6 +144,30 @@ const plural = (n: number, forms: readonly [string, string, string]) =>
 const maxDate = (a: IsoDate, b: IsoDate) => (a > b ? a : b);
 const dayOf = (date: IsoDate) => Number(date.slice(8, 10));
 
+/** Буквы дней недели в окне «Повтор» (прототип `TS_WD_C`): с понедельника. */
+export const SERIES_WEEKDAY_LETTERS = ['П', 'В', 'С', 'Ч', 'П', 'С', 'В'] as const;
+/** Названия дней недели для подсказки и диктора (прототип `TS_WD_F`). */
+export const SERIES_WEEKDAY_NAMES = [
+  'понедельник',
+  'вторник',
+  'среда',
+  'четверг',
+  'пятница',
+  'суббота',
+  'воскресенье',
+] as const;
+
+/** Подпись единицы в окне «Повтор» по интервалу (прототип `tsDlg`: «неделю» → «неделя»). */
+export function seriesUnitLabel(unit: SeriesUnit, every: number): string {
+  const n = Number.isInteger(every) && every > 0 ? every : 1;
+  return plural(n, UNIT_FORMS[unit]).replace('неделю', 'неделя');
+}
+
+/** «5 марта» — день и месяц начала у повтора «каждый год» (подсказка окна «Повтор»). */
+export function seriesDayMonthText(start: IsoDate): string {
+  return `${dayOf(start)} ${MONTHS_GEN[Number(start.slice(5, 7)) - 1]}`;
+}
+
 /** Правило по умолчанию в окне «Повтор» (прототип `tsDef`): каждую неделю в день срока, «На месяц» — каждый месяц. */
 export function defaultSeriesRule(start: IsoDate, term: TaskTerm): SeriesRule {
   return term === 'month'

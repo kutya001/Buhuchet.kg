@@ -227,15 +227,16 @@ export const exportTasksRoute = createRoute({
 });
 
 /**
- * Выгрузка в Excel: видимые столбцы по порядку экрана и отдельная колонка «Вид задачи», даже если
- * её нет на экране (ТЗ «В выгрузке в Excel — отдельная колонка «Вид задачи»»).
+ * Выгрузка в Excel: видимые столбцы по порядку экрана и отдельные колонки «Вид задачи» и «Повтор», даже
+ * если их нет на экране (ТЗ «В выгрузке в Excel — отдельная колонка «Вид задачи»»; прототип `taskCols`:
+ * у `scope` и `rep` — `xls: true`).
  */
 export function exportTasksHandler(deps: ApiDeps): RouteHandler<typeof exportTasksRoute, AppEnv> {
   return async (c) => {
     const params = c.req.valid('query');
     const query = listQueryOf(params);
     const cols = [...new Set(params.cols.split(','))];
-    const keys = cols.includes('scope') ? cols : [...cols, 'scope'];
+    const keys = [...cols, ...['scope', 'rep'].filter((k) => !cols.includes(k))];
     const t = await serverTexts(deps);
     return withExportSlot(deps, c.get('session')!.userId, async () => {
       const result = await withOrgContext(

@@ -23,6 +23,7 @@ import {
 } from '@buhuchet/ui';
 import type { Translate } from '../l10n/translate';
 import { miniView, statusName, type StatusEvent } from '../status/status-view';
+import { SeriesIcon } from './series-dialog';
 
 /** Сортировка по умолчанию во всех списках — от новых к старым по «Создано» (прототип defSort). */
 export const TASK_DEFAULT_SORT: ListSort = { key: 'createdAt', dir: 'desc' };
@@ -135,7 +136,12 @@ export function taskColumns(t: Translate): GridColumn<TaskListRow>[] {
       type: 'text',
       width: 330,
       text: (r) => r.title,
-      cell: (r) => <span className="font-semibold">{r.title}</span>,
+      cell: (r) => (
+        <>
+          {r.repeat ? <SeriesIcon rule={r.repeat} /> : null}
+          <span className="font-semibold">{r.title}</span>
+        </>
+      ),
     },
     {
       key: 'cp',
@@ -253,6 +259,16 @@ export function taskColumns(t: Translate): GridColumn<TaskListRow>[] {
       type: 'enum',
       width: 120,
       text: (r) => t(taskTermOf(r) === 'month' ? 'task.term.month' : 'task.term.day'),
+    },
+    {
+      // Повтор (доработки 28.11.2026, блок 4, пункт 1; прототип `taskCols`: rep): фильтр — «Повторяющиеся»
+      // и «Разовые», в строке и в Excel — правило словами.
+      key: 'rep',
+      label: t('task.col.repeat'),
+      type: 'enum',
+      width: 230,
+      text: (r) => r.repeat ?? '',
+      cell: (r) => (r.repeat ? r.repeat : <span className="text-faint">—</span>),
     },
     {
       key: 'open',

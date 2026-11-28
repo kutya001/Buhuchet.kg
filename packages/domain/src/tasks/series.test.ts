@@ -10,9 +10,11 @@ import {
   seriesRuleProblems,
   seriesRuleText,
   seriesBossRefusal,
+  seriesDayMonthText,
   seriesRuleEqual,
   seriesRunStep,
   seriesStopText,
+  seriesUnitLabel,
 } from './series';
 
 // Правила повтора, которых нет в сверке с прототипом (series-oracle.test.ts): окно «Повтор»,
@@ -280,5 +282,15 @@ describe('кто управляет серией и что считается с
     expect(seriesStopText(null)).toBe('');
     expect(seriesStopText('executor')).toBe('Исполнитель заблокирован');
     expect(seriesStopText('archive')).toBe('Контрагент в архиве');
+  });
+});
+
+describe('подписи окна «Повтор»', () => {
+  it('единица — по интервалу, «неделя» вместо «неделю»; год — день и месяц начала', () => {
+    expect(seriesUnitLabel('week', 1)).toBe('неделя');
+    expect(seriesUnitLabel('week', 3)).toBe('недели');
+    expect(seriesUnitLabel('day', 5)).toBe('дней');
+    expect(seriesUnitLabel('year', 0)).toBe('год');
+    expect(seriesDayMonthText('2026-03-05')).toBe('5 марта');
   });
 });

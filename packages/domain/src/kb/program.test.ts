@@ -261,7 +261,7 @@ describe('программа обучения', () => {
     expect(kbProgram({ steps, groups: CATALOG.groups }, OWNER)).toEqual([]);
   });
 
-  it('шаги «Поставить задачу с повтором» и «Сообщить об ошибке или опечатке» ждут своих этапов: в программе их нет (docs/deviations.md п. О-107)', () => {
+  it('шаг «Поставить задачу с повтором» в программе с этапа 1 пакета 28.11; «Сообщить об ошибке или опечатке» ждёт этапа 3 (docs/deviations.md п. О-107)', () => {
     const steps = [
       step('trep', 'tasks', 45.5, { perm: 'tasksCreate', featk: 'tasks', evk: 't.rep' }),
       step('rqbug', 'lists', 69.5, { perm: '', featk: '', evk: 'rq.bug' }),
@@ -272,7 +272,9 @@ describe('программа обучения', () => {
       features: ['tasks'],
       modules: ['home', 'cps', 'tasks', 'org', 'kb'],
     });
-    expect(kbProgram({ steps, groups }, all)).toEqual([]);
+    expect(kbProgram({ steps, groups }, all).flatMap((g) => g.steps.map((x) => x.def.id))).toEqual([
+      'trep',
+    ]);
   });
 
   it('шаги группы — по порядку, флаги «★» и «Посмотреть»', () => {

@@ -60,8 +60,9 @@ function changeLines(t: Translate, c: Change): string[] {
 
 /** Что произошло — строкой: поставлена, изменена (по полям), файл прикреплён или удалён. */
 export function taskHistoryText(t: Translate, entry: TaskHistoryEntry): string {
-  const file = (key: 'from' | 'to') =>
-    String(entry.changes.find((c) => c.field === 'file')?.[key] ?? '');
+  const change = (field: string, key: 'from' | 'to') =>
+    String(entry.changes.find((c) => c.field === field)?.[key] ?? '');
+  const file = (key: 'from' | 'to') => change('file', key);
   switch (entry.action) {
     case 'create':
       return t('task.hist.created');
@@ -72,6 +73,25 @@ export function taskHistoryText(t: Translate, entry: TaskHistoryEntry): string {
       return fileHistoryText(t, entry) ?? '';
     case 'file_delete':
       return t('task.hist.file_delete', { name: file('from') });
+    // Серия (доработки 28.11.2026; прототип `tsLog`): запись — на ближайшей задаче серии.
+    case 'series_set':
+      return t('task.hist.series_set', { rule: change('repeat', 'to') });
+    case 'series_edit': {
+      const rule = entry.changes.find((c) => c.field === 'repeat');
+      return rule
+        ? t('task.hist.series_edit', { from: String(rule.from ?? ''), to: String(rule.to ?? '') })
+        : t('task.hist.series_edit_tasks');
+    }
+    case 'series_stop': {
+      const why = change('why', 'to');
+      return why ? t('task.hist.series_stop_why', { why }) : t('task.hist.series_stop');
+    }
+    case 'series_resume':
+      return t('task.hist.series_resume');
+    case 'series_make':
+      return t('task.hist.series_make');
+    case 'series_end':
+      return t('task.hist.series_end');
     default:
       return entry.changes.flatMap((c) => changeLines(t, c)).join('; ');
   }

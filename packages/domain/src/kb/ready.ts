@@ -223,6 +223,8 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
   // выполнена» — и отправленная на подтверждение (прототип `KB_EV['t.done']`); «Подтвердить» или «На
   // доработку» (`KB_EV['t.conf']`).
   mtask: { module: 'tasks', done: { kind: 'history', entity: 'task', actions: ['create'] } },
+  // «Поставить задачу с повтором» (доработки 28.11.2026; прототип `KB_EV['t.rep']`: «Повтор настроен: …»).
+  trep: { module: 'tasks', done: { kind: 'history', entity: 'task', actions: ['series_set'] } },
   daymonth: { module: 'tasks' },
   tdone: {
     module: 'tasks',

@@ -203,6 +203,7 @@ describe('доска задач', () => {
       confirm: false,
       projectId: null,
       version: 7,
+      scope: 'one',
     });
     const day = { ...task, term: 'day', dueDate: '2026-10-25', contractor: null } as Task;
     expect(executorChangeBody(day, OTHER)).toMatchObject({

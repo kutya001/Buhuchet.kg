@@ -35,7 +35,7 @@ import {
   type KeyValueItem,
 } from '@buhuchet/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { api, callApi } from '../api-client';
 import { ContractorLink } from '../contractors/contractor-link';
 import { RecordFiles } from '../files/record-files';
@@ -45,6 +45,7 @@ import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { dueWords, MiniScale } from '../status/status-line';
 import { historyLabels, historyView, scaleView, statusEvents } from '../status/status-view';
+import { SeriesCardRow, useSeriesActions } from './series-actions';
 import { taskHistoryItem } from './task-history';
 import { taskCardButtons, taskScaleSteps } from './task-menu';
 import { taskQuery } from './tasks-data';
@@ -243,6 +244,7 @@ export function TaskCard({
   actions,
   onAction,
   onRollback,
+  onOpenTask,
 }: {
   id: string;
   /** Строка списка — показывается, пока карточка не загрузилась. */
@@ -256,9 +258,12 @@ export function TaskCard({
   onAction: (action: TaskAction, task: Task) => void;
   /** Шаг отката на шкале. */
   onRollback: (task: Task, to: string) => void;
+  /** «Все задачи серии» → строка: открыть другую задачу серии. */
+  onOpenTask?: (id: string) => void;
 }) {
   const t = useT();
   const client = useQueryClient();
+  const series = useSeriesActions(onOpenTask);
   const query = useQuery(taskQuery(id));
   const task = query.data ?? null;
   const shown = task ?? initial;
@@ -338,9 +343,15 @@ export function TaskCard({
             onStep={(action) => onAction(action, task)}
             onBack={(to) => onRollback(task, to)}
             onTask={setTask}
+            seriesRow={
+              task.series ? (
+                <SeriesCardRow series={{ info: task.series, title: task.title }} actions={series} />
+              ) : null
+            }
           />
         ) : null}
       </div>
+      {series.node}
       {menu && shown ? (
         <ActionMenu
           items={items}
@@ -360,6 +371,7 @@ function CardBody({
   onStep,
   onBack,
   onTask,
+  seriesRow,
 }: {
   t: Translate;
   task: Task;
@@ -367,6 +379,8 @@ function CardBody({
   onStep: (action: TaskAction) => void;
   onBack: (to: string) => void;
   onTask: (task: Task) => void;
+  /** Строка «Повтор» (прототип `tsCardHtml`): после «кто подтверждает», до «нужен файл». */
+  seriesRow: ReactNode;
 }) {
   const events = statusEvents(task.statusHistory);
   const steps = actor ? taskScaleSteps(task, actor) : {};
@@ -447,6 +461,7 @@ function CardBody({
       {taskPending(task.status) ? (
         <PendingNote t={t} task={task} employeeId={actor?.employeeId ?? null} />
       ) : null}
+      {seriesRow}
       {/* Без «Файлов в карточках» «Требуется файл» не действует (docs/deviations.md п. Б-1). */}
       {task.needFile && task.filesOn ? (
         <div className="flex flex-wrap items-center gap-2">

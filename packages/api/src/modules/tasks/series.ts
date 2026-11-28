@@ -50,6 +50,7 @@ import {
   ListQueryParams,
   ListValues,
   ListValuesQuery,
+  SeriesActionResult,
   SeriesList,
   SeriesRuleUpdate,
   SeriesTasks,
@@ -304,12 +305,6 @@ const seriesErrors = {
   404: { description: 'Нет такого повтора или сотрудник не видит его задач', content: error },
 };
 
-const SeriesActionResult = z.object({
-  series: TaskSeriesInfo,
-  /** Шаг сразу после действия: поставлена ли задача на ближайшую дату. */
-  made: z.boolean(),
-});
-
 /** Ответ действия: серия после шага без пользователя. */
 async function actionResult(
   deps: ApiDeps,
@@ -333,7 +328,8 @@ export const seriesTasksRoute = createRoute({
   request: { params: idParam },
   responses: {
     200: {
-      description: 'Задачи серии: срок, исполнитель, статус — новые сверху',
+      description:
+        'Задачи серии (срок, исполнитель, статус — новые сверху) и сама серия — для меню вкладки «Повторы»',
       content: { 'application/json': { schema: SeriesTasks } },
     },
     ...seriesErrors,
@@ -348,7 +344,8 @@ export function seriesTasksHandler(deps: ApiDeps): RouteHandler<typeof seriesTas
     const body = await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
       await requireTasks(tx, orgContextOf(c).orgId);
       const s = await visibleSeries(tx, id, subject);
-      return { title: s.title, text: seriesTextOf(s), items: await seriesTaskList(tx, s.id) };
+      const series = (await seriesInfoOf(tx, s.id, subject, todayOf(deps)))!;
+      return { title: s.title, text: seriesTextOf(s), series, items: await seriesTaskList(tx, s.id) };
     });
     return c.json(body, 200);
   };

@@ -250,13 +250,24 @@ export const SeriesRuleUpdate = z.strictObject({
 });
 export type SeriesRuleUpdate = z.infer<typeof SeriesRuleUpdate>;
 
+/** Ответ «Изменить повтор», «Остановить», «Возобновить»: серия и поставлена ли задача на ближайшую дату. */
+export const SeriesActionResult = z.object({
+  series: TaskSeriesInfo,
+  made: z.boolean(),
+});
+export type SeriesActionResult = z.infer<typeof SeriesActionResult>;
+
 /** «Остановить повтор», «Возобновить»: версия серии. */
 export const SeriesVersionBody = z.strictObject({ version: RecordVersion });
 
-/** «Все задачи серии» (прототип `tsListDlg`): срок, исполнитель, статус — новые сверху. */
+/**
+ * «Все задачи серии» (прототип `tsListDlg`): срок, исполнитель, статус — новые сверху; `series` — серия
+ * целиком (правило, версия, права): по ней действует меню строки вкладки «Повторы».
+ */
 export const SeriesTasks = z.object({
   title: z.string(),
   text: z.string(),
+  series: TaskSeriesInfo,
   items: z.array(
     z.object({
       id: Uuid,
