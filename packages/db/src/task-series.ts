@@ -13,6 +13,7 @@ import {
   type SeriesState,
   type SeriesStopReason,
   type SeriesUnit,
+  type ListSort,
   type TaskStatus,
   type TaskTerm,
 } from '@buhuchet/domain';
@@ -797,6 +798,8 @@ const seriesScope = (o: SeriesListOptions): SQL | undefined =>
   o.authorEmployeeId ? sql`${SS.authorId} = ${o.authorEmployeeId}` : undefined;
 
 const SERIES_NATURAL = [NEXT_SORT, SS.createdAt, SS.id];
+// Как в прототипе (`tsRender`): по ближайшей дате.
+const SERIES_SORT: ListSort = { key: 'next', dir: 'asc' };
 
 export async function listSeriesPage(
   tx: Tx,
@@ -808,6 +811,7 @@ export async function listSeriesPage(
     query,
     columns: seriesListColumns(o.t),
     natural: SERIES_NATURAL,
+    defaultSort: SERIES_SORT,
     scope: seriesScope(o),
     select: ({ window, where, orderBy, limit, offset }) =>
       fromSeriesList(tx, { ...fields, ...window } as typeof fields & ListWindowFields, o)
@@ -847,6 +851,7 @@ export function exportSeries(
     columns: seriesListColumns(o.t),
     keys,
     natural: SERIES_NATURAL,
+    defaultSort: SERIES_SORT,
     scope: seriesScope(o),
     from: seriesListFrom(tx, o),
   });

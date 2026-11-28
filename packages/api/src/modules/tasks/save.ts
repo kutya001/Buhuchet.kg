@@ -22,7 +22,6 @@ import {
   withOrgContext,
   type TaskFields,
   type TaskLock,
-  type TaskRecord,
   type Tx,
 } from '@buhuchet/db';
 import {
@@ -196,7 +195,6 @@ async function seriesPlanOfEdit(
   series: SeriesRecord | null,
   body: Omit<z.infer<typeof UpdateTaskRequest>, 'version'>,
   fields: TaskFields,
-  today: IsoDate,
 ): Promise<SeriesEdit | null> {
   if (!series) {
     if (!body.repeat) return null;
@@ -397,7 +395,7 @@ export function updateTaskHandler(deps: ApiDeps): RouteHandler<typeof updateTask
         features,
       );
       const series = visible.seriesId ? await lockSeries(tx, visible.seriesId) : null;
-      const plan = await seriesPlanOfEdit(tx, subject, lock, series, body, fields, today);
+      const plan = await seriesPlanOfEdit(tx, subject, lock, series, body, fields);
       const to = taskStatusAfterEdit(lock.status, lock.confirm, fields.confirm);
       await updateTask(
         tx,

@@ -32,6 +32,7 @@ import {
 } from '@buhuchet/domain';
 import type { ApiDeps, Job, JobContext } from '../../deps';
 import { queueTelegramEvents, taskBell, type TelegramEvent } from '../telegram/events';
+import { botText } from '../telegram/bot';
 import { flushEvents } from '../telegram/outbox';
 import { serverTexts } from '../l10n/texts';
 import { newTaskEvent } from './task-events';
@@ -228,15 +229,19 @@ export async function seriesNoticeEvents(
     // Остановил человек — постановщику не пишется (прототип `tsHalt`: только «system»).
     if (n.action === 'series_stop' && n.byUser) continue;
     const end = n.action === 'series_end';
+    const template = end ? 'tgSerEnd' : 'tgSerStop';
+    const values: Record<string, string> = end ? { задача: s.title } : { задача: s.title, причина: n.why ?? '' };
+    // Строка колокольчика — то же сообщение без точки в конце (прототип `tsTell`).
+    const text = (await botText(deps, template, values, tx)).replace(/\.\s*$/, '');
     out.push({
       kind: end ? 'task_series_end' : 'task_series_stop',
       to: s.authorEmployeeId,
       by: null,
-      template: end ? 'tgSerEnd' : 'tgSerStop',
-      values: end ? { задача: s.title } : { задача: s.title, причина: n.why },
+      template,
+      values,
       link: 'tasks',
       key,
-      bell: { ...taskBell(task), subject: s.title },
+      bell: { ...taskBell(task), subject: s.title, text },
     });
   }
   return out;
