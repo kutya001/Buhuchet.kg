@@ -732,12 +732,52 @@ const FROM_LIST_ENDS = new Set([
 /** Слова сразу после «(» на месте таблицы, с которых начинается подзапрос, а не список таблиц. */
 const NOT_TABLE_AFTER_PAREN = new Set(['SELECT', 'WITH', 'VALUES', 'TABLE']);
 
+/** Есть ли JOIN прямо внутри скобки `sig[open]` (не глубже), до её закрывающей. */
+function joinInside(sig: readonly DmSqlToken[], open: number): boolean {
+  let d = 0;
+  for (let k = open; k < sig.length; k += 1) {
+    const x = sig[k]!.text;
+    if (x === '(') d += 1;
+    else if (x === ')') {
+      d -= 1;
+      if (d === 0) return false;
+    } else if (d === 1 && x.toUpperCase() === 'JOIN') return true;
+  }
+  return false;
+}
+
 /**
- * Где в значимых кусках (без пробелов и комментариев) за словом стоит имя таблицы: FROM и JOIN уровня
- * скобок, на котором есть SELECT, и запятая внутри списка таблиц после FROM того же уровня. Иначе
- * запятая в ORDER BY и GROUP BY («ORDER BY day DESC, org») давала имя столбца вывода за таблицу, а FROM
- * внутри функции («EXTRACT(YEAR FROM created_at)») — имя поля (замечание заказчика 28.11.2026,
- * docs/typical-mistakes.md № 89). Ответ — номера кусков FROM, JOIN и запятой перед именем.
+ * Имена из WITH: «WITH имя AS (», «, имя AS (» и со списком столбцов «, имя (a, b) AS (». Значимые куски —
+ * без пробелов и комментариев.
+ */
+export function dmSqlCteNames(sig: readonly DmSqlToken[]): Set<string> {
+  const out = new Set<string>();
+  for (let k = 0; k < sig.length; k += 1) {
+    const w = upper(sig[k]!);
+    if (w !== 'WITH' && w !== 'RECURSIVE' && sig[k]!.text !== ',') continue;
+    const n = sig[k + 1];
+    if (!n || n.kind !== 'word') continue;
+    let a = k + 2;
+    if (sig[a]?.text === '(') {
+      let d = 0;
+      for (; a < sig.length; a += 1) {
+        if (sig[a]!.text === '(') d += 1;
+        else if (sig[a]!.text === ')' && --d === 0) break;
+      }
+      a += 1;
+    }
+    if (sig[a] && upper(sig[a]!) === 'AS') out.add(n.text.toLowerCase());
+  }
+  return out;
+}
+
+/**
+ * Где в значимых кусках (без пробелов и комментариев) за словом стоит имя таблицы: FROM у SELECT своего
+ * уровня скобок, JOIN на любом уровне, скобка с JOIN внутри на месте таблицы («FROM (a JOIN b ON …)») и
+ * запятая только в списке таблиц своего уровня. Иначе запятая в ORDER BY и GROUP BY («ORDER BY day DESC,
+ * org») давала имя столбца вывода за таблицу, а FROM внутри функции («EXTRACT(YEAR FROM created_at)») и
+ * «IS DISTINCT FROM» — имя поля (замечание заказчика 28.11.2026, docs/typical-mistakes.md № 89). Ответ —
+ * номера кусков FROM, JOIN, «(» и запятой перед именем.
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#О-106
 export function dmSqlFromSlots(sig: readonly DmSqlToken[]): Set<number> {
@@ -751,12 +791,14 @@ export function dmSqlFromSlots(sig: readonly DmSqlToken[]): Set<number> {
       depth += 1;
       hasSelect[depth] = false;
       inList[depth] = false;
-      // «FROM (a JOIN b ON …)»: скобка на месте таблицы без подзапроса — внутри тоже список таблиц.
+      // «FROM (a JOIN b ON …)»: скобка на месте таблицы с JOIN внутри — тоже список таблиц
+      // (не «.from(v)» кода и не подзапрос).
       const next = sig[k + 1];
       if (
         out.has(k - 1) &&
         next?.kind === 'word' &&
-        !NOT_TABLE_AFTER_PAREN.has(next.text.toUpperCase())
+        !NOT_TABLE_AFTER_PAREN.has(next.text.toUpperCase()) &&
+        joinInside(sig, k)
       ) {
         inList[depth] = true;
         out.add(k);
@@ -765,6 +807,13 @@ export function dmSqlFromSlots(sig: readonly DmSqlToken[]): Set<number> {
     }
     if (t.text === ')') {
       if (depth > 0) depth -= 1;
+      continue;
+    }
+    if (t.text === ';') {
+      // Новый оператор («REVOKE … FROM PUBLIC» после представления) — без SELECT, пока его нет.
+      depth = 0;
+      hasSelect[0] = false;
+      inList[0] = false;
       continue;
     }
     const w = t.kind === 'word' ? t.text.toUpperCase() : '';
@@ -783,16 +832,7 @@ export function dmSqlFromSlots(sig: readonly DmSqlToken[]): Set<number> {
 /** Таблицы после FROM и JOIN (без схемы `public.`; подзапросы и функции пропускаются, имена CTE — тоже). */
 export function dmSqlTables(sql: string): string[] {
   const sig = dmSqlLex(sql).filter((t) => t.kind !== 'space' && t.kind !== 'comment');
-  const ctes = new Set<string>();
-  for (let k = 0; k < sig.length; k += 1) {
-    const w = upper(sig[k]!);
-    if (
-      (w === 'WITH' || w === 'RECURSIVE' || sig[k]!.text === ',') &&
-      sig[k + 1]?.kind === 'word'
-    ) {
-      if (upper(sig[k + 2] ?? sig[k]!) === 'AS') ctes.add(sig[k + 1]!.text.toLowerCase());
-    }
-  }
+  const ctes = dmSqlCteNames(sig);
   const out: string[] = [];
   const slots = dmSqlFromSlots(sig);
   for (let k = 0; k < sig.length; k += 1) {
@@ -1014,7 +1054,8 @@ export function dmMethodTables(
   const out: string[] = [];
   for (const i of method.q ?? []) {
     const q = sql[i];
-    if (!q) continue;
+    // Код Drizzle («.from(v)») — не SQL: имена в нём — переменные.
+    if (!q || q.k === 'code') continue;
     for (const t of dmSqlTables(q.t)) if (!out.includes(t)) out.push(t);
   }
   return out;

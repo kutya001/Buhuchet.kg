@@ -323,6 +323,35 @@ describe('таблицы и столбцы запроса', () => {
     expect(dmSqlTables('select * from a join (b join c on true) on true')).toEqual(['a', 'b', 'c']);
     expect(dmSqlTables('select * from a where a.x is distinct from a.y')).toEqual(['a']);
   });
+  it.each([
+    [
+      'подзапрос в WHERE',
+      'select a.x from a where a.y in (select b.y from b, c) order by 1, 2',
+      ['a', 'b', 'c'],
+    ],
+    ['UNION', 'select x from t1 union select y from t2, t3 order by 1, a', ['t1', 't2', 't3']],
+    [
+      'CTE со списком столбцов',
+      'with x as (select 1 from a), y (p, q) as (select 1, 2 from b) select * from x, y, c',
+      ['a', 'b', 'c'],
+    ],
+    ['«, LATERAL»', 'select * from a, lateral (select 1 from b) y, c', ['a', 'b', 'c']],
+    [
+      'CROSS JOIN LATERAL',
+      'select * from a cross join lateral (select 1 from b, d) y, c',
+      ['a', 'b', 'd', 'c'],
+    ],
+    ['DISTINCT ON', 'select distinct on (a.x, a.y) a.x from a order by a.x, a.y', ['a']],
+    ['OVER (ORDER BY …)', 'select count(*) over (partition by a order by b, c) from t', ['t']],
+    ['string_agg с ORDER BY', "select string_agg(x, ',' order by y, z) from t", ['t']],
+    ['USING (…)', 'select * from a join b using (x, y), c', ['a', 'b', 'c']],
+    ['WINDOW', 'select sum(x) over w from t window w as (order by x, y)', ['t']],
+    ['IS DISTINCT FROM в списке вывода', 'select a is distinct from b, c from t', ['t']],
+    ['FROM (a JOIN b), c', 'select 1 from (a join b on true), c', ['a', 'b', 'c']],
+    ['код Drizzle «.select().from(v)»', 'db.select().from(v).where(eq(v.id, id))', []],
+  ])('места таблиц: %s', (_, sql, want) => {
+    expect(dmSqlTables(sql)).toEqual(want);
+  });
   it('столбцы вывода: псевдоним, иначе последнее имя', () => {
     expect(
       dmSqlOutputNames('select c.name, count(*) as n, coalesce(a, b) as "Итог" from t'),
@@ -365,6 +394,14 @@ describe('метод API → SELECT на всём снимке (блок 5, пу
   it('таблицы метода — для сборщика этапа 2', () => {
     const m = withSql.find((x) => x.p === '/admin/organizations')!;
     expect(dmMethodTables(m, docs.sql)).toContain('organizations');
+    expect(dmMethodTables(m, docs.sql)).not.toContain('v');
+  });
+  it('таблицы всех методов — таблицы описания схемы, а не переменные кода Drizzle («.from(v)»)', () => {
+    const names = new Set(schema.tables.map((x) => x.name));
+    const unknown = new Set<string>();
+    for (const m of docs.methods)
+      for (const t of dmMethodTables(m, docs.sql)) if (!names.has(t)) unknown.add(t);
+    expect([...unknown]).toEqual([]);
   });
 });
 
